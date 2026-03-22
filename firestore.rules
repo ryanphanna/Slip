@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only server-side (Firebase Admin SDK) can read/write receipts
+    match /receipts/{docId} {
+      allow read, write: if false;
+    }
+  }
+}

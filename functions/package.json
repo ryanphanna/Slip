@@ -1,0 +1,12 @@
+{
+  "name": "slip-functions",
+  "version": "1.0.0",
+  "main": "index.js",
+  "engines": { "node": "20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^6.0.0",
+    "twilio": "^5.0.0"
+  }
+}
