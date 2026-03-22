@@ -12,8 +12,9 @@ const fs = require('fs');
 
 // Look for service account key in a few places
 const keyPaths = [
+  path.join(__dirname, '..', '..', 'serviceAccountKey.json'),
   path.join(__dirname, '..', 'serviceAccountKey.json'),
-  path.join(__dirname, '..', '..', '..', '..', '..', 'Dev', 'Firebase for Transit Stats.json'),
+  path.join(__dirname, '..', '..', '..', '..', 'Dev', 'Firebase for Transit Stats.json'),
 ];
 
 let credential;
