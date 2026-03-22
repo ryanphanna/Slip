@@ -12,10 +12,10 @@ admin.initializeApp();
 const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
 const twilioPhoneNumber = defineSecret('TWILIO_PHONE_NUMBER');
-const anthropicApiKey = defineSecret('ANTHROPIC_API_KEY');
+const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 exports.sms = onRequest(
-  { secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, anthropicApiKey] },
+  { secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, geminiApiKey] },
   async (req, res) => {
     if (req.method !== 'POST') return res.status(405).send('Method not allowed');
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Test receipt parsing locally against a real image file.
-// Usage: ANTHROPIC_API_KEY=sk-... node scripts/test-parse.js /path/to/receipt.jpg
+// Usage: GEMINI_API_KEY=... node scripts/test-parse.js /path/to/receipt.jpg
 
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
+const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  console.error('Set ANTHROPIC_API_KEY env var first.');
+  console.error('Set GEMINI_API_KEY env var first.');
   process.exit(1);
 }
 
@@ -19,28 +19,12 @@ if (!imagePath) {
 }
 
 const ext = path.extname(imagePath).toLowerCase();
-const mediaTypeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
-const mediaType = mediaTypeMap[ext] || 'image/jpeg';
+const mimeTypeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+const mimeType = mimeTypeMap[ext] || 'image/jpeg';
 
 const base64 = fs.readFileSync(imagePath).toString('base64');
-const client = new Anthropic({ apiKey });
 
-async function run() {
-  console.log(`Parsing ${path.basename(imagePath)}...\n`);
-
-  const message = await client.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 1024,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: { type: 'base64', media_type: mediaType, data: base64 },
-        },
-        {
-          type: 'text',
-          text: `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
+const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
 {
   "merchant": "store name",
   "date": "YYYY-MM-DD or null",
@@ -51,13 +35,20 @@ async function run() {
   "items": [{ "name": "item name", "price": number }],
   "currency": "CAD"
 }
-Use null for anything you can't determine. Items can be an empty array.`,
-        },
-      ],
-    }],
-  });
+Use null for anything you can't determine. Items can be an empty array.`;
 
-  const raw = message.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+async function run() {
+  console.log(`Parsing ${path.basename(imagePath)}...\n`);
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+  const result = await model.generateContent([
+    { inlineData: { data: base64, mimeType } },
+    PROMPT,
+  ]);
+
+  const raw = result.response.text().trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
   const receipt = JSON.parse(raw);
   console.log(JSON.stringify(receipt, null, 2));
 }

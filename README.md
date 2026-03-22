@@ -1,6 +1,6 @@
 # Slip
 
-A personal receipt logging backend. Text a photo of a receipt to a Twilio number and it gets parsed by Claude Vision and saved to Firestore — no app required.
+A personal receipt logging backend. Text a photo of a receipt to a Twilio number and it gets parsed by Gemini Vision and saved to Firestore — no app required.
 
 ## Problem
 
@@ -9,7 +9,7 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 ## Features
 
 - **MMS Intake**: Send a photo to a Twilio number — no app, no UI, just your camera roll.
-- **Claude Vision Parsing**: Extracts merchant, date, total, subtotal, tax, line items, and category in one API call.
+- **Gemini Vision Parsing**: Extracts merchant, date, total, subtotal, tax, line items, and category in one API call.
 - **Allowlisting**: Only your number can submit receipts — prevents abuse and unexpected API costs.
 - **SMS Confirmation**: Replies instantly with a summary (e.g. `Saved: T&T Supermarket — $23.14 (Grocery)`).
 - **Firestore Storage**: Every receipt stored with full line items and metadata, queryable locally via `scripts/query.js`.
@@ -18,7 +18,7 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 
 - **Backend**: Firebase Cloud Functions (Node.js)
 - **SMS/MMS**: Twilio
-- **Vision / Parsing**: Anthropic Claude (claude-opus-4-6)
+- **Vision / Parsing**: Google Gemini (gemini-2.0-flash)
 - **Database**: Firestore
 
 ---
