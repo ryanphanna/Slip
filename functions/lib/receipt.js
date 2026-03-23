@@ -2,8 +2,6 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { defineSecret } = require('firebase-functions/params');
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
-const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
-const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
 
 const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
 {
@@ -18,18 +16,11 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
 }
 Use null for anything you can't determine. Items can be an empty array.`;
 
-async function parseReceiptFromUrl(mediaUrl) {
-  // Twilio media URLs require HTTP Basic auth
-  const auth = Buffer.from(
-    `${twilioAccountSid.value()}:${twilioAuthToken.value()}`
-  ).toString('base64');
-
-  const imgResponse = await fetch(mediaUrl, {
-    headers: { Authorization: `Basic ${auth}` },
-  });
+async function parseReceiptFromUrl(imageUrl) {
+  const imgResponse = await fetch(imageUrl);
 
   if (!imgResponse.ok) {
-    throw new Error(`Failed to fetch media: ${imgResponse.status}`);
+    throw new Error(`Failed to fetch image: ${imgResponse.status}`);
   }
 
   const buffer = await imgResponse.arrayBuffer();

@@ -1,7 +1,7 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
-const { validateTwilioSignature, twimlResponse } = require('./lib/twilio');
+const { sendMessage, getFileUrl, validateTelegramSecret } = require('./lib/telegram');
 const { parseReceiptFromUrl } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
 const { saveReceipt } = require('./lib/store');
@@ -9,42 +9,47 @@ const { isAllowed } = require('./lib/allowlist');
 
 admin.initializeApp();
 
-const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
-const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
-const twilioPhoneNumber = defineSecret('TWILIO_PHONE_NUMBER');
+const telegramBotToken = defineSecret('TELEGRAM_BOT_TOKEN');
+const telegramSecret = defineSecret('TELEGRAM_WEBHOOK_SECRET');
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
-exports.sms = onRequest(
-  { secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, geminiApiKey] },
+exports.telegram = onRequest(
+  { secrets: [telegramBotToken, telegramSecret, geminiApiKey] },
   async (req, res) => {
-    if (req.method !== 'POST') return res.status(405).send('Method not allowed');
+    // Always respond 200 immediately — Telegram expects a fast ack
+    res.sendStatus(200);
 
-    if (!validateTwilioSignature(req)) {
-      return res.status(403).send('Forbidden');
+    if (req.method !== 'POST') return;
+
+    if (!validateTelegramSecret(req, telegramSecret.value())) {
+      console.warn('Invalid Telegram webhook secret');
+      return;
     }
 
-    const from = req.body.From;
+    const update = req.body;
+    const message = update.message;
+    if (!message) return;
+
+    const chatId = message.chat.id;
+    const from = String(chatId);
 
     if (!isAllowed(from)) {
-      console.warn(`Rejected request from unlisted number: ${from}`);
-      return res.type('text/xml').send(twimlResponse('Not authorized.'));
+      console.warn(`Rejected request from unlisted chat: ${chatId}`);
+      return;
     }
 
-    const numMedia = parseInt(req.body.NumMedia || '0', 10);
-
-    if (numMedia === 0) {
-      return res.type('text/xml').send(twimlResponse('Send me a photo of a receipt to log it.'));
+    // Only handle photo messages
+    if (!message.photo) {
+      await sendMessage(chatId, 'Send me a photo of a receipt to log it.');
+      return;
     }
 
-    const mediaUrl = req.body.MediaUrl0;
-    const contentType = req.body.MediaContentType0 || '';
-
-    if (!contentType.startsWith('image/')) {
-      return res.type('text/xml').send(twimlResponse('Please send an image of your receipt.'));
-    }
+    // Telegram sends multiple sizes — use the largest
+    const photo = message.photo[message.photo.length - 1];
 
     try {
-      const raw = await parseReceiptFromUrl(mediaUrl);
+      const imageUrl = await getFileUrl(photo.file_id);
+      const raw = await parseReceiptFromUrl(imageUrl);
       const receipt = validateReceipt(raw);
       await saveReceipt(receipt, from);
 
@@ -52,14 +57,10 @@ exports.sms = onRequest(
       const total = receipt.total != null ? `$${receipt.total.toFixed(2)}` : '?';
       const category = receipt.category;
 
-      return res.type('text/xml').send(
-        twimlResponse(`Saved: ${merchant} — ${total} (${category})`)
-      );
+      await sendMessage(chatId, `Saved: ${merchant} — ${total} (${category})`);
     } catch (err) {
       console.error('Receipt parsing failed:', err);
-      return res.type('text/xml').send(
-        twimlResponse("Couldn't read that receipt. Try a clearer photo.")
-      );
+      await sendMessage(chatId, "Couldn't read that receipt. Try a clearer photo.");
     }
   }
 );
