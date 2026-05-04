@@ -1,16 +1,16 @@
-// Only these Telegram chat IDs can submit receipts.
-// Set in .env as ALLOWED_CHATS=123456789
-// Find your chat ID by messaging @userinfobot on Telegram.
+// Only these phone numbers (E.164 format) can submit receipts.
+// Set in .env as ALLOWED_PHONES=+14165551234
+// Find your number in E.164 format: +1 followed by area code and number, no spaces.
 // Falls back to open if env var is not set (useful for initial testing — lock it down before deploying).
 
-function isAllowed(chatId) {
-  const raw = process.env.ALLOWED_CHATS;
+function isAllowed(phone) {
+  const raw = process.env.ALLOWED_PHONES;
   if (!raw) {
-    console.warn('ALLOWED_CHATS not set — all chats allowed. Set this before deploying.');
+    console.warn('ALLOWED_PHONES not set — all numbers allowed. Set this before deploying.');
     return true;
   }
   const allowed = raw.split(',').map(n => n.trim());
-  return allowed.includes(chatId);
+  return allowed.includes(phone);
 }
 
 module.exports = { isAllowed };

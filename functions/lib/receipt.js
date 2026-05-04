@@ -6,6 +6,7 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
 {
   "merchant": "store name",
+  "location": "store address or location as printed on receipt, or null",
   "date": "YYYY-MM-DD or null",
   "total": number or null,
   "subtotal": number or null,
@@ -16,19 +17,9 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
 }
 Use null for anything you can't determine. Items can be an empty array.`;
 
-async function parseReceiptFromUrl(imageUrl) {
-  const imgResponse = await fetch(imageUrl);
-
-  if (!imgResponse.ok) {
-    throw new Error(`Failed to fetch image: ${imgResponse.status}`);
-  }
-
-  const buffer = await imgResponse.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString('base64');
-  const mimeType = imgResponse.headers.get('content-type') || 'image/jpeg';
-
+async function parseReceiptFromBase64(base64, mimeType) {
   const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const result = await model.generateContent([
     { inlineData: { data: base64, mimeType } },
@@ -39,4 +30,14 @@ async function parseReceiptFromUrl(imageUrl) {
   return JSON.parse(raw);
 }
 
-module.exports = { parseReceiptFromUrl };
+// Used by scripts/test-parse.js
+async function parseReceiptFromUrl(imageUrl) {
+  const imgResponse = await fetch(imageUrl);
+  if (!imgResponse.ok) throw new Error(`Failed to fetch image: ${imgResponse.status}`);
+  const buffer = await imgResponse.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
+  const mimeType = imgResponse.headers.get('content-type') || 'image/jpeg';
+  return parseReceiptFromBase64(base64, mimeType);
+}
+
+module.exports = { parseReceiptFromBase64, parseReceiptFromUrl };

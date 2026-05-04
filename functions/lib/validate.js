@@ -4,6 +4,7 @@ const VALID_CATEGORIES = ['Food', 'Grocery', 'Transport', 'Shopping', 'Entertain
 function validateReceipt(raw) {
   return {
     merchant: typeof raw.merchant === 'string' ? raw.merchant.trim() : null,
+    location: typeof raw.location === 'string' ? raw.location.trim() : null,
     date: isValidDate(raw.date) ? raw.date : null,
     total: toPositiveNumber(raw.total),
     subtotal: toPositiveNumber(raw.subtotal),

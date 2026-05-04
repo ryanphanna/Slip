@@ -4,3 +4,4 @@ functions/node_modules/
 *.local
 .firebase/
 firebase-debug.log
+TODO.md
