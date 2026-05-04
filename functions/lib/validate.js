@@ -1,4 +1,4 @@
-const VALID_CATEGORIES = ['Food', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Other'];
+const VALID_CATEGORIES = ['Takeout/Dining', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Home', 'Other'];
 const VALID_TYPES = ['purchase', 'refund'];
 
 // Clean and validate the parsed receipt object before writing to Firestore.
@@ -11,6 +11,7 @@ function validateReceipt(raw) {
     subtotal: toNumber(raw.subtotal),
     tax: toNumber(raw.tax),
     category: VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other',
+    subCategory: typeof raw.subCategory === 'string' ? raw.subCategory.trim() : null,
     items: Array.isArray(raw.items)
       ? raw.items
           .filter(i => i && typeof i.name === 'string')

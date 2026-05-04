@@ -11,7 +11,8 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "total": number or null,
   "subtotal": number or null,
   "tax": number or null,
-  "category": "one of: Food, Grocery, Transport, Shopping, Entertainment, Health, Other",
+  "category": "one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other",
+  "subCategory": "Provide a specific sub-category based on the merchant (e.g. Coffee Shop, Fast Food, Supermarket, Electronics, Pharmacy, Rideshare, Clothing, Alcohol)",
   "items": [{ "name": "item name", "price": number }],
   "currency": "Currency code (e.g. CAD, USD, EUR). Infer from location if implied.",
   "type": "purchase or refund",
@@ -20,17 +21,42 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
 }
 Use null for anything you can't determine. Items can be an empty array.`;
 
-async function parseReceiptFromBase64(base64, mimeType) {
+async function parseReceiptFromBase64(images) {
+  // Backwards compatibility for single string signature
+  if (typeof images === 'string') {
+    images = [{ base64: arguments[0], mimeType: arguments[1] || 'image/jpeg' }];
+  }
+
   const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  
+  const promptParts = images.map(img => ({
+    inlineData: { data: img.base64, mimeType: img.mimeType }
+  }));
+  promptParts.push({ text: PROMPT });
 
-  const result = await model.generateContent([
-    { inlineData: { data: base64, mimeType } },
-    PROMPT,
-  ]);
-
-  const raw = result.response.text().trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
-  return JSON.parse(raw);
+  // Try parsing with Gemini 2.5 Flash first
+  try {
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash',
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+    
+    const result = await model.generateContent(promptParts);
+    let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn('Primary model (2.5-flash) failed, attempting fallback to gemini-2.5-pro:', err.message);
+    
+    // Fallback to Gemini 2.5 Pro
+    const fallbackModel = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-pro',
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+    
+    const result = await fallbackModel.generateContent(promptParts);
+    let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    return JSON.parse(raw);
+  }
 }
 
 // Used by scripts/test-parse.js
@@ -43,4 +69,24 @@ async function parseReceiptFromUrl(imageUrl) {
   return parseReceiptFromBase64(base64, mimeType);
 }
 
-module.exports = { parseReceiptFromBase64, parseReceiptFromUrl };
+async function parseReceiptFromText(text) {
+  const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json'
+    }
+  });
+
+  const result = await model.generateContent([
+    { text: PROMPT },
+    { text: `Receipt Text:\n${text}` }
+  ]);
+
+  const responseText = result.response.text();
+  let cleanJson = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  
+  return JSON.parse(cleanJson);
+}
+
+module.exports = { parseReceiptFromUrl, parseReceiptFromBase64, parseReceiptFromText };
