@@ -93,10 +93,11 @@ exports.sms = onRequest(
       await saveReceipt(receipt, from, messageSid);
 
       const merchant = receipt.merchant || 'Unknown';
-      const total = receipt.total != null ? `$${receipt.total.toFixed(2)}` : '?';
+      const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
       const category = receipt.category;
+      const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
 
-      await sendSms(from, `Saved: ${merchant} — ${total} (${category})`);
+      await sendSms(from, `${prefix}: ${merchant} — ${total} (${category})`);
     } catch (err) {
       console.error('Receipt parsing failed:', err);
       await sendSms(from, "Couldn't read that receipt. Try a clearer photo.");

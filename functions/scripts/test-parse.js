@@ -27,13 +27,17 @@ const base64 = fs.readFileSync(imagePath).toString('base64');
 const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
 {
   "merchant": "store name",
+  "location": "store address or location as printed on receipt, or null",
   "date": "YYYY-MM-DD or null",
   "total": number or null,
   "subtotal": number or null,
   "tax": number or null,
   "category": "one of: Food, Grocery, Transport, Shopping, Entertainment, Health, Other",
   "items": [{ "name": "item name", "price": number }],
-  "currency": "CAD"
+  "currency": "Currency code (e.g. CAD, USD, EUR). Infer from location if implied.",
+  "type": "purchase or refund",
+  "loyaltyPointsEarned": number or null,
+  "loyaltyPointsBalance": number or null
 }
 Use null for anything you can't determine. Items can be an empty array.`;
 

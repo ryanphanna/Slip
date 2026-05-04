@@ -1,4 +1,5 @@
 const VALID_CATEGORIES = ['Food', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Other'];
+const VALID_TYPES = ['purchase', 'refund'];
 
 // Clean and validate the parsed receipt object before writing to Firestore.
 function validateReceipt(raw) {
@@ -6,16 +7,19 @@ function validateReceipt(raw) {
     merchant: typeof raw.merchant === 'string' ? raw.merchant.trim() : null,
     location: typeof raw.location === 'string' ? raw.location.trim() : null,
     date: isValidDate(raw.date) ? raw.date : null,
-    total: toPositiveNumber(raw.total),
-    subtotal: toPositiveNumber(raw.subtotal),
-    tax: toPositiveNumber(raw.tax),
+    total: toNumber(raw.total),
+    subtotal: toNumber(raw.subtotal),
+    tax: toNumber(raw.tax),
     category: VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other',
     items: Array.isArray(raw.items)
       ? raw.items
           .filter(i => i && typeof i.name === 'string')
-          .map(i => ({ name: i.name.trim(), price: toPositiveNumber(i.price) }))
+          .map(i => ({ name: i.name.trim(), price: toNumber(i.price) }))
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',
+    type: VALID_TYPES.includes(raw.type) ? raw.type : 'purchase',
+    loyaltyPointsEarned: toNumber(raw.loyaltyPointsEarned),
+    loyaltyPointsBalance: toNumber(raw.loyaltyPointsBalance),
   };
 }
 
@@ -23,9 +27,10 @@ function isValidDate(val) {
   return typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val);
 }
 
-function toPositiveNumber(val) {
+function toNumber(val) {
   const n = parseFloat(val);
-  return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : null;
+  // Allow negative numbers so refunds can have negative totals/items
+  return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
 module.exports = { validateReceipt };
