@@ -12,9 +12,9 @@ const fs = require('fs');
 
 // Look for service account key in a few places
 const keyPaths = [
+  path.join(__dirname, '..', '..', '..', '..', '..', 'Credentials', 'Firebase for Slip.json'),
   path.join(__dirname, '..', '..', 'serviceAccountKey.json'),
   path.join(__dirname, '..', 'serviceAccountKey.json'),
-  path.join(__dirname, '..', '..', '..', '..', 'Dev', 'Firebase for Transit Stats.json'),
 ];
 
 let credential;
@@ -63,7 +63,7 @@ async function run() {
   for (const r of receipts) {
     const date = r.date || r.createdAt?.toDate().toISOString().slice(0, 10) || '?';
     const amount = r.total != null ? `$${r.total.toFixed(2)}` : '   ?  ';
-    console.log(`${date}  ${amount.padStart(8)}  ${(r.category || '').padEnd(14)}  ${r.merchant || 'Unknown'}`);
+    console.log(`${r.id}  ${date}  ${amount.padStart(8)}  ${(r.category || '').padEnd(14)}  ${r.merchant || 'Unknown'}`);
     if (r.total) total += r.total;
   }
 

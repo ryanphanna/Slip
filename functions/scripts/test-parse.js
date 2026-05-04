@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Test receipt parsing locally against a real image file.
-// Usage: GEMINI_API_KEY=... node scripts/test-parse.js /path/to/receipt.jpg
+// Test receipt parsing locally against one or more image files.
+// Usage:
+//   GEMINI_API_KEY=... node scripts/test-parse.js /path/to/receipt.jpg
+//   GEMINI_API_KEY=... node scripts/test-parse.js img1.jpg img2.jpg img3.jpg
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
@@ -12,17 +14,13 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const imagePath = process.argv[2];
-if (!imagePath) {
-  console.error('Usage: node scripts/test-parse.js /path/to/receipt.jpg');
+const imagePaths = process.argv.slice(2);
+if (imagePaths.length === 0) {
+  console.error('Usage: node scripts/test-parse.js /path/to/receipt.jpg [img2.jpg ...]');
   process.exit(1);
 }
 
-const ext = path.extname(imagePath).toLowerCase();
-const mimeTypeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
-const mimeType = mimeTypeMap[ext] || 'image/jpeg';
-
-const base64 = fs.readFileSync(imagePath).toString('base64');
+const mimeTypeMap = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.heic': 'image/heic', '.heif': 'image/heif' };
 
 const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
 {
@@ -32,29 +30,49 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "total": number or null,
   "subtotal": number or null,
   "tax": number or null,
-  "category": "one of: Food, Grocery, Transport, Shopping, Entertainment, Health, Other",
+  "category": "one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other",
+  "subCategory": "Provide a specific sub-category based on the merchant (e.g. Coffee Shop, Fast Food, Supermarket, Electronics, Pharmacy, Rideshare, Clothing, Alcohol)",
   "items": [{ "name": "item name", "price": number }],
   "currency": "Currency code (e.g. CAD, USD, EUR). Infer from location if implied.",
   "type": "purchase or refund",
   "loyaltyPointsEarned": number or null,
   "loyaltyPointsBalance": number or null
 }
-Use null for anything you can't determine. Items can be an empty array.`;
+Use null for anything you can't determine. Items can be an empty array.
+For each item, record the final net price paid after any inline per-item discount shown beneath it on the receipt. Do not add a separate line item for any discount summary or coupon total that appears at the bottom — if per-item discounts are already reflected in individual prices, the summary line is redundant and should be omitted.`;
 
 async function run() {
-  console.log(`Parsing ${path.basename(imagePath)}...\n`);
+  const images = imagePaths.map(p => {
+    const ext = path.extname(p).toLowerCase();
+    return {
+      name: path.basename(p),
+      base64: fs.readFileSync(p).toString('base64'),
+      mimeType: mimeTypeMap[ext] || 'image/jpeg',
+    };
+  });
+
+  console.log(`Parsing ${images.map(i => i.name).join(', ')}...\n`);
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: { responseMimeType: 'application/json' },
+  });
 
-  const result = await model.generateContent([
-    { inlineData: { data: base64, mimeType } },
-    PROMPT,
-  ]);
+  const parts = [
+    ...images.map(img => ({ inlineData: { data: img.base64, mimeType: img.mimeType } })),
+    { text: PROMPT },
+  ];
 
-  const raw = result.response.text().trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '');
+  const result = await model.generateContent(parts);
+  const raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const receipt = JSON.parse(raw);
   console.log(JSON.stringify(receipt, null, 2));
+
+  if (receipt.items?.length) {
+    const itemSum = receipt.items.reduce((a, i) => a + (i.price || 0), 0);
+    console.log(`\nItems sum: $${itemSum.toFixed(2)}  |  Subtotal: $${receipt.subtotal ?? '?'}  |  Total: $${receipt.total ?? '?'}`);
+  }
 }
 
 run().catch(err => { console.error(err); process.exit(1); });
