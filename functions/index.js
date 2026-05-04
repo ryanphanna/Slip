@@ -2,7 +2,7 @@ const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
-const { parseReceiptFromBase64 } = require('./lib/receipt');
+const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
 const { saveReceipt } = require('./lib/store');
 const { isAllowed } = require('./lib/allowlist');
@@ -42,65 +42,57 @@ exports.sms = onRequest(
       return;
     }
 
-    if (numMedia === 0) {
-      await sendSms(from, 'Send me a photo of a receipt to log it.');
-      res.set('Content-Type', 'text/xml');
-      res.send('<Response/>');
-      return;
-    }
-
-    // --- Idempotency: skip if this MessageSid was already processed ---
-    if (messageSid) {
-      const db = admin.firestore();
-      const existing = await db.collection('receipts').where('messageSid', '==', messageSid).limit(1).get();
-      if (!existing.empty) {
-        console.log(`Duplicate MessageSid ${messageSid} — skipping`);
-        res.set('Content-Type', 'text/xml');
-        res.send('<Response/>');
-        return;
-      }
-    }
-
-    // --- Image validation: reject non-image MIME types ---
-    const mimeType = req.body.MediaContentType0 || 'image/jpeg';
-    if (!ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) {
-      console.warn(`Rejected non-image MIME type: ${mimeType}`);
-      await sendSms(from, `That doesn't look like an image (${mimeType}). Send a photo of a receipt.`);
-      res.set('Content-Type', 'text/xml');
-      res.send('<Response/>');
-      return;
-    }
-
-    const mediaUrl = req.body.MediaUrl0;
-
     try {
-      const imgResponse = await fetchMedia(mediaUrl);
+      let raw;
+      if (numMedia === 0) {
+        const bodyText = (req.body.Body || '').trim();
+        if (!bodyText) {
+          await sendSms(from, 'Send me a photo or paste text of a receipt to log it.');
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
 
-      // Check file size before buffering
-      const contentLength = parseInt(imgResponse.headers.get('content-length') || '0', 10);
-      if (contentLength > MAX_IMAGE_SIZE) {
-        console.warn(`Image too large: ${contentLength} bytes`);
-        await sendSms(from, 'That image is too large. Try a smaller photo.');
-        res.set('Content-Type', 'text/xml');
-        res.send('<Response/>');
-        return;
+        raw = await parseReceiptFromText(bodyText);
+      } else {
+        const images = [];
+        for (let i = 0; i < numMedia; i++) {
+          const mimeType = req.body[`MediaContentType${i}`] || 'image/jpeg';
+          if (!ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) continue;
+
+          const mediaUrl = req.body[`MediaUrl${i}`];
+          const imgResponse = await fetchMedia(mediaUrl);
+
+          const contentLength = parseInt(imgResponse.headers.get('content-length') || '0', 10);
+          if (contentLength > MAX_IMAGE_SIZE) continue;
+
+          const buffer = await imgResponse.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString('base64');
+          images.push({ base64, mimeType });
+        }
+
+        if (images.length === 0) {
+          await sendSms(from, 'None of the attachments were valid images. Try again.');
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
+        raw = await parseReceiptFromBase64(images);
       }
 
-      const buffer = await imgResponse.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      const raw = await parseReceiptFromBase64(base64, mimeType);
       const receipt = validateReceipt(raw);
       await saveReceipt(receipt, from, messageSid);
 
       const merchant = receipt.merchant || 'Unknown';
       const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
-      const category = receipt.category;
+      const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
       const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
 
-      await sendSms(from, `${prefix}: ${merchant} — ${total} (${category})`);
+      await sendSms(from, `${prefix}: ${merchant} — ${total} (${categoryDisplay})`);
     } catch (err) {
       console.error('Receipt parsing failed:', err);
-      await sendSms(from, "Couldn't read that receipt. Try a clearer photo.");
+      await sendSms(from, `Couldn't read that receipt. Error: ${err.message}`);
     }
 
     // Acknowledge Twilio after all work is done
