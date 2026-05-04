@@ -5,6 +5,7 @@ const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio')
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
 const { saveReceipt } = require('./lib/store');
+const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 
 admin.initializeApp();
@@ -81,8 +82,18 @@ exports.sms = onRequest(
         raw = await parseReceiptFromBase64(images);
       }
 
+      // Store images non-blocking — a storage failure shouldn't kill the receipt save
+      let imagePaths = [];
+      if (images.length > 0) {
+        try {
+          imagePaths = await saveImages(images, messageSid);
+        } catch (err) {
+          console.error('Image storage failed (non-fatal):', err.message);
+        }
+      }
+
       const receipt = validateReceipt(raw);
-      await saveReceipt(receipt, from, messageSid);
+      await saveReceipt(receipt, from, messageSid, imagePaths);
 
       const merchant = receipt.merchant || 'Unknown';
       const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
