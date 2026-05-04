@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] — 2026-05-04
+
+### Added
+- **Image Storage**: Receipt images are now saved to Firebase Storage under `receipts/{messageSid}/{index}.jpg` before parsing. Storage path is saved to the Firestore document as `imagePaths`. Storage failures are non-fatal — the receipt is still saved if the image upload fails.
+- **Storage Rules**: `storage.rules` blocks all client-side reads and writes — images are server-only.
+- **30-day lifecycle**: GCS bucket lifecycle rule auto-deletes images after 30 days (configured manually in GCS console).
+
+---
+
 ## [1.1.1] — 2026-05-04
 
 ### Fixed
