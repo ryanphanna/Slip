@@ -19,7 +19,8 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "loyaltyPointsEarned": number or null,
   "loyaltyPointsBalance": number or null
 }
-Use null for anything you can't determine. Items can be an empty array.`;
+Use null for anything you can't determine. Items can be an empty array.
+For each item, record the final net price paid after any inline per-item discount shown beneath it on the receipt. Do not add a separate line item for any discount summary or coupon total that appears at the bottom — if per-item discounts are already reflected in individual prices, the summary line is redundant and should be omitted.`;
 
 async function parseReceiptFromBase64(images) {
   // Backwards compatibility for single string signature

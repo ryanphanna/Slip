@@ -18,6 +18,7 @@ Slip is a personal finance backend for capturing receipt data at the point of pu
 - **Confidence Scoring**: Have Gemini return a confidence score for each field. Flag low-confidence parses for manual review instead of silently saving bad data.
 - **Receipt Image Storage**: Store the original image in Cloud Storage alongside the parsed data. Useful for auditing, re-parsing with better models, and dispute resolution.
 - **Multi-Image Support**: Handle receipts sent as multiple photos (long rolls) and stitch them into one parsed document.
+- **Multi-Image Deduplication**: When overlapping photos are sent, Gemini double-counts items that appear in more than one frame. Prompt-based instructions are inconsistent. Correct approach: post-processing using contiguous block analysis — for any run of identical adjacent items, the true count is the max run length observed between two distinct anchor items (e.g. if DVALA → 8 candles → FRAKA appears in one image and 16 candles appear in the full merged list, the candle block between those two anchors is capped at 8). Also use the "Total items: N" line as a cross-check.
 - **Currency Detection**: Currently hardcoded to `CAD`. Let Gemini detect the currency from the receipt itself for travel receipts.
 
 ## Features

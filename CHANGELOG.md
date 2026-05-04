@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] — 2026-05-04
+
+### Fixed
+- **Prompt: inline discount handling** — Gemini now records the final net price per item after inline per-item discounts and omits the coupon summary line at the bottom of the receipt (e.g. IKEA "$35 off $120" total), which was previously being double-counted as a separate line item.
+
+### Changed
+- **`test-parse.js`**: synced prompt with `receipt.js`; now accepts multiple image paths as arguments for testing multi-image receipts locally; added items-sum vs subtotal check at the end of output.
+- **`query.js`**: now prints Firestore doc ID alongside each receipt for use with `delete.js`.
+- **`delete.js`**: new script for deleting receipts by ID, date, date range, or all.
+
+---
+
 ## [1.1.0] — 2026-05-04
 
 ### Added
