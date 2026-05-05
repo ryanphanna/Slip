@@ -220,9 +220,19 @@ exports.sms = onRequest(
       const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
       const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
       const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
+      const itemCount = Array.isArray(receipt.items) ? receipt.items.length : 0;
+      const itemSuffix = itemCount === 1 ? '1 item' : `${itemCount} items`;
+      
+      let message = `${prefix}: ${merchant} — ${total} (${categoryDisplay}, ${itemSuffix})`;
+      
+      // Warn if confidence is still low after potential fallback
+      if (raw.confidence != null && raw.confidence < 0.7) {
+        message = `⚠️ ${message}`;
+        logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
+      }
 
-      await sendSms(from, `${prefix}: ${merchant} — ${total} (${categoryDisplay})`);
-      logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total });
+      await sendSms(from, message);
+      logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total, confidence: raw.confidence });
     } catch (err) {
       logger.error('Receipt processing failed', { messageSid, from: maskedFrom, error: err.message || err });
       await sendSms(from, "Couldn't read that receipt. Try again with a clearer image or shorter text.");
