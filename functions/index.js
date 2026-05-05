@@ -17,12 +17,20 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_TOTAL_MEDIA_SIZE = 20 * 1024 * 1024; // 20 MB
+const MAX_MEDIA_ATTACHMENTS = 4;
+const MAX_BODY_TEXT_LENGTH = 8000;
 
 exports.sms = onRequest(
   { secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, geminiApiKey] },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).send('Method Not Allowed');
+      return;
+    }
+
+    if (!req.body || typeof req.body !== 'object') {
+      res.status(400).send('Bad Request');
       return;
     }
 
@@ -33,8 +41,20 @@ exports.sms = onRequest(
     }
 
     const from = req.body.From;
-    const numMedia = parseInt(req.body.NumMedia || '0', 10);
+    const numMedia = Number.parseInt(req.body.NumMedia || '0', 10);
     const messageSid = req.body.MessageSid;
+
+    if (!from || typeof from !== 'string') {
+      console.warn('Rejected request with missing From value');
+      res.status(400).send('Bad Request');
+      return;
+    }
+
+    if (!Number.isFinite(numMedia) || numMedia < 0) {
+      console.warn(`Rejected request with invalid NumMedia: ${req.body.NumMedia}`);
+      res.status(400).send('Bad Request');
+      return;
+    }
 
     if (!isAllowed(from)) {
       console.warn(`Rejected request from unlisted number: ${from}`);
@@ -43,8 +63,16 @@ exports.sms = onRequest(
       return;
     }
 
+    if (numMedia > MAX_MEDIA_ATTACHMENTS) {
+      await sendSms(from, `Too many attachments. Send up to ${MAX_MEDIA_ATTACHMENTS} images per message.`);
+      res.set('Content-Type', 'text/xml');
+      res.send('<Response/>');
+      return;
+    }
+
     try {
       let raw;
+      const images = [];
       if (numMedia === 0) {
         const bodyText = (req.body.Body || '').trim();
         if (!bodyText) {
@@ -54,26 +82,39 @@ exports.sms = onRequest(
           return;
         }
 
+        if (bodyText.length > MAX_BODY_TEXT_LENGTH) {
+          await sendSms(from, `Receipt text is too long. Keep it under ${MAX_BODY_TEXT_LENGTH} characters.`);
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
         raw = await parseReceiptFromText(bodyText);
       } else {
-        const images = [];
+        let totalMediaBytes = 0;
         for (let i = 0; i < numMedia; i++) {
           const mimeType = req.body[`MediaContentType${i}`] || 'image/jpeg';
           if (!ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) continue;
 
           const mediaUrl = req.body[`MediaUrl${i}`];
+          if (!mediaUrl) continue;
           const imgResponse = await fetchMedia(mediaUrl);
 
-          const contentLength = parseInt(imgResponse.headers.get('content-length') || '0', 10);
+          const contentLength = Number.parseInt(imgResponse.headers.get('content-length') || '0', 10);
           if (contentLength > MAX_IMAGE_SIZE) continue;
 
-          const buffer = await imgResponse.arrayBuffer();
-          const base64 = Buffer.from(buffer).toString('base64');
+          const buffer = Buffer.from(await imgResponse.arrayBuffer());
+          if (buffer.length > MAX_IMAGE_SIZE) continue;
+
+          if (totalMediaBytes + buffer.length > MAX_TOTAL_MEDIA_SIZE) continue;
+          totalMediaBytes += buffer.length;
+
+          const base64 = buffer.toString('base64');
           images.push({ base64, mimeType });
         }
 
         if (images.length === 0) {
-          await sendSms(from, 'None of the attachments were valid images. Try again.');
+          await sendSms(from, 'No valid images were found. Use up to 4 images under 10MB each.');
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -103,7 +144,7 @@ exports.sms = onRequest(
       await sendSms(from, `${prefix}: ${merchant} — ${total} (${categoryDisplay})`);
     } catch (err) {
       console.error('Receipt parsing failed:', err);
-      await sendSms(from, `Couldn't read that receipt. Error: ${err.message}`);
+      await sendSms(from, "Couldn't read that receipt. Try again with a clearer image or shorter text.");
     }
 
     // Acknowledge Twilio after all work is done
