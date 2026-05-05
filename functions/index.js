@@ -5,7 +5,7 @@ const admin = require('firebase-admin');
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
-const { saveReceipt, findDuplicate } = require('./lib/store');
+const { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
 const { getMonthlyStats, getLastReceipt } = require('./lib/query');
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
@@ -68,6 +68,21 @@ exports.sms = onRequest(
 
     if (!isAllowed(from)) {
       logger.warn('Rejected request from unlisted number', { messageSid, from: maskedFrom });
+      res.set('Content-Type', 'text/xml');
+      res.send('<Response/>');
+      return;
+    }
+
+    if (await isMessageProcessed(messageSid)) {
+      logger.info('Message already processed (idempotency)', { messageSid });
+      res.set('Content-Type', 'text/xml');
+      res.send('<Response/>');
+      return;
+    }
+
+    if (await checkRateLimit(from)) {
+      logger.warn('Rate limit exceeded', { messageSid, from: maskedFrom });
+      await sendSms(from, 'Hourly limit reached. Please wait a bit before logging more receipts.');
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;

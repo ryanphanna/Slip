@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Message Idempotency**: Added a check for Twilio `MessageSid` at the beginning of the function. Exact retries from Twilio are now handled instantly without invoking the Gemini API or Storage.
+- **Hourly Rate Limiting**: Added a safety valve to limit the number of receipts logged per phone number per hour (default: 15). Protects against abuse and accidental loops.
 - **SMS Text Commands**: Added support for direct querying via SMS. Use `TOTAL` (monthly spend), `SUMMARY` (category breakdown), `LAST` (latest receipt), or `INFO`.
 - **Duplicate Detection**: Implemented a check to prevent redundant receipt entries by matching merchant, total, and sender within a 10-minute window.
 - **Dependabot Configuration**: Enabled weekly automated `npm` dependency updates for the `functions` directory via `.github/dependabot.yml`.

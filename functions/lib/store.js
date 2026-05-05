@@ -1,5 +1,27 @@
 const admin = require('firebase-admin');
 
+async function isMessageProcessed(messageSid) {
+  if (!messageSid) return false;
+  const db = admin.firestore();
+  const snapshot = await db.collection('receipts')
+    .where('messageSid', '==', messageSid)
+    .limit(1)
+    .get();
+  return !snapshot.empty;
+}
+
+async function checkRateLimit(from, limit = 15) {
+  const db = admin.firestore();
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const snapshot = await db.collection('receipts')
+    .where('from', '==', from)
+    .where('createdAt', '>=', oneHourAgo)
+    .count()
+    .get();
+  
+  return snapshot.data().count >= limit;
+}
+
 async function findDuplicate(receipt, from) {
   if (!receipt.merchant || receipt.total == null) return null;
 
@@ -29,4 +51,4 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = []) {
   return doc.id;
 }
 
-module.exports = { saveReceipt, findDuplicate };
+module.exports = { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit };
