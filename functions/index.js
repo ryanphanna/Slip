@@ -118,7 +118,7 @@ exports.sms = onRequest(
           return;
         }
 
-        if (bodyText === 'HELP') {
+        if (bodyText === 'INFO') {
           await sendSms(from, 'Commands: TOTAL (monthly spend), SUMMARY (by category), LAST (latest receipt), or send a photo to log.');
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
