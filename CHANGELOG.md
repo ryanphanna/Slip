@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.2.0] — 2026-05-05
 
 ### Added
 - **Confidence-Based Fallback**: The system now requests a `confidence` score from Gemini. If the primary `gemini-3-flash` model returns low confidence (< 0.8), it automatically falls back to `gemini-3.1-pro` for a more accurate re-parse.
