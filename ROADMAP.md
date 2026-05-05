@@ -9,13 +9,11 @@ Slip is a personal finance backend for capturing receipt data at the point of pu
 - **Image Validation**: No checks on `MediaContentType0` — the function will happily send a PDF, video, or 20MB file to Gemini. Reject non-image MIME types and enforce a max file size before fetching.
 - **Retry Safety / Idempotency**: Twilio retries failed webhooks. Without idempotency (e.g. dedup on `MessageSid`), the same receipt can be saved multiple times (as we saw tonight with 4 identical entries).
 - **Node.js 20 Deprecation**: Runtime was deprecated 2026-04-30 and decommissions 2026-10-30. Upgrade to Node.js 22 before October.
-- **firebase-functions Upgrade**: CLI warns the current version is outdated. Upgrade to latest and address any breaking changes.
-- **Structured Error Logging**: Errors are logged as raw strings. Use structured JSON logging (`severity`, `message`, `receiptId`) for better filtering in Cloud Logging.
+- **firebase-functions Upgrade**: CLI warns the current version is outdated. Upgrade to latest and address any breaking changes. (✅ Done - SDKs at latest 2026 versions)
 - **User Blocklist**: Add a mechanism to block abusive or spammy numbers. Store blocked identifiers in a Firestore `blocklist` collection. Use salted hashes (SHA-256) of phone numbers in the blocklist to prevent storing raw PII while still allowing unique identification for rejection.
 
 ## Data Quality
 
-- **Duplicate Detection**: Flag receipts that match a recent entry by merchant + total + date before saving. Prevents accidental re-submissions.
 - **Confidence Scoring**: Have Gemini return a confidence score for each field. Flag low-confidence parses for manual review instead of silently saving bad data.
 - **Receipt Image Storage**: Store the original image in Cloud Storage alongside the parsed data. Useful for auditing, re-parsing with better models, and dispute resolution.
 - **Multi-Image Support**: Handle receipts sent as multiple photos (long rolls) and stitch them into one parsed document.
@@ -26,7 +24,6 @@ Slip is a personal finance backend for capturing receipt data at the point of pu
 ## Features
 
 - **Monthly Summaries**: Automated SMS digest at month-end — total spend, breakdown by category, biggest single purchase.
-- **Text Commands**: Reply with keywords like `TOTAL`, `LAST`, or `SUMMARY` to query your data over SMS without needing the query script.
 - **Budget Alerts**: Set a monthly cap per category; get an SMS when you're within 10% of the limit.
 - **Web Viewer**: Minimal read-only dashboard to browse and search receipts without running the query script locally.
 - **Export**: CSV/JSON export of all receipts for tax season or spreadsheet analysis.

@@ -1,4 +1,5 @@
 const { defineSecret } = require('firebase-functions/params');
+const logger = require('firebase-functions/logger');
 const twilio = require('twilio');
 
 const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
@@ -42,20 +43,21 @@ function buildRequestUrls(req) {
 function validateTwilioSignature(req) {
   const signature = req.headers['x-twilio-signature'];
   if (!signature) {
-    console.warn('No x-twilio-signature header found');
+    logger.warn('No x-twilio-signature header found');
     return false;
   }
 
   const authToken = twilioAuthToken.value();
   const params = req.body && typeof req.body === 'object' ? req.body : {};
+  const candidates = buildRequestUrls(req);
 
-  for (const candidateUrl of buildRequestUrls(req)) {
+  for (const candidateUrl of candidates) {
     if (twilio.validateRequest(authToken, signature, candidateUrl, params)) {
       return true;
     }
   }
 
-  console.warn('Twilio signature validation failed for all candidate request URLs');
+  logger.warn('Twilio signature validation failed for all candidate request URLs', { candidates });
   return false;
 }
 

@@ -1,10 +1,12 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
+const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
-const { saveReceipt } = require('./lib/store');
+const { saveReceipt, findDuplicate } = require('./lib/store');
+const { getMonthlyStats, getLastReceipt } = require('./lib/query');
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 
@@ -42,7 +44,7 @@ exports.sms = onRequest(
     }
 
     if (!validateTwilioSignature(req)) {
-      console.warn('Invalid Twilio signature');
+      logger.warn('Invalid Twilio signature');
       res.status(403).send('Forbidden');
       return;
     }
@@ -53,19 +55,19 @@ exports.sms = onRequest(
     const messageSid = req.body.MessageSid;
 
     if (!from || typeof from !== 'string') {
-      console.warn('Rejected request with missing From value');
+      logger.warn('Rejected request with missing From value', { messageSid });
       res.status(400).send('Bad Request');
       return;
     }
 
     if (!Number.isFinite(numMedia) || numMedia < 0) {
-      console.warn(`Rejected request with invalid NumMedia: ${req.body.NumMedia}`);
+      logger.warn('Rejected request with invalid NumMedia', { messageSid, numMedia: req.body.NumMedia });
       res.status(400).send('Bad Request');
       return;
     }
 
     if (!isAllowed(from)) {
-      console.warn(`Rejected request from unlisted number: ${maskedFrom}`);
+      logger.warn('Rejected request from unlisted number', { messageSid, from: maskedFrom });
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;
@@ -79,6 +81,51 @@ exports.sms = onRequest(
     }
 
     try {
+      // Handle Text Commands
+      if (numMedia === 0) {
+        const bodyText = (req.body.Body || '').trim().toUpperCase();
+        
+        if (bodyText === 'TOTAL') {
+          const stats = await getMonthlyStats(from);
+          await sendSms(from, `${stats.month} Total: $${stats.total.toFixed(2)} (${stats.count} receipts)`);
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
+        if (bodyText === 'SUMMARY') {
+          const stats = await getMonthlyStats(from);
+          const breakdown = Object.entries(stats.categories)
+            .sort((a, b) => b[1] - a[1])
+            .map(([cat, amt]) => `${cat}: $${amt.toFixed(2)}`)
+            .join('\n');
+          await sendSms(from, `${stats.month} Summary:\n${breakdown}\n\nTotal: $${stats.total.toFixed(2)}`);
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
+        if (bodyText === 'LAST') {
+          const last = await getLastReceipt(from);
+          if (!last) {
+            await sendSms(from, 'No receipts found.');
+          } else {
+            const date = last.date || 'unknown date';
+            await sendSms(from, `Last: ${last.merchant} — $${(last.total || 0).toFixed(2)} on ${date} (${last.category})`);
+          }
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
+        if (bodyText === 'HELP') {
+          await sendSms(from, 'Commands: TOTAL (monthly spend), SUMMARY (by category), LAST (latest receipt), or send a photo to log.');
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+      }
+
       let raw;
       const images = [];
       if (numMedia === 0) {
@@ -137,11 +184,21 @@ exports.sms = onRequest(
         try {
           imagePaths = await saveImages(images, messageSid);
         } catch (err) {
-          console.error('Image storage failed (non-fatal):', err.message);
+          logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
         }
       }
 
       const receipt = validateReceipt(raw);
+      
+      const duplicateId = await findDuplicate(receipt, from);
+      if (duplicateId) {
+        logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
+        await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged recently.`);
+        res.set('Content-Type', 'text/xml');
+        res.send('<Response/>');
+        return;
+      }
+
       await saveReceipt(receipt, from, messageSid, imagePaths);
 
       const merchant = receipt.merchant || 'Unknown';
@@ -150,9 +207,9 @@ exports.sms = onRequest(
       const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
 
       await sendSms(from, `${prefix}: ${merchant} — ${total} (${categoryDisplay})`);
-      console.log(`Successfully processed receipt from ${maskedFrom}: ${merchant} ${total}`);
+      logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total });
     } catch (err) {
-      console.error('Receipt parsing failed:', err);
+      logger.error('Receipt processing failed', { messageSid, from: maskedFrom, error: err.message || err });
       await sendSms(from, "Couldn't read that receipt. Try again with a clearer image or shorter text.");
     }
 
