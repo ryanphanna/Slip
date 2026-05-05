@@ -5,14 +5,18 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **SMS Text Commands**: Added support for direct querying via SMS. Use `TOTAL` (monthly spend), `SUMMARY` (category breakdown), `LAST` (latest receipt), or `HELP`.
+- **Duplicate Detection**: Implemented a check to prevent redundant receipt entries by matching merchant, total, and sender within a 10-minute window.
 - **Dependabot Configuration**: Enabled weekly automated `npm` dependency updates for the `functions` directory via `.github/dependabot.yml`.
 - **User Blocklist (Roadmap)**: Added a strategy for blocking abusive users using a Firestore `blocklist` collection with salted SHA-256 hashes for privacy.
 
 ### Fixed
+- **Structured JSON Logging**: Migrated from `console` to `firebase-functions/logger` for better observability and filtering in Google Cloud Logs. Includes relevant metadata like `messageSid` and masked phone numbers.
 - **Storage Path Sanitization**: Implemented alphanumeric sanitization for `messageSid` in `functions/lib/image-store.js` to prevent potential path traversal vulnerabilities in Cloud Storage.
 - **PII Masking in Logs**: Added `maskPhone` utility to `functions/index.js` to hide all but the last 4 digits of phone numbers in console logs, preventing accidental exposure of personal data.
 
 ### Changed
+- **Dependency Upgrades**: Upgraded `twilio` to v6.0.0 and `@google/generative-ai` to v0.24.1. Core Firebase SDKs are verified as up-to-date.
 - **Gemini Model Upgrade**: Upgraded the parsing pipeline to use the 2026 fleet: `gemini-3-flash` as the primary model and `gemini-3.1-pro` as the fallback for maximum accuracy and reasoning.
 - **Security Housekeeping**: Removed the deprecated and unused `functions/lib/telegram.js` library following the migration to Twilio.
 

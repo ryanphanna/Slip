@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { defineSecret } = require('firebase-functions/params');
+const logger = require('firebase-functions/logger');
 
 const geminiApiKey = defineSecret('GEMINI_API_KEY');
 
@@ -46,7 +47,7 @@ async function parseReceiptFromBase64(images) {
     let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(raw);
   } catch (err) {
-    console.warn('Primary model (gemini-3-flash) failed, attempting fallback to gemini-3.1-pro:', err.message);
+    logger.warn('Primary model (gemini-3-flash) failed, attempting fallback to gemini-3.1-pro', { error: err.message });
     
     // Fallback to Gemini 3.1 Pro
     const fallbackModel = genAI.getGenerativeModel({ 
