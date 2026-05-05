@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.3] — 2026-05-05
+
+### Fixed
+- **Webhook authentication restored**: removed temporary Twilio signature bypass and added robust validation across forwarded host/protocol URL variants.
+- **Allowlist fail-closed**: missing `ALLOWED_PHONES` now rejects requests instead of allowing all senders.
+- **Media fetch hardening**: restricted media downloads to approved Twilio HTTPS hosts with controlled redirect handling to block SSRF and credential forwarding to arbitrary domains.
+- **Input abuse limits**: added bounds for max attachments, per-image size, total media size, and max text body length.
+- **Error response sanitization**: removed internal exception details from user-facing SMS errors.
+- **Security housekeeping**: removed tracked log artifacts and added ignore rules for logs, local service account key files, and assistant-local markdown artifacts.
+- **Dependency vulnerability remediation**: added dependency overrides and lockfile updates resolving Dependabot/npm audit findings (including path-to-regexp, protobufjs, fast-xml-parser, and @tootallnate/once transitive issues).
+
+---
+
 ## [1.1.2] — 2026-05-04
 
 ### Added
