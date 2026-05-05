@@ -35,10 +35,10 @@ async function parseReceiptFromBase64(images) {
   }));
   promptParts.push({ text: PROMPT });
 
-  // Try parsing with Gemini 2.5 Flash first
+  // Try parsing with Gemini 3 Flash first
   try {
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash',
       generationConfig: { responseMimeType: 'application/json' }
     });
     
@@ -46,11 +46,11 @@ async function parseReceiptFromBase64(images) {
     let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(raw);
   } catch (err) {
-    console.warn('Primary model (2.5-flash) failed, attempting fallback to gemini-2.5-pro:', err.message);
+    console.warn('Primary model (gemini-3-flash) failed, attempting fallback to gemini-3.1-pro:', err.message);
     
-    // Fallback to Gemini 2.5 Pro
+    // Fallback to Gemini 3.1 Pro
     const fallbackModel = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.1-pro',
       generationConfig: { responseMimeType: 'application/json' }
     });
     
@@ -73,7 +73,7 @@ async function parseReceiptFromUrl(imageUrl) {
 async function parseReceiptFromText(text) {
   const genAI = new GoogleGenerativeAI(geminiApiKey.value());
   const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash',
     generationConfig: {
       responseMimeType: 'application/json'
     }

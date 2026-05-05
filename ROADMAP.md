@@ -11,6 +11,7 @@ Slip is a personal finance backend for capturing receipt data at the point of pu
 - **Node.js 20 Deprecation**: Runtime was deprecated 2026-04-30 and decommissions 2026-10-30. Upgrade to Node.js 22 before October.
 - **firebase-functions Upgrade**: CLI warns the current version is outdated. Upgrade to latest and address any breaking changes.
 - **Structured Error Logging**: Errors are logged as raw strings. Use structured JSON logging (`severity`, `message`, `receiptId`) for better filtering in Cloud Logging.
+- **User Blocklist**: Add a mechanism to block abusive or spammy numbers. Store blocked identifiers in a Firestore `blocklist` collection. Use salted hashes (SHA-256) of phone numbers in the blocklist to prevent storing raw PII while still allowing unique identification for rejection.
 
 ## Data Quality
 
