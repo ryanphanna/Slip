@@ -4,10 +4,10 @@ Slip is a personal finance backend for capturing receipt data at the point of pu
 
 ## Reliability & Security
 
-- **Rate Limiting**: No throttle exists on the SMS endpoint. A malicious actor (or Twilio retry storm) could rack up Gemini API costs and Firestore writes. Add per-number rate limiting (e.g. max 10 receipts/hour).
+- **Rate Limiting**: No throttle exists on the SMS endpoint. A malicious actor (or Twilio retry storm) could rack up Gemini API costs and Firestore writes. Add per-number rate limiting (e.g. max 10 receipts/hour). (✅ Done)
 - **Timeout Guard**: Gemini parsing + Twilio media fetch can exceed Cloud Run's 60s timeout on slow images. Add an `AbortController` with a hard cutoff and graceful error reply.
 - **Image Validation**: No checks on `MediaContentType0` — the function will happily send a PDF, video, or 20MB file to Gemini. Reject non-image MIME types and enforce a max file size before fetching.
-- **Retry Safety / Idempotency**: Twilio retries failed webhooks. Without idempotency (e.g. dedup on `MessageSid`), the same receipt can be saved multiple times (as we saw tonight with 4 identical entries).
+- **Retry Safety / Idempotency**: Twilio retries failed webhooks. Without idempotency (e.g. dedup on `MessageSid`), the same receipt can be saved multiple times (as we saw tonight with 4 identical entries). (✅ Done)
 - **Node.js 20 Deprecation**: Runtime was deprecated 2026-04-30 and decommissions 2026-10-30. Upgrade to Node.js 22 before October.
 - **firebase-functions Upgrade**: CLI warns the current version is outdated. Upgrade to latest and address any breaking changes. (✅ Done - SDKs at latest 2026 versions)
 - **User Blocklist**: Add a mechanism to block abusive or spammy numbers. Store blocked identifiers in a Firestore `blocklist` collection. Use salted hashes (SHA-256) of phone numbers in the blocklist to prevent storing raw PII while still allowing unique identification for rejection.
