@@ -18,10 +18,22 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "currency": "Currency code (e.g. CAD, USD, EUR). Infer from location if implied.",
   "type": "purchase or refund",
   "loyaltyPointsEarned": number or null,
-  "loyaltyPointsBalance": number or null
+  "loyaltyPointsBalance": number or null,
+  "confidence": 0.0 to 1.0 (how certain you are about the extraction)
 }
 Use null for anything you can't determine. Items can be an empty array.
 For each item, record the final net price paid after any inline per-item discount shown beneath it on the receipt. Do not add a separate line item for any discount summary or coupon total that appears at the bottom — if per-item discounts are already reflected in individual prices, the summary line is redundant and should be omitted.`;
+
+async function parseWithPro(promptParts, genAI) {
+  const fallbackModel = genAI.getGenerativeModel({ 
+    model: 'gemini-3.1-pro',
+    generationConfig: { responseMimeType: 'application/json' }
+  });
+  
+  const result = await fallbackModel.generateContent(promptParts);
+  let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  return JSON.parse(raw);
+}
 
 async function parseReceiptFromBase64(images) {
   // Backwards compatibility for single string signature
@@ -45,19 +57,18 @@ async function parseReceiptFromBase64(images) {
     
     const result = await model.generateContent(promptParts);
     let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+
+    // If confidence is low, fallback to Pro
+    if (parsed.confidence != null && parsed.confidence < 0.8) {
+      logger.info('Low confidence from Flash model, attempting Pro fallback', { confidence: parsed.confidence });
+      return await parseWithPro(promptParts, genAI);
+    }
+
+    return parsed;
   } catch (err) {
     logger.warn('Primary model (gemini-3-flash) failed, attempting fallback to gemini-3.1-pro', { error: err.message });
-    
-    // Fallback to Gemini 3.1 Pro
-    const fallbackModel = genAI.getGenerativeModel({ 
-      model: 'gemini-3.1-pro',
-      generationConfig: { responseMimeType: 'application/json' }
-    });
-    
-    const result = await fallbackModel.generateContent(promptParts);
-    let raw = result.response.text().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    return JSON.parse(raw);
+    return await parseWithPro(promptParts, genAI);
   }
 }
 
