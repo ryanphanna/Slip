@@ -21,6 +21,13 @@ const MAX_TOTAL_MEDIA_SIZE = 20 * 1024 * 1024; // 20 MB
 const MAX_MEDIA_ATTACHMENTS = 4;
 const MAX_BODY_TEXT_LENGTH = 8000;
 
+function maskPhone(phone) {
+  if (!phone || typeof phone !== 'string') return 'unknown';
+  const clean = phone.trim();
+  if (clean.length <= 4) return clean;
+  return `+${'*'.repeat(clean.length - 5)}${clean.slice(-4)}`;
+}
+
 exports.sms = onRequest(
   { secrets: [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, geminiApiKey] },
   async (req, res) => {
@@ -41,6 +48,7 @@ exports.sms = onRequest(
     }
 
     const from = req.body.From;
+    const maskedFrom = maskPhone(from);
     const numMedia = Number.parseInt(req.body.NumMedia || '0', 10);
     const messageSid = req.body.MessageSid;
 
@@ -57,7 +65,7 @@ exports.sms = onRequest(
     }
 
     if (!isAllowed(from)) {
-      console.warn(`Rejected request from unlisted number: ${from}`);
+      console.warn(`Rejected request from unlisted number: ${maskedFrom}`);
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;
@@ -142,6 +150,7 @@ exports.sms = onRequest(
       const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
 
       await sendSms(from, `${prefix}: ${merchant} — ${total} (${categoryDisplay})`);
+      console.log(`Successfully processed receipt from ${maskedFrom}: ${merchant} ${total}`);
     } catch (err) {
       console.error('Receipt parsing failed:', err);
       await sendSms(from, "Couldn't read that receipt. Try again with a clearer image or shorter text.");
