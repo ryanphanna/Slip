@@ -1,5 +1,19 @@
 const admin = require('firebase-admin');
 
+function countRecentReceipts(snapshotDocs, from, oneHourAgo, limit) {
+  let recentCount = 0;
+  for (const doc of snapshotDocs) {
+    if (doc.get('from') !== from) continue;
+    const createdAt = doc.get('createdAt');
+    const createdAtDate = createdAt?.toDate?.();
+    if (!createdAtDate || createdAtDate < oneHourAgo) continue;
+    recentCount += 1;
+    if (recentCount >= limit) return true;
+  }
+
+  return false;
+}
+
 async function isMessageProcessed(messageSid) {
   if (!messageSid) return false;
   const db = admin.firestore();
@@ -14,12 +28,11 @@ async function checkRateLimit(from, limit = 15) {
   const db = admin.firestore();
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const snapshot = await db.collection('receipts')
-    .where('from', '==', from)
-    .where('createdAt', '>=', oneHourAgo)
-    .count()
+    .orderBy('createdAt', 'desc')
+    .limit(Math.max(limit * 10, 50))
     .get();
-  
-  return snapshot.data().count >= limit;
+
+  return countRecentReceipts(snapshot.docs, from, oneHourAgo, limit);
 }
 
 async function findDuplicate(receipt, from) {
@@ -51,4 +64,4 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = []) {
   return doc.id;
 }
 
-module.exports = { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit };
+module.exports = { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };
