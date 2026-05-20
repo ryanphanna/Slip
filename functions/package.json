@@ -6,7 +6,10 @@
     "node": "22"
   },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "smoke": "node scripts/smoke.js",
+    "check:webhook-health": "node scripts/check-webhook-health.js",
+    "check:release": "node scripts/release-check.js"
   },
   "dependencies": {
     "@google-cloud/logging": "^11.2.1",

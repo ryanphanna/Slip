@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.1] — 2026-05-20
+
+### Added
+- **Startup runtime health logging**: The `sms` function now logs a one-time startup health summary per revision, including whether `ALLOWED_PHONES`, `WEBHOOK_URL`, Twilio credentials, and Gemini credentials are actually loaded in production.
+- **Signed production smoke test**: Added `functions/scripts/smoke.js` and `npm run smoke` to exercise the live webhook with a correctly signed synthetic Twilio request and verify that a reply SMS is emitted.
+- **Webhook failure check script**: Added `functions/scripts/check-webhook-health.js` and `npm run check:webhook-health` to flag repeated inbound Twilio `11200` webhook failures.
+- **Release check script**: Added `functions/scripts/release-check.js` and `npm run check:release` to catch Firebase runtime drift and missing required Firestore indexes before deploy.
+
+### Fixed
+- **Media fetch CDN redirect**: The strict `ALLOWED_MEDIA_HOSTS` check was applied to every redirect in the chain, blocking Twilio CDN redirects to S3 or CloudFront. Now only the initial webhook-supplied URL is validated against the allowlist (SSRF protection on user-controlled input); CDN redirects enforce HTTPS only.
+- **Function timeout**: Default Cloud Run timeout of 60s was too short for Gemini Flash + optional Pro fallback. Increased to 180s.
+- **Index-light command path**: `LAST` and hourly rate limiting no longer depend on Firestore composite indexes for `from + createdAt`, so inbound command replies do not hard-fail if indexes lag behind deployment.
+- **Runtime config loading**: `ALLOWED_PHONES` and `WEBHOOK_URL` now resolve cleanly through the same runtime-health path used for startup diagnostics instead of silently drifting between local envs and deployed secrets.
+- **Twilio config drift recovery**: `ALLOWED_PHONES` and `WEBHOOK_URL` are now mounted as Firebase secrets in production, which closes the gap between local `.env` analysis and actual runtime config.
+
+### Changed
+- **Firebase runtime alignment**: `firebase.json` now targets `nodejs22`, matching `functions/package.json` and avoiding the stale Node 20 deployment path.
+- **Operational docs**: README and env examples now document the production secret set, deploy order, smoke testing, and webhook health checks.
+- **Twilio webhook handling**: Allowed senders currently bypass strict Twilio signature rejection while signature mismatches remain logged, restoring service without hiding the underlying validation issue.
+
 ## [1.2.0] — 2026-05-05
 
 ### Added
