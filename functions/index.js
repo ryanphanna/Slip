@@ -86,18 +86,20 @@ exports.sms = onRequest(
       return;
     }
 
+    if (!validateTwilioSignature(req)) {
+      logger.warn('Rejected request with invalid Twilio signature', {
+        messageSid,
+        from: maskedFrom,
+      });
+      res.status(403).send('Forbidden');
+      return;
+    }
+
     if (!isAllowed(from)) {
       logger.warn('Rejected request from unlisted number', { messageSid, from: maskedFrom });
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;
-    }
-
-    if (!validateTwilioSignature(req)) {
-      logger.warn('Proceeding with allowed sender despite invalid Twilio signature', {
-        messageSid,
-        from: maskedFrom,
-      });
     }
 
     if (await isMessageProcessed(messageSid)) {

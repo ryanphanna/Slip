@@ -1,5 +1,6 @@
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
+const crypto = require('crypto');
 const twilio = require('twilio');
 const { readConfigValue } = require('./runtime-health');
 
@@ -67,6 +68,18 @@ function buildRequestUrls(req) {
   return [...urls];
 }
 
+function readRequiredConfig(envName, secretParam) {
+  return readConfigValue(envName, secretParam).value.trim();
+}
+
+function signatureMatches(authToken, signature, url, params) {
+  const expected = twilio.getExpectedTwilioSignature(authToken, url, params);
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
 function validateTwilioSignature(req) {
   const signature = req.headers['x-twilio-signature'];
   if (!signature) {
@@ -74,12 +87,15 @@ function validateTwilioSignature(req) {
     return false;
   }
 
-  const authToken = twilioAuthToken.value();
+  const authToken = readRequiredConfig('TWILIO_AUTH_TOKEN', twilioAuthToken);
   const params = req.body && typeof req.body === 'object' ? req.body : {};
   const candidates = buildRequestUrls(req);
 
   for (const candidateUrl of candidates) {
-    if (twilio.validateRequest(authToken, signature, candidateUrl, params)) {
+    if (
+      twilio.validateRequest(authToken, signature, candidateUrl, params) ||
+      signatureMatches(authToken, signature, candidateUrl, params)
+    ) {
       return true;
     }
   }
@@ -89,8 +105,15 @@ function validateTwilioSignature(req) {
 }
 
 async function sendSms(to, body) {
-  const client = twilio(twilioAccountSid.value(), twilioAuthToken.value());
-  await client.messages.create({ body, from: twilioPhoneNumber.value(), to });
+  const client = twilio(
+    readRequiredConfig('TWILIO_ACCOUNT_SID', twilioAccountSid),
+    readRequiredConfig('TWILIO_AUTH_TOKEN', twilioAuthToken)
+  );
+  await client.messages.create({
+    body,
+    from: readRequiredConfig('TWILIO_PHONE_NUMBER', twilioPhoneNumber),
+    to,
+  });
 }
 
 function validateMediaUrl(url, baseUrl) {
@@ -111,7 +134,7 @@ function shouldSendAuth(url) {
 
 async function fetchMedia(mediaUrl) {
   const credentials = Buffer.from(
-    `${twilioAccountSid.value()}:${twilioAuthToken.value()}`
+    `${readRequiredConfig('TWILIO_ACCOUNT_SID', twilioAccountSid)}:${readRequiredConfig('TWILIO_AUTH_TOKEN', twilioAuthToken)}`
   ).toString('base64');
 
   // Validate the webhook-supplied URL against allowlist (SSRF protection on user-controlled input)

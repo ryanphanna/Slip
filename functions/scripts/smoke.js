@@ -1,25 +1,62 @@
 #!/usr/bin/env node
-const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
 const twilio = require('twilio');
+
+function loadDotenv(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match || process.env[match[1]]) continue;
+
+    let value = match[2].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    process.env[match[1]] = value;
+  }
+}
+
+loadDotenv(path.join(__dirname, '..', '.env'));
 
 function getEnv(name, fallback = '') {
   return process.env[name] || fallback;
 }
 
-function requireEnv(name) {
-  const value = getEnv(name);
+function getSecret(name) {
+  const version = process.env.SMOKE_SECRET_VERSION || '1';
+  try {
+    return execFileSync('firebase', ['functions:secrets:access', `${name}@${version}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function getConfig(name, fallback = '') {
+  return getEnv(name) || getSecret(name) || fallback;
+}
+
+function requireConfig(name) {
+  const value = getConfig(name);
   if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
+    throw new Error(`Missing required config: ${name}`);
   }
   return value;
 }
 
 function buildSignature(authToken, url, params) {
-  const data = url + Object.keys(params)
-    .sort()
-    .map(key => key + params[key])
-    .join('');
-  return crypto.createHmac('sha1', authToken).update(data, 'utf8').digest('base64');
+  return twilio.getExpectedTwilioSignature(authToken, url, params);
 }
 
 async function sleep(ms) {
@@ -52,14 +89,14 @@ async function verifyReply({ accountSid, authToken, from, to, startedAt }) {
 }
 
 async function main() {
-  const webhookUrl = requireEnv('WEBHOOK_URL');
-  const authToken = requireEnv('TWILIO_AUTH_TOKEN');
-  const to = requireEnv('TWILIO_PHONE_NUMBER');
-  const from = getEnv('SMOKE_FROM') || getEnv('ALLOWED_PHONES').split(',')[0]?.trim();
+  const webhookUrl = requireConfig('WEBHOOK_URL');
+  const authToken = requireConfig('TWILIO_AUTH_TOKEN');
+  const to = requireConfig('TWILIO_PHONE_NUMBER');
+  const from = getEnv('SMOKE_FROM') || getConfig('ALLOWED_PHONES').split(',')[0]?.trim();
   if (!from) throw new Error('Set SMOKE_FROM or ALLOWED_PHONES for the smoke sender');
 
   const body = process.argv[2] || 'LAST';
-  const accountSid = getEnv('TWILIO_ACCOUNT_SID');
+  const accountSid = getConfig('TWILIO_ACCOUNT_SID');
   const messageSid = `SMOKE-${Date.now()}`;
   const params = {
     AccountSid: accountSid || 'ACSMOKE',

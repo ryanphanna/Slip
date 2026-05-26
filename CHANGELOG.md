@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.2] — 2026-05-26
+
+### Fixed
+- **Twilio webhook authentication**: invalid Twilio signatures are rejected with `403 Forbidden` even when the sender is allowlisted, restoring fail-closed request authentication.
+- **Twilio runtime config resolution**: Twilio validation, SMS replies, and media fetches now read the mounted runtime config path consistently instead of calling duplicate secret params directly.
+- **Signed smoke test config**: `npm run smoke` now loads local `.env` values and falls back to Firebase Secret Manager, so it works without duplicating production config locally.
+- **Signed smoke test signatures**: smoke tests now use Twilio's official signature helper and the webhook accepts exact URL signatures alongside Twilio's normalized URL validation.
+- **LAST command accuracy**: `LAST` now queries the sender's newest receipt directly instead of sampling recent global receipts and filtering locally.
+
 ## [1.2.1] — 2026-05-20
 
 ### Added
