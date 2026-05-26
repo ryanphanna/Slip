@@ -38,11 +38,12 @@ async function getMonthlyStats(from) {
 async function getLastReceipt(from) {
   const db = admin.firestore();
   const snapshot = await db.collection('receipts')
+    .where('from', '==', from)
     .orderBy('createdAt', 'desc')
-    .limit(50)
+    .limit(1)
     .get();
 
-  return findLatestReceiptForSender(snapshot.docs, from);
+  return snapshot.empty ? null : snapshot.docs[0].data();
 }
 
 module.exports = { getMonthlyStats, getLastReceipt, findLatestReceiptForSender };
