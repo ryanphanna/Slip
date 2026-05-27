@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Functions CI**: Added a GitHub Actions workflow that runs `npm ci`, `npm test`, and `npm run check:release` for function, Firebase runtime, and Firestore index changes.
+
+### Fixed
+- **Dependency vulnerabilities**: Updated the npm lockfile and added a `uuid` override to resolve the moderate npm audit findings reported by GitHub.
+
 ## [1.2.2] — 2026-05-26
 
 ### Fixed
@@ -28,7 +36,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Firebase runtime alignment**: `firebase.json` now targets `nodejs22`, matching `functions/package.json` and avoiding the stale Node 20 deployment path.
-- **Operational docs**: README and env examples now document the production secret set, deploy order, smoke testing, and webhook health checks.
+- **Operational docs**: env examples document the production secret set, deploy order, smoke testing, and webhook health checks.
 - **Twilio webhook handling**: Allowed senders currently bypass strict Twilio signature rejection while signature mismatches remain logged, restoring service without hiding the underlying validation issue.
 
 ## [1.2.0] — 2026-05-05
