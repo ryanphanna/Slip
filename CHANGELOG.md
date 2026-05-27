@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.2.3] — 2026-05-26
 
 ### Added
 - **Functions CI**: Added a GitHub Actions workflow that runs `npm ci`, `npm test`, and `npm run check:release` for function, Firebase runtime, and Firestore index changes.
