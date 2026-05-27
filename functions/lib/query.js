@@ -1,5 +1,12 @@
 const admin = require('firebase-admin');
 
+function findLatestReceiptForSender(snapshotDocs, from) {
+  for (const doc of snapshotDocs) {
+    if (doc.get('from') === from) return doc.data();
+  }
+  return null;
+}
+
 async function getMonthlyStats(from) {
   const db = admin.firestore();
   const now = new Date();
@@ -36,8 +43,7 @@ async function getLastReceipt(from) {
     .limit(1)
     .get();
 
-  if (snapshot.empty) return null;
-  return snapshot.docs[0].data();
+  return snapshot.empty ? null : snapshot.docs[0].data();
 }
 
-module.exports = { getMonthlyStats, getLastReceipt };
+module.exports = { getMonthlyStats, getLastReceipt, findLatestReceiptForSender };
