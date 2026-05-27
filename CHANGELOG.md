@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Gemini parsing refactoring (Priority 1)**: Extracted the authoritative PROMPT and all Gemini Vision logic (Flash primary + Pro fallback on low confidence, JSON cleanup, multi-image support) into a new shared `functions/lib/gemini.js`. Both `lib/receipt.js` (production) and `scripts/test-parse.js` now delegate to it, eliminating duplication. The shared module is usable from both Cloud Functions (secret-based) and local scripts (env var).
 - **Centralized config (Priority 2)**: Created `functions/lib/config.js` and moved all magic numbers/limits (image sizes, media attachments, body text length, rate limiting, duplicate window, function timeout) into one place. Updated `index.js` and `store.js` to use it. Error messages now stay in sync automatically.
+- **Twilio URL generation tests (Priority 3)**: Added unit tests for the complex `buildRequestUrls` function (and `parseForwardedValues`) in `lib/twilio.js`. Exported the helpers for testability. Covers forwarded headers, path variants, Cloud Functions URL generation, and fallback behavior. 8 new tests added.
 
 ## [1.2.3] — 2026-05-26
 
