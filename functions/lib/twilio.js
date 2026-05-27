@@ -159,4 +159,10 @@ async function fetchMedia(mediaUrl) {
   throw new Error('Too many redirects while fetching Twilio media');
 }
 
-module.exports = { validateTwilioSignature, sendSms, fetchMedia };
+module.exports = {
+  validateTwilioSignature,
+  sendSms,
+  fetchMedia,
+  buildRequestUrls,           // Exported for unit testing the complex URL generation logic
+  parseForwardedValues,       // Exported for unit testing
+};

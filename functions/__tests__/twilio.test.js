@@ -1,0 +1,139 @@
+const { buildRequestUrls, parseForwardedValues } = require('../lib/twilio');
+
+describe('twilio url generation helpers', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    // Reset relevant env vars before each test
+    delete process.env.WEBHOOK_URL;
+    delete process.env.K_SERVICE;
+    delete process.env.FUNCTION_TARGET;
+    delete process.env.FUNCTION_REGION;
+    delete process.env.GCLOUD_REGION;
+    delete process.env.GCLOUD_PROJECT;
+    delete process.env.GCP_PROJECT;
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  describe('parseForwardedValues', () => {
+    it('returns empty array for missing or invalid input', () => {
+      expect(parseForwardedValues(null)).toEqual([]);
+      expect(parseForwardedValues(undefined)).toEqual([]);
+      expect(parseForwardedValues('')).toEqual([]);
+      expect(parseForwardedValues(123)).toEqual([]);
+    });
+
+    it('splits comma-separated values and trims whitespace', () => {
+      expect(parseForwardedValues('host1.example.com, host2.example.com')).toEqual([
+        'host1.example.com',
+        'host2.example.com',
+      ]);
+    });
+
+    it('filters out empty values', () => {
+      expect(parseForwardedValues('host1,,host2, ')).toEqual(['host1', 'host2']);
+    });
+  });
+
+  describe('buildRequestUrls', () => {
+    it('generates basic URLs from a minimal request', () => {
+      process.env.WEBHOOK_URL = 'https://example.com/webhook';
+      process.env.K_SERVICE = 'sms';
+      process.env.GCLOUD_PROJECT = 'my-project';
+
+      const req = {
+        originalUrl: '/webhook',
+        url: '/webhook',
+        headers: { host: 'example.com' },
+        protocol: 'https',
+        get: (h) => (h === 'host' ? 'example.com' : undefined),
+      };
+
+      const urls = buildRequestUrls(req);
+
+      expect(urls).toContain('https://example.com/webhook');
+      expect(urls).toContain('https://example.com/webhook/');
+      expect(urls.some(u => u.includes('my-project.cloudfunctions.net/sms'))).toBe(true);
+    });
+
+    it('includes variants from x-forwarded-host and x-forwarded-proto', () => {
+      process.env.WEBHOOK_URL = 'https://primary.example.com/sms';
+      process.env.K_SERVICE = 'sms';
+
+      const req = {
+        originalUrl: '/sms',
+        headers: {
+          host: 'internal-host',
+          'x-forwarded-host': 'forwarded1.com, forwarded2.com',
+          'x-forwarded-proto': 'https, http',
+        },
+        protocol: 'http',
+        get: (h) => req.headers[h.toLowerCase()] || undefined,
+      };
+
+      const urls = buildRequestUrls(req);
+
+      // Should include variants for both forwarded hosts
+      expect(urls.some(u => u.includes('https://forwarded1.com'))).toBe(true);
+      expect(urls.some(u => u.includes('http://forwarded2.com'))).toBe(true);
+      expect(urls.some(u => u.includes('https://internal-host'))).toBe(true);
+    });
+
+    it('handles paths that do not match the function name', () => {
+      process.env.K_SERVICE = 'sms';
+      process.env.GCLOUD_PROJECT = 'proj';
+
+      const req = {
+        originalUrl: '/custom-path',
+        headers: { host: 'example.com' },
+        protocol: 'https',
+        get: () => 'example.com',
+      };
+
+      const urls = buildRequestUrls(req);
+
+      expect(urls).toContain('https://example.com/custom-path');
+      expect(urls).toContain('https://example.com/sms'); // the fallback function name path
+    });
+
+    it('always includes both slashed and non-slashed versions', () => {
+      process.env.WEBHOOK_URL = 'https://example.com/sms';
+      process.env.K_SERVICE = 'sms';
+
+      const req = {
+        originalUrl: '/sms',
+        headers: { host: 'example.com' },
+        protocol: 'https',
+        get: () => 'example.com',
+      };
+
+      const urls = buildRequestUrls(req);
+
+      expect(urls).toContain('https://example.com/sms');
+      expect(urls).toContain('https://example.com/sms/');
+    });
+
+    it('falls back gracefully when many headers are missing', () => {
+      process.env.WEBHOOK_URL = 'https://fallback.example.com';
+      process.env.FUNCTION_TARGET = 'myfunc';
+      process.env.GCLOUD_PROJECT = 'test-proj';
+
+      const req = {
+        headers: { host: 'some-host.internal' },
+        protocol: 'https',
+        get: (h) => (h === 'host' ? 'some-host.internal' : undefined),
+      };
+
+      const urls = buildRequestUrls(req);
+
+      expect(urls.length).toBeGreaterThan(0);
+      // Should still generate the function-name fallback path
+      expect(urls.some(u => u.includes('/myfunc'))).toBe(true);
+      // Should also generate the Cloud Functions URL
+      expect(urls.some(u => u.includes('test-proj.cloudfunctions.net'))).toBe(true);
+    });
+  });
+});
