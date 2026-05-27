@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const config = require('./config');
 
 function countRecentReceipts(snapshotDocs, from, oneHourAgo, limit) {
   let recentCount = 0;
@@ -24,9 +25,9 @@ async function isMessageProcessed(messageSid) {
   return !snapshot.empty;
 }
 
-async function checkRateLimit(from, limit = 15) {
+async function checkRateLimit(from, limit = config.RATE_LIMIT_PER_HOUR) {
   const db = admin.firestore();
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const oneHourAgo = new Date(Date.now() - config.RATE_LIMIT_WINDOW_MS);
   const snapshot = await db.collection('receipts')
     .orderBy('createdAt', 'desc')
     .limit(Math.max(limit * 10, 50))
@@ -39,7 +40,7 @@ async function findDuplicate(receipt, from) {
   if (!receipt.merchant || receipt.total == null) return null;
 
   const db = admin.firestore();
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  const tenMinutesAgo = new Date(Date.now() - config.DUPLICATE_WINDOW_MS);
 
   const snapshot = await db.collection('receipts')
     .where('from', '==', from)

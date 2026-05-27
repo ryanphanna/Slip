@@ -10,6 +10,7 @@ const { getMonthlyStats, getLastReceipt } = require('./lib/query');
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
+const config = require('./lib/config');
 
 admin.initializeApp();
 
@@ -20,11 +21,6 @@ const geminiApiKey = defineSecret('GEMINI_API_KEY');
 const allowedPhonesSecret = defineSecret('ALLOWED_PHONES');
 const webhookUrlSecret = defineSecret('WEBHOOK_URL');
 
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif'];
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
-const MAX_TOTAL_MEDIA_SIZE = 20 * 1024 * 1024; // 20 MB
-const MAX_MEDIA_ATTACHMENTS = 4;
-const MAX_BODY_TEXT_LENGTH = 8000;
 let startupHealthLogged = false;
 
 function maskPhone(phone) {
@@ -44,7 +40,7 @@ exports.sms = onRequest(
       allowedPhonesSecret,
       webhookUrlSecret,
     ],
-    timeoutSeconds: 180,
+    timeoutSeconds: config.FUNCTION_TIMEOUT_SECONDS,
   },
   async (req, res) => {
     if (!startupHealthLogged) {
@@ -117,8 +113,8 @@ exports.sms = onRequest(
       return;
     }
 
-    if (numMedia > MAX_MEDIA_ATTACHMENTS) {
-      await sendSms(from, `Too many attachments. Send up to ${MAX_MEDIA_ATTACHMENTS} images per message.`);
+    if (numMedia > config.MAX_MEDIA_ATTACHMENTS) {
+      await sendSms(from, `Too many attachments. Send up to ${config.MAX_MEDIA_ATTACHMENTS} images per message.`);
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;
@@ -181,8 +177,8 @@ exports.sms = onRequest(
           return;
         }
 
-        if (bodyText.length > MAX_BODY_TEXT_LENGTH) {
-          await sendSms(from, `Receipt text is too long. Keep it under ${MAX_BODY_TEXT_LENGTH} characters.`);
+        if (bodyText.length > config.MAX_BODY_TEXT_LENGTH) {
+          await sendSms(from, `Receipt text is too long. Keep it under ${config.MAX_BODY_TEXT_LENGTH} characters.`);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -193,19 +189,19 @@ exports.sms = onRequest(
         let totalMediaBytes = 0;
         for (let i = 0; i < numMedia; i++) {
           const mimeType = req.body[`MediaContentType${i}`] || 'image/jpeg';
-          if (!ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) continue;
+          if (!config.ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) continue;
 
           const mediaUrl = req.body[`MediaUrl${i}`];
           if (!mediaUrl) continue;
           const imgResponse = await fetchMedia(mediaUrl);
 
           const contentLength = Number.parseInt(imgResponse.headers.get('content-length') || '0', 10);
-          if (contentLength > MAX_IMAGE_SIZE) continue;
+          if (contentLength > config.MAX_IMAGE_SIZE) continue;
 
           const buffer = Buffer.from(await imgResponse.arrayBuffer());
-          if (buffer.length > MAX_IMAGE_SIZE) continue;
+          if (buffer.length > config.MAX_IMAGE_SIZE) continue;
 
-          if (totalMediaBytes + buffer.length > MAX_TOTAL_MEDIA_SIZE) continue;
+          if (totalMediaBytes + buffer.length > config.MAX_TOTAL_MEDIA_SIZE) continue;
           totalMediaBytes += buffer.length;
 
           const base64 = buffer.toString('base64');
@@ -213,7 +209,7 @@ exports.sms = onRequest(
         }
 
         if (images.length === 0) {
-          await sendSms(from, 'No valid images were found. Use up to 4 images under 10MB each.');
+          await sendSms(from, `No valid images were found. Use up to ${config.MAX_MEDIA_ATTACHMENTS} images under ${config.MAX_IMAGE_SIZE / 1024 / 1024}MB each.`);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
