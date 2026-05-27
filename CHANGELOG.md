@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.2.4] — 2026-05-27
 
 ### Changed
 - **Gemini parsing refactoring (Priority 1)**: Extracted the authoritative PROMPT and all Gemini Vision logic (Flash primary + Pro fallback on low confidence, JSON cleanup, multi-image support) into a new shared `functions/lib/gemini.js`. Both `lib/receipt.js` (production) and `scripts/test-parse.js` now delegate to it, eliminating duplication. The shared module is usable from both Cloud Functions (secret-based) and local scripts (env var).
