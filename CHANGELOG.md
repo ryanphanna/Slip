@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.5] — 2026-05-30
+
+### Fixed
+- **Screenshot parsing fallback**: Added an OCR-based retry path when Gemini vision parsing fails, plus more tolerant JSON extraction and clearer SMS error hints when a receipt can't be read.
+
+### Security
+- **CodeQL: Incomplete URL substring sanitization** (`js/incomplete-url-substring-sanitization`): Replaced `String#includes()` URL assertions in `twilio.test.js` with `startsWith()` for full protocol+host prefix checks (anchors match to the start of the URL) and `new URL().hostname` / `new URL().pathname` parsing for host-fragment and path checks. Eliminates the pattern where a trusted hostname could pass a substring check by appearing anywhere in a crafted URL.
+- **CodeQL: Workflow does not contain permissions**: Added `permissions: contents: read` to the `test` job in `functions-ci.yml`, pinning `GITHUB_TOKEN` to least-privilege read-only access instead of inheriting the default write scope.
+
 ## [1.2.4] — 2026-05-27
 
 ### Changed
