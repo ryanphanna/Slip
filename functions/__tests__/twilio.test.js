@@ -56,7 +56,7 @@ describe('twilio url generation helpers', () => {
 
       expect(urls).toContain('https://example.com/webhook');
       expect(urls).toContain('https://example.com/webhook/');
-      expect(urls.some(u => u.includes('my-project.cloudfunctions.net/sms'))).toBe(true);
+      expect(urls.some(u => { try { const p = new URL(u); return p.hostname.endsWith('my-project.cloudfunctions.net') && p.pathname.startsWith('/sms'); } catch { return false; } })).toBe(true);
     });
 
     it('includes variants from x-forwarded-host and x-forwarded-proto', () => {
@@ -77,9 +77,9 @@ describe('twilio url generation helpers', () => {
       const urls = buildRequestUrls(req);
 
       // Should include variants for both forwarded hosts
-      expect(urls.some(u => u.includes('https://forwarded1.com'))).toBe(true);
-      expect(urls.some(u => u.includes('http://forwarded2.com'))).toBe(true);
-      expect(urls.some(u => u.includes('https://internal-host'))).toBe(true);
+      expect(urls.some(u => u.startsWith('https://forwarded1.com'))).toBe(true);
+      expect(urls.some(u => u.startsWith('http://forwarded2.com'))).toBe(true);
+      expect(urls.some(u => u.startsWith('https://internal-host'))).toBe(true);
     });
 
     it('handles paths that do not match the function name', () => {
@@ -131,9 +131,9 @@ describe('twilio url generation helpers', () => {
 
       expect(urls.length).toBeGreaterThan(0);
       // Should still generate the function-name fallback path
-      expect(urls.some(u => u.includes('/myfunc'))).toBe(true);
+      expect(urls.some(u => { try { return new URL(u).pathname.startsWith('/myfunc'); } catch { return false; } })).toBe(true);
       // Should also generate the Cloud Functions URL
-      expect(urls.some(u => u.includes('test-proj.cloudfunctions.net'))).toBe(true);
+      expect(urls.some(u => { try { return new URL(u).hostname.endsWith('test-proj.cloudfunctions.net'); } catch { return false; } })).toBe(true);
     });
   });
 });
