@@ -56,7 +56,8 @@ describe('twilio url generation helpers', () => {
 
       expect(urls).toContain('https://example.com/webhook');
       expect(urls).toContain('https://example.com/webhook/');
-      expect(urls.some(u => { try { const p = new URL(u); return p.hostname.endsWith('my-project.cloudfunctions.net') && p.pathname.startsWith('/sms'); } catch { return false; } })).toBe(true);
+      expect(urls).toContain('https://us-central1-my-project.cloudfunctions.net/sms');
+      expect(urls).toContain('https://us-central1-my-project.cloudfunctions.net/sms/');
     });
 
     it('includes variants from x-forwarded-host and x-forwarded-proto', () => {
@@ -133,7 +134,8 @@ describe('twilio url generation helpers', () => {
       // Should still generate the function-name fallback path
       expect(urls.some(u => { try { return new URL(u).pathname.startsWith('/myfunc'); } catch { return false; } })).toBe(true);
       // Should also generate the Cloud Functions URL
-      expect(urls.some(u => { try { return new URL(u).hostname.endsWith('test-proj.cloudfunctions.net'); } catch { return false; } })).toBe(true);
+      expect(urls).toContain('https://us-central1-test-proj.cloudfunctions.net/myfunc');
+      expect(urls).toContain('https://us-central1-test-proj.cloudfunctions.net/myfunc/');
     });
   });
 });

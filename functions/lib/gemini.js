@@ -23,11 +23,36 @@ Use null for anything you can't determine. Items can be an empty array.
 For each item, record the final net price paid after any inline per-item discount shown beneath it on the receipt. Do not add a separate line item for any discount summary or coupon total that appears at the bottom — if per-item discounts are already reflected in individual prices, the summary line is redundant and should be omitted.`;
 
 /**
- * Strip markdown code fences and parse JSON.
+ * Strip markdown code fences and parse JSON. Attempts a fallback extraction
+ * if the model returns extra text around the JSON payload.
  */
 function cleanJsonResponse(text) {
   const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    const first = cleaned.indexOf('{');
+    const last = cleaned.lastIndexOf('}');
+    if (first !== -1 && last !== -1 && last > first) {
+      const sliced = cleaned.slice(first, last + 1);
+      try {
+        return JSON.parse(sliced);
+      } catch (innerErr) {
+        const wrapped = new Error('Gemini returned invalid JSON');
+        wrapped.cause = innerErr;
+        throw wrapped;
+      }
+    }
+    const wrapped = new Error('Gemini returned invalid JSON');
+    wrapped.cause = err;
+    throw wrapped;
+  }
+}
+
+function buildImagePromptParts(images) {
+  return images.map(img => ({
+    inlineData: { data: img.base64, mimeType: img.mimeType }
+  }));
 }
 
 async function parseWithPro(promptParts, apiKey) {
@@ -39,6 +64,24 @@ async function parseWithPro(promptParts, apiKey) {
 
   const result = await model.generateContent(promptParts);
   return cleanJsonResponse(result.response.text());
+}
+
+async function extractReceiptTextFromBase64(images, apiKey) {
+  // Backwards compatibility for single string signature
+  if (typeof images === 'string') {
+    images = [{ base64: arguments[0], mimeType: arguments[1] || 'image/jpeg' }];
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro' });
+
+  const promptParts = buildImagePromptParts(images);
+  promptParts.push({
+    text: 'Transcribe the receipt text exactly as seen. Return plain text only with line breaks. Ignore any phone UI or background.'
+  });
+
+  const result = await model.generateContent(promptParts);
+  return (result.response.text() || '').trim();
 }
 
 /**
@@ -54,9 +97,7 @@ async function parseReceiptFromBase64(images, apiKey) {
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  const promptParts = images.map(img => ({
-    inlineData: { data: img.base64, mimeType: img.mimeType }
-  }));
+  const promptParts = buildImagePromptParts(images);
   promptParts.push({ text: PROMPT });
 
   // Try Flash first
@@ -76,7 +117,17 @@ async function parseReceiptFromBase64(images, apiKey) {
     return parsed;
   } catch (err) {
     // Any failure on Flash → Pro fallback
-    return await parseWithPro(promptParts, apiKey);
+    try {
+      return await parseWithPro(promptParts, apiKey);
+    } catch (proErr) {
+      const ocrText = await extractReceiptTextFromBase64(images, apiKey);
+      if (!ocrText || ocrText.length < 40) {
+        const wrapped = new Error('OCR text too short for reliable parsing');
+        wrapped.cause = proErr;
+        throw wrapped;
+      }
+      return await parseReceiptFromText(ocrText, apiKey);
+    }
   }
 }
 
@@ -85,17 +136,28 @@ async function parseReceiptFromBase64(images, apiKey) {
  */
 async function parseReceiptFromText(text, apiKey) {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'gemini-3-flash',
-    generationConfig: { responseMimeType: 'application/json' }
-  });
-
-  const result = await model.generateContent([
+  const promptParts = [
     { text: PROMPT },
     { text: `Receipt Text:\n${text}` }
-  ]);
+  ];
 
-  return cleanJsonResponse(result.response.text());
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash',
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+
+    const result = await model.generateContent(promptParts);
+    const parsed = cleanJsonResponse(result.response.text());
+
+    if (parsed.confidence != null && parsed.confidence < 0.8) {
+      return await parseWithPro(promptParts, apiKey);
+    }
+
+    return parsed;
+  } catch (err) {
+    return await parseWithPro(promptParts, apiKey);
+  }
 }
 
 /**
