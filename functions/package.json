@@ -1,6 +1,6 @@
 {
   "name": "slip-functions",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "main": "index.js",
   "engines": {
     "node": "22"

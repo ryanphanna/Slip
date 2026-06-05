@@ -259,8 +259,15 @@ exports.sms = onRequest(
       await sendSms(from, message);
       logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total, confidence: raw.confidence });
     } catch (err) {
-      logger.error('Receipt processing failed', { messageSid, from: maskedFrom, error: err.message || err });
-      await sendSms(from, "Couldn't read that receipt. Try again with a clearer image or shorter text.");
+      logger.error('Receipt processing failed', {
+        messageSid,
+        from: maskedFrom,
+        error: err && err.message ? err.message : err,
+        cause: err && err.cause && err.cause.message ? err.cause.message : undefined,
+      });
+      const errorMessage = err && err.message ? err.message : 'Unknown error';
+      const safeMessage = errorMessage.replace(/\s+/g, ' ').slice(0, 140);
+      await sendSms(from, `Couldn't read that receipt. ${safeMessage}. Try again with a clearer image or shorter text.`);
     }
 
     // Acknowledge Twilio after all work is done
