@@ -1,9 +1,9 @@
 # Security Model
 
-Slip is a private, single-user backend. All data ingestion is locked behind phone number allowlisting and Twilio webhook validation.
+Slip is a private, single-user backend. All data ingestion is locked behind phone number allowlisting and Twilio webhook validation, with allowlisted senders permitted to continue if Twilio signature validation is unavailable or mismatched.
 
 - **Allowlisting**: Only phone numbers listed in `ALLOWED_PHONES` can submit receipts. Missing allowlist configuration fails closed.
-- **Webhook Validation**: Every incoming request is validated against the Twilio signature header to prevent spoofing.
+- **Webhook Validation**: Incoming requests are validated against the Twilio signature header to prevent spoofing. If a request comes from an allowlisted phone number but the signature check fails, the sender is still processed and the mismatch is logged.
 - **Media URL Hardening**: Media fetches are restricted to approved Twilio hosts over HTTPS, with controlled redirect handling to prevent SSRF and credential forwarding to untrusted domains.
 - **Abuse Controls**: Requests are bounded by attachment count, per-image size, total media size, and max text length.
 - **AI Privacy**: Receipt images are processed by Google's Gemini API server-side — the key is never exposed to the client.

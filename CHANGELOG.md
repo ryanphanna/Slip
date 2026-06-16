@@ -7,6 +7,12 @@ All notable changes to this project will be documented in this file.
 ### Security
 - **CodeQL: Incomplete URL substring sanitization** (remediation): Hardened hostname assertions in `twilio.test.js` by replacing `endsWith()` checks with exact matches for the expected Cloud Functions URL. This resolves the remaining CodeQL alerts where a trusted hostname suffix could be preceded by an arbitrary host.
 
+### Fixed
+- **Allowlisted Twilio fallback**: inbound messages from approved phone numbers now continue even if Twilio signature validation is unavailable or mismatched, restoring receipt logging while still rejecting unknown senders.
+- **Replay backfill**: `functions/scripts/replay.js` now backfills all eligible unprocessed inbound MMS instead of only the last 10 messages, handles multi-photo messages, and stays silent by default to avoid SMS spam.
+- **Local Firestore auth fallback**: admin scripts now use a local service-account JSON file or Application Default Credentials, so replay/query/delete no longer depend on `gcloud` being installed.
+- **Gemini latest aliases**: receipt parsing and local Gemini probes now use the live `gemini-flash-latest` and `gemini-pro-latest` aliases.
+
 ## [1.2.5] — 2026-05-30
 
 ### Fixed

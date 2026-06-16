@@ -1,5 +1,8 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+const FLASH_MODEL = 'gemini-flash-latest';
+const PRO_MODEL = 'gemini-pro-latest';
+
 // Authoritative prompt used by production and all test scripts.
 // Includes confidence scoring for quality fallback logic.
 const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
@@ -58,7 +61,7 @@ function buildImagePromptParts(images) {
 async function parseWithPro(promptParts, apiKey) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.1-pro',
+    model: PRO_MODEL,
     generationConfig: { responseMimeType: 'application/json' }
   });
 
@@ -73,7 +76,7 @@ async function extractReceiptTextFromBase64(images, apiKey) {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-pro' });
+  const model = genAI.getGenerativeModel({ model: PRO_MODEL });
 
   const promptParts = buildImagePromptParts(images);
   promptParts.push({
@@ -103,7 +106,7 @@ async function parseReceiptFromBase64(images, apiKey) {
   // Try Flash first
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash',
+      model: FLASH_MODEL,
       generationConfig: { responseMimeType: 'application/json' }
     });
 
@@ -143,7 +146,7 @@ async function parseReceiptFromText(text, apiKey) {
 
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash',
+      model: FLASH_MODEL,
       generationConfig: { responseMimeType: 'application/json' }
     });
 

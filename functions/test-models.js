@@ -4,14 +4,14 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 async function listModels() {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   // We can't list models directly with standard SDK easily without raw fetch.
-  // Let's just try to generate content with gemini-3-flash and gemini-2.0-flash.
+  // Let's just try the live aliases and one older fallback.
   
   try {
-    const m3 = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
-    await m3.generateContent("Hello");
-    console.log("gemini-3-flash works");
+    const mLatest = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+    await mLatest.generateContent("Hello");
+    console.log("gemini-flash-latest works");
   } catch (e) {
-    console.error("gemini-3-flash error:", e.message);
+    console.error("gemini-flash-latest error:", e.message);
   }
   
   try {
@@ -23,11 +23,11 @@ async function listModels() {
   }
 
   try {
-    const m15 = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    await m15.generateContent("Hello");
-    console.log("gemini-1.5-flash works");
+    const mPro = genAI.getGenerativeModel({ model: 'gemini-pro-latest' });
+    await mPro.generateContent("Hello");
+    console.log("gemini-pro-latest works");
   } catch (e) {
-    console.error("gemini-1.5-flash error:", e.message);
+    console.error("gemini-pro-latest error:", e.message);
   }
 }
 

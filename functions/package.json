@@ -8,6 +8,7 @@
   "scripts": {
     "test": "jest",
     "smoke": "node scripts/smoke.js",
+    "replay": "node scripts/replay.js",
     "check:webhook-health": "node scripts/check-webhook-health.js",
     "check:release": "node scripts/release-check.js"
   },

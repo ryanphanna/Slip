@@ -76,7 +76,7 @@ describe('sms webhook authentication', () => {
     delete process.env.ALLOWED_PHONES;
   });
 
-  it('rejects allowed senders when Twilio signature validation fails', async () => {
+  it('allows approved senders to proceed when Twilio signature validation fails', async () => {
     isAllowed.mockReturnValue(true);
     validateTwilioSignature.mockReturnValue(false);
 
@@ -86,7 +86,7 @@ describe('sms webhook authentication', () => {
         From: '+14165551234',
         MessageSid: 'SM123',
         NumMedia: '0',
-        Body: 'LAST',
+        Body: ' ',
       },
       headers: {},
     };
@@ -94,14 +94,14 @@ describe('sms webhook authentication', () => {
 
     await sms(req, res);
 
-    expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.send).toHaveBeenCalledWith('Forbidden');
-    expect(isMessageProcessed).not.toHaveBeenCalled();
-    expect(checkRateLimit).not.toHaveBeenCalled();
-    expect(sendSms).not.toHaveBeenCalled();
+    expect(res.status).not.toHaveBeenCalledWith(403);
+    expect(res.send).toHaveBeenCalledWith('<Response/>');
+    expect(isMessageProcessed).toHaveBeenCalledWith('SM123');
+    expect(checkRateLimit).toHaveBeenCalledWith('+14165551234');
+    expect(sendSms).toHaveBeenCalled();
   });
 
-  it('validates Twilio signature before checking the sender allowlist', async () => {
+  it('still rejects unlisted senders when the Twilio signature fails', async () => {
     isAllowed.mockReturnValue(false);
     validateTwilioSignature.mockReturnValue(false);
 
@@ -121,7 +121,7 @@ describe('sms webhook authentication', () => {
 
     expect(res.status).toHaveBeenCalledWith(403);
     expect(res.send).toHaveBeenCalledWith('Forbidden');
-    expect(isAllowed).not.toHaveBeenCalled();
+    expect(isAllowed).toHaveBeenCalledWith('+14165550000');
     expect(sendSms).not.toHaveBeenCalled();
   });
 });

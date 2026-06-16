@@ -7,30 +7,9 @@
 //   node scripts/query.js --limit 50
 
 const admin = require('firebase-admin');
-const path = require('path');
-const fs = require('fs');
+const { initializeAdminApp } = require('../lib/admin');
 
-// Look for service account key in a few places
-const keyPaths = [
-  path.join(__dirname, '..', '..', '..', '..', '..', 'Credentials', 'Firebase for Slip.json'),
-  path.join(__dirname, '..', '..', 'serviceAccountKey.json'),
-  path.join(__dirname, '..', 'serviceAccountKey.json'),
-];
-
-let credential;
-for (const p of keyPaths) {
-  if (fs.existsSync(p)) {
-    credential = admin.credential.cert(require(p));
-    break;
-  }
-}
-
-if (!credential) {
-  console.error('No service account key found. Place serviceAccountKey.json in the project root.');
-  process.exit(1);
-}
-
-admin.initializeApp({ credential });
+initializeAdminApp();
 const db = admin.firestore();
 
 const args = process.argv.slice(2);
