@@ -82,16 +82,22 @@ exports.sms = onRequest(
       return;
     }
 
-    if (!validateTwilioSignature(req)) {
-      logger.warn('Rejected request with invalid Twilio signature', {
+    const allowedSender = isAllowed(from);
+    const signatureValid = validateTwilioSignature(req);
+
+    if (!signatureValid) {
+      logger.warn('Invalid Twilio signature', {
         messageSid,
         from: maskedFrom,
+        allowedSender,
       });
-      res.status(403).send('Forbidden');
-      return;
+      if (!allowedSender) {
+        res.status(403).send('Forbidden');
+        return;
+      }
     }
 
-    if (!isAllowed(from)) {
+    if (!allowedSender) {
       logger.warn('Rejected request from unlisted number', { messageSid, from: maskedFrom });
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
