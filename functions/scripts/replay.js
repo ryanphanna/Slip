@@ -179,6 +179,12 @@ async function main() {
   const accountSid = requireConfig('TWILIO_ACCOUNT_SID');
   const authToken = requireConfig('TWILIO_AUTH_TOKEN');
   const to = requireConfig('TWILIO_PHONE_NUMBER');
+
+  // Ensure lib modules' readConfigValue can pick these up via process.env
+  process.env.TWILIO_ACCOUNT_SID = accountSid;
+  process.env.TWILIO_AUTH_TOKEN = authToken;
+  process.env.TWILIO_PHONE_NUMBER = to;
+  process.env.GEMINI_API_KEY = requireConfig('GEMINI_API_KEY');
   const args = parseArgs(process.argv.slice(2));
   const senders = selectReplaySenders(args);
   const sinceTime = args.since ? new Date(args.since).getTime() : null;
