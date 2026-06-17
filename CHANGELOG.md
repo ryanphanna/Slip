@@ -4,7 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.6] — 2026-06-17
+
 ### Security
+- **CVE: @grpc/grpc-js malformed message/request crashes**: Added `@grpc/grpc-js ^1.14.4` override to force the patched version, resolving Dependabot alerts #8 and #9 introduced transitively via `@google-cloud/logging`.
 - **CodeQL: Incomplete URL substring sanitization** (remediation): Hardened hostname assertions in `twilio.test.js` by replacing `endsWith()` checks with exact matches for the expected Cloud Functions URL. This resolves the remaining CodeQL alerts where a trusted hostname suffix could be preceded by an arbitrary host.
 
 ### Fixed
