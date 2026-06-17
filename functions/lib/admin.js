@@ -18,14 +18,15 @@ function resolveServiceAccountPath() {
 }
 
 function initializeAdminApp() {
+  const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || 'slip-c742b.firebasestorage.app';
   const serviceAccountPath = resolveServiceAccountPath();
   if (serviceAccountPath) {
     const credential = admin.credential.cert(require(serviceAccountPath));
-    admin.initializeApp({ credential });
+    admin.initializeApp({ credential, storageBucket });
     return { admin, credentialSource: serviceAccountPath };
   }
 
-  admin.initializeApp();
+  admin.initializeApp({ storageBucket });
   return { admin, credentialSource: 'application-default-credentials' };
 }
 
