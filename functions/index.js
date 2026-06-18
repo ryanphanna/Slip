@@ -148,9 +148,8 @@ exports.sms = onRequest(
       return;
     }
 
-    try {
-      // Handle Text Commands
-      if (numMedia === 0) {
+    // Handle Text Commands
+    if (numMedia === 0) {
         const bodyText = (req.body.Body || '').trim().toUpperCase();
         
         if (bodyText === 'TOTAL') {
@@ -227,166 +226,153 @@ exports.sms = onRequest(
         }
       }
 
-      let raw;
-      const images = [];
-      if (numMedia === 0) {
-        const bodyText = (req.body.Body || '').trim();
-        if (!bodyText) {
-          await sendSms(from, 'Send me a photo or paste text of a receipt to log it.');
-          res.set('Content-Type', 'text/xml');
-          res.send('<Response/>');
-          return;
-        }
+      // ACK Twilio immediately — receipt parsing (Gemini) can exceed the 15s webhook
+      // timeout. Processing continues in the background; result arrives via sendSms.
+      res.set('Content-Type', 'text/xml');
+      res.send('<Response/>');
 
-        if (bodyText.length > config.MAX_BODY_TEXT_LENGTH) {
-          await sendSms(from, `Receipt text is too long. Keep it under ${config.MAX_BODY_TEXT_LENGTH} characters.`);
-          res.set('Content-Type', 'text/xml');
-          res.send('<Response/>');
-          return;
-        }
-
-        raw = await parseReceiptFromText(bodyText);
-      } else {
-        const mediaPromises = [];
-        for (let i = 0; i < numMedia; i++) {
-          const mimeType = req.body[`MediaContentType${i}`] || 'image/jpeg';
-          const mediaUrl = req.body[`MediaUrl${i}`];
-          if (config.ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase()) && mediaUrl) {
-            mediaPromises.push((async () => {
-              const imgResponse = await fetchMedia(mediaUrl);
-              const contentLength = Number.parseInt(imgResponse.headers.get('content-length') || '0', 10);
-              if (contentLength > config.MAX_IMAGE_SIZE) return null;
-
-              const buffer = Buffer.from(await imgResponse.arrayBuffer());
-              if (buffer.length > config.MAX_IMAGE_SIZE) return null;
-
-              return { buffer, mimeType };
-            })());
+      // --- background processing starts here ---
+      (async () => {
+        let raw;
+        const images = [];
+        if (numMedia === 0) {
+          const bodyText = (req.body.Body || '').trim();
+          if (!bodyText) {
+            await sendSms(from, 'Send me a photo or paste text of a receipt to log it.');
+            return;
           }
-        }
 
-        const fetchedMedia = (await Promise.all(mediaPromises)).filter(Boolean);
-        let totalMediaBytes = 0;
-        for (const item of fetchedMedia) {
-          if (totalMediaBytes + item.buffer.length <= config.MAX_TOTAL_MEDIA_SIZE) {
-            totalMediaBytes += item.buffer.length;
-            images.push({ base64: item.buffer.toString('base64'), mimeType: item.mimeType });
+          if (bodyText.length > config.MAX_BODY_TEXT_LENGTH) {
+            await sendSms(from, `Receipt text is too long. Keep it under ${config.MAX_BODY_TEXT_LENGTH} characters.`);
+            return;
           }
-        }
 
+          raw = await parseReceiptFromText(bodyText);
+        } else {
+          const mediaPromises = [];
+          for (let i = 0; i < numMedia; i++) {
+            const mimeType = req.body[`MediaContentType${i}`] || 'image/jpeg';
+            const mediaUrl = req.body[`MediaUrl${i}`];
+            if (config.ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase()) && mediaUrl) {
+              mediaPromises.push((async () => {
+                const imgResponse = await fetchMedia(mediaUrl);
+                const contentLength = Number.parseInt(imgResponse.headers.get('content-length') || '0', 10);
+                if (contentLength > config.MAX_IMAGE_SIZE) return null;
 
-        if (images.length === 0) {
-          await sendSms(from, `No valid images were found. Use up to ${config.MAX_MEDIA_ATTACHMENTS} images under ${config.MAX_IMAGE_SIZE / 1024 / 1024}MB each.`);
-          res.set('Content-Type', 'text/xml');
-          res.send('<Response/>');
-          return;
-        }
+                const buffer = Buffer.from(await imgResponse.arrayBuffer());
+                if (buffer.length > config.MAX_IMAGE_SIZE) return null;
 
-        raw = await parseReceiptFromBase64(images);
-      }
-
-      const receipt = validateReceipt(raw);
-
-      // Store images and check for duplicates in parallel to optimize latency
-      const [imagePathsResult, duplicateId] = await Promise.all([
-        images.length > 0
-          ? saveImages(images, messageSid, receipt).catch(err => {
-              logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
-              return [];
-            })
-          : Promise.resolve([]),
-        findDuplicate(receipt, from)
-      ]);
-      
-      const imagePaths = imagePathsResult;
-      if (duplicateId) {
-        logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
-        await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged recently.`);
-        res.set('Content-Type', 'text/xml');
-        res.send('<Response/>');
-        return;
-      }
-
-
-      await saveReceipt(receipt, from, messageSid, imagePaths);
-
-      const merchant = receipt.merchant || 'Unknown';
-      const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
-      const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
-      const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
-      const itemCount = Array.isArray(receipt.items) ? receipt.items.length : 0;
-      const itemSuffix = itemCount === 1 ? '1 item' : `${itemCount} items`;
-      
-      let message = `${prefix}: ${merchant} — ${total} (${categoryDisplay}, ${itemSuffix})`;
-      
-      // Warn if confidence is still low after potential fallback
-      if (raw.confidence != null && raw.confidence < 0.7) {
-        message = `⚠️ ${message}`;
-        logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
-      }
-
-      // Budget status integration
-      if (receipt.category) {
-        try {
-          const budget = await getBudget(from, receipt.category);
-          if (budget && budget.limit > 0) {
-            const db = admin.firestore();
-            const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            
-            const snapshot = await db.collection('receipts')
-              .where('from', '==', from)
-              .where('createdAt', '>=', startOfMonth)
-              .get();
-
-            const docs = snapshot.docs.map(doc => doc.data());
-            const { categories } = aggregateSpendingByCategory(docs);
-            const spentKey = Object.keys(categories).find(k => k.toLowerCase() === receipt.category.toLowerCase());
-            const spent = spentKey ? categories[spentKey] : 0;
-
-            const remaining = Math.round((budget.limit - spent) * 100) / 100;
-            const budgetLine = `\nBudget: $${spent.toFixed(2)}/$${budget.limit.toFixed(2)} spent`;
-
-            if (spent > budget.limit) {
-              message += `${budgetLine} (⚠️ over by $${Math.abs(remaining).toFixed(2)})`;
-            } else {
-              message += `${budgetLine} ($${remaining.toFixed(2)} left)`;
+                return { buffer, mimeType };
+              })());
             }
           }
-        } catch (budgetErr) {
-          logger.error('Failed to append budget status to receipt confirmation', { messageSid, error: budgetErr.message });
+
+          const fetchedMedia = (await Promise.all(mediaPromises)).filter(Boolean);
+          let totalMediaBytes = 0;
+          for (const item of fetchedMedia) {
+            if (totalMediaBytes + item.buffer.length <= config.MAX_TOTAL_MEDIA_SIZE) {
+              totalMediaBytes += item.buffer.length;
+              images.push({ base64: item.buffer.toString('base64'), mimeType: item.mimeType });
+            }
+          }
+
+          if (images.length === 0) {
+            await sendSms(from, `No valid images were found. Use up to ${config.MAX_MEDIA_ATTACHMENTS} images under ${config.MAX_IMAGE_SIZE / 1024 / 1024}MB each.`);
+            return;
+          }
+
+          raw = await parseReceiptFromBase64(images);
         }
-      }
 
-      await sendSms(from, message);
-      logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total, confidence: raw.confidence });
-    } catch (err) {
-      logger.error('Receipt processing failed', {
-        messageSid,
-        from: maskedFrom,
-        error: err && err.message ? err.message : err,
-        cause: err && err.cause && err.cause.message ? err.cause.message : undefined,
-      });
+        const receipt = validateReceipt(raw);
 
-      try {
-        const lastReceipt = await getLastReceipt(from);
-        if (!lastReceipt) {
-          await sendSms(from, config.ONBOARDING_MESSAGE);
-          res.set('Content-Type', 'text/xml');
-          res.send('<Response/>');
+        // Store images and check for duplicates in parallel to optimize latency
+        const [imagePathsResult, duplicateId] = await Promise.all([
+          images.length > 0
+            ? saveImages(images, messageSid, receipt).catch(err => {
+                logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
+                return [];
+              })
+            : Promise.resolve([]),
+          findDuplicate(receipt, from)
+        ]);
+
+        const imagePaths = imagePathsResult;
+        if (duplicateId) {
+          logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
+          await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged recently.`);
           return;
         }
-      } catch (dbErr) {
-        logger.error('Failed to query last receipt for onboarding check', { messageSid, error: dbErr.message });
-      }
 
-      const errorMessage = err && err.message ? err.message : 'Unknown error';
-      const safeMessage = errorMessage.replace(/\s+/g, ' ').slice(0, 140);
-      await sendSms(from, `Couldn't read that receipt. ${safeMessage}. Try again with a clearer image or shorter text.`);
-    }
+        await saveReceipt(receipt, from, messageSid, imagePaths);
 
-    // Acknowledge Twilio after all work is done
-    res.set('Content-Type', 'text/xml');
-    res.send('<Response/>');
+        const merchant = receipt.merchant || 'Unknown';
+        const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
+        const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
+        const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
+        const itemCount = Array.isArray(receipt.items) ? receipt.items.length : 0;
+        const itemSuffix = itemCount === 1 ? '1 item' : `${itemCount} items`;
+
+        let message = `${prefix}: ${merchant} — ${total} (${categoryDisplay}, ${itemSuffix})`;
+
+        if (raw.confidence != null && raw.confidence < 0.7) {
+          message = `⚠️ ${message}`;
+          logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
+        }
+
+        if (receipt.category) {
+          try {
+            const budget = await getBudget(from, receipt.category);
+            if (budget && budget.limit > 0) {
+              const db = admin.firestore();
+              const now = new Date();
+              const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+              const snapshot = await db.collection('receipts')
+                .where('from', '==', from)
+                .where('createdAt', '>=', startOfMonth)
+                .get();
+
+              const docs = snapshot.docs.map(doc => doc.data());
+              const { categories } = aggregateSpendingByCategory(docs);
+              const spentKey = Object.keys(categories).find(k => k.toLowerCase() === receipt.category.toLowerCase());
+              const spent = spentKey ? categories[spentKey] : 0;
+
+              const remaining = Math.round((budget.limit - spent) * 100) / 100;
+              const budgetLine = `\nBudget: $${spent.toFixed(2)}/$${budget.limit.toFixed(2)} spent`;
+
+              if (spent > budget.limit) {
+                message += `${budgetLine} (⚠️ over by $${Math.abs(remaining).toFixed(2)})`;
+              } else {
+                message += `${budgetLine} ($${remaining.toFixed(2)} left)`;
+              }
+            }
+          } catch (budgetErr) {
+            logger.error('Failed to append budget status to receipt confirmation', { messageSid, error: budgetErr.message });
+          }
+        }
+
+        await sendSms(from, message);
+        logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total, confidence: raw.confidence });
+      })().catch(async (err) => {
+        logger.error('Receipt processing failed', {
+          messageSid,
+          from: maskedFrom,
+          error: err && err.message ? err.message : err,
+          cause: err && err.cause && err.cause.message ? err.cause.message : undefined,
+        });
+
+        try {
+          const lastReceipt = await getLastReceipt(from);
+          if (!lastReceipt) {
+            await sendSms(from, config.ONBOARDING_MESSAGE);
+            return;
+          }
+        } catch (dbErr) {
+          logger.error('Failed to query last receipt for onboarding check', { messageSid, error: dbErr.message });
+        }
+
+        await sendSms(from, 'Sorry, couldn\'t read that receipt. Please try again with a clearer image or shorter text.').catch(() => {});
+      });
   }
 );
