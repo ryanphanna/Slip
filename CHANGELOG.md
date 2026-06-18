@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to `functions/package.json` to enforce root-level version alignment (`^14.0.0`) across transitively dependent peer packages (like `firebase-functions`), correcting the npm ERESOLVE crash on the Functions CI server.
+- **Rate Limiter Query Optimization**: Optimized the `checkRateLimit` query in `functions/lib/store.js` to filter directly by sender number and the 1-hour window timeframe. This prevents potential rate limiter bypass under high collection load and significantly reduces Firestore read costs by eliminating the global scan.
+
 
 ## [1.3.2] — 2026-06-17
 
