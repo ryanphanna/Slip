@@ -19,7 +19,7 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 
 - **Backend**: Firebase Cloud Functions (Node.js)
 - **Intake**: Twilio SMS/MMS
-- **Vision / Parsing**: Google Gemini (gemini-3-flash)
+- **Vision / Parsing**: Google Gemini (gemini-flash-latest / gemini-pro-latest fallback)
 - **Database**: Firestore
 
 ---
