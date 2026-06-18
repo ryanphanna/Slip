@@ -225,27 +225,33 @@ exports.sms = onRequest(
 
         raw = await parseReceiptFromText(bodyText);
       } else {
-        let totalMediaBytes = 0;
+        const mediaPromises = [];
         for (let i = 0; i < numMedia; i++) {
           const mimeType = req.body[`MediaContentType${i}`] || 'image/jpeg';
-          if (!config.ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase())) continue;
-
           const mediaUrl = req.body[`MediaUrl${i}`];
-          if (!mediaUrl) continue;
-          const imgResponse = await fetchMedia(mediaUrl);
+          if (config.ALLOWED_IMAGE_TYPES.includes(mimeType.toLowerCase()) && mediaUrl) {
+            mediaPromises.push((async () => {
+              const imgResponse = await fetchMedia(mediaUrl);
+              const contentLength = Number.parseInt(imgResponse.headers.get('content-length') || '0', 10);
+              if (contentLength > config.MAX_IMAGE_SIZE) return null;
 
-          const contentLength = Number.parseInt(imgResponse.headers.get('content-length') || '0', 10);
-          if (contentLength > config.MAX_IMAGE_SIZE) continue;
+              const buffer = Buffer.from(await imgResponse.arrayBuffer());
+              if (buffer.length > config.MAX_IMAGE_SIZE) return null;
 
-          const buffer = Buffer.from(await imgResponse.arrayBuffer());
-          if (buffer.length > config.MAX_IMAGE_SIZE) continue;
-
-          if (totalMediaBytes + buffer.length > config.MAX_TOTAL_MEDIA_SIZE) continue;
-          totalMediaBytes += buffer.length;
-
-          const base64 = buffer.toString('base64');
-          images.push({ base64, mimeType });
+              return { buffer, mimeType };
+            })());
+          }
         }
+
+        const fetchedMedia = (await Promise.all(mediaPromises)).filter(Boolean);
+        let totalMediaBytes = 0;
+        for (const item of fetchedMedia) {
+          if (totalMediaBytes + item.buffer.length <= config.MAX_TOTAL_MEDIA_SIZE) {
+            totalMediaBytes += item.buffer.length;
+            images.push({ base64: item.buffer.toString('base64'), mimeType: item.mimeType });
+          }
+        }
+
 
         if (images.length === 0) {
           await sendSms(from, `No valid images were found. Use up to ${config.MAX_MEDIA_ATTACHMENTS} images under ${config.MAX_IMAGE_SIZE / 1024 / 1024}MB each.`);
@@ -259,17 +265,18 @@ exports.sms = onRequest(
 
       const receipt = validateReceipt(raw);
 
-      // Store images non-blocking — a storage failure shouldn't kill the receipt save
-      let imagePaths = [];
-      if (images.length > 0) {
-        try {
-          imagePaths = await saveImages(images, messageSid, receipt);
-        } catch (err) {
-          logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
-        }
-      }
+      // Store images and check for duplicates in parallel to optimize latency
+      const [imagePathsResult, duplicateId] = await Promise.all([
+        images.length > 0
+          ? saveImages(images, messageSid, receipt).catch(err => {
+              logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
+              return [];
+            })
+          : Promise.resolve([]),
+        findDuplicate(receipt, from)
+      ]);
       
-      const duplicateId = await findDuplicate(receipt, from);
+      const imagePaths = imagePathsResult;
       if (duplicateId) {
         logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
         await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged recently.`);
@@ -277,6 +284,7 @@ exports.sms = onRequest(
         res.send('<Response/>');
         return;
       }
+
 
       await saveReceipt(receipt, from, messageSid, imagePaths);
 

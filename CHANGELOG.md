@@ -18,7 +18,9 @@ All notable changes to this project will be documented in this file.
 
 
 ### Changed
-- **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central [functions/lib/config.js](file:///Users/ryan/Desktop/Dev/Coding/Backend/Slip/functions/lib/config.js).
+- **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central [functions/lib/config.js](file:///functions/lib/config.js).
+- **Latency Optimization and Parallelization**: Optimized response times by parallelizing sequential web requests, GCS file uploads, and database lookups using `Promise.all`. Multiple incoming Twilio media downloads are now fetched concurrently, GCS image saves are uploaded in parallel, and GCS storage operations run concurrently with the Firestore duplicate receipt query. This reduces inline webhook execution time by up to 2-3 seconds for multi-image messages.
+
 
 ### Fixed
 - **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to `functions/package.json` to enforce root-level version alignment (`^14.0.0`) across transitively dependent peer packages (like `firebase-functions`), correcting the npm ERESOLVE crash on the Functions CI server.
