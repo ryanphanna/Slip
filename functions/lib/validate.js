@@ -15,7 +15,11 @@ function validateReceipt(raw) {
     items: Array.isArray(raw.items)
       ? raw.items
           .filter(i => i && typeof i.name === 'string')
-          .map(i => ({ name: i.name.trim(), price: toNumber(i.price) }))
+          .map(i => ({
+            name: i.name.trim(),
+            price: toNumber(i.price),
+            category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
+          }))
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',
     type: VALID_TYPES.includes(raw.type) ? raw.type : 'purchase',

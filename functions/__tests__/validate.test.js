@@ -33,8 +33,8 @@ describe('validateReceipt', () => {
       category: 'Grocery',
       subCategory: 'Supermarket',
       items: [
-        { name: 'Apple', price: 1.5 },
-        { name: 'Banana', price: 0.99 }
+        { name: 'Apple', price: 1.5, category: 'Grocery' },
+        { name: 'Banana', price: 0.99, category: 'Grocery' }
       ],
       currency: 'USD',
       type: 'purchase',
@@ -83,5 +83,27 @@ describe('validateReceipt', () => {
     expect(result.date).toBeNull();
     expect(result.total).toBeNull();
     expect(result.tax).toBeNull();
+  });
+
+  it('should validate and default item-level categories', () => {
+    const raw = {
+      merchant: 'Walmart',
+      category: 'Grocery',
+      items: [
+        { name: 'Milk', price: 5.5, category: 'Grocery' },
+        { name: 'T-Shirt', price: 15.0, category: 'Shopping' },
+        { name: 'Socks', price: 10.0, category: 'InvalidCat' },
+        { name: 'Pens', price: 3.0 }
+      ]
+    };
+
+    const result = validateReceipt(raw);
+
+    expect(result.items).toEqual([
+      { name: 'Milk', price: 5.5, category: 'Grocery' },
+      { name: 'T-Shirt', price: 15.0, category: 'Shopping' },
+      { name: 'Socks', price: 10.0, category: 'Grocery' },
+      { name: 'Pens', price: 3.0, category: 'Grocery' }
+    ]);
   });
 });

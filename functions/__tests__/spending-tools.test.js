@@ -98,4 +98,35 @@ describe('spending-tools helper', () => {
     expect(result).toHaveLength(1);
     expect(result[0].merchant).toBe('Walmart');
   });
+
+  it('aggregates spending by item categories for mixed receipts', async () => {
+    const mixedDocs = [
+      {
+        merchant: 'Walmart',
+        total: 100.0,
+        category: 'Grocery',
+        createdAt: { toDate: () => new Date('2026-06-12T12:00:00Z') },
+        items: [
+          { name: 'Apples', price: 10.0, category: 'Grocery' },
+          { name: 'Advil', price: 15.0, category: 'Health' },
+          { name: 'Sofa Pillow', price: 25.0, category: 'Home' },
+          { name: 'Shirt', price: 30.0, category: 'Shopping' },
+        ],
+      },
+    ];
+
+    mockGet.mockResolvedValue({
+      docs: mixedDocs.map(d => ({ data: () => d })),
+    });
+
+    const result = await executeTool('getSpendingByCategory', {});
+
+    expect(result.total).toBe(100.0);
+    expect(result.categories).toEqual(expect.arrayContaining([
+      { category: 'Grocery', amount: 30.0 },
+      { category: 'Health', amount: 15.0 },
+      { category: 'Home', amount: 25.0 },
+      { category: 'Shopping', amount: 30.0 },
+    ]));
+  });
 });

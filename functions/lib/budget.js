@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { aggregateSpendingByCategory } = require('./query');
 
 function getDocId(from, category) {
   const safeFrom = (from || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
@@ -54,13 +55,8 @@ async function getBudgetReport(from) {
     .where('createdAt', '>=', startOfMonth)
     .get();
 
-  const spentMap = {};
-  for (const doc of snapshot.docs) {
-    const data = doc.data();
-    const cat = data.category || 'Other';
-    const amount = data.total || 0;
-    spentMap[cat.toLowerCase()] = (spentMap[cat.toLowerCase()] || 0) + amount;
-  }
+  const docs = snapshot.docs.map(doc => doc.data());
+  const { categories: spentMap } = aggregateSpendingByCategory(docs);
 
   // Combine into status report
   const report = [];
@@ -68,7 +64,8 @@ async function getBudgetReport(from) {
   // 1. Add categories with budgets
   for (const b of budgets) {
     const catLower = b.category.toLowerCase();
-    const spent = Math.round((spentMap[catLower] || 0) * 100) / 100;
+    const spentKey = Object.keys(spentMap).find(k => k.toLowerCase() === catLower);
+    const spent = spentKey ? spentMap[spentKey] : 0;
     report.push({
       category: b.category,
       limit: b.limit,
@@ -78,14 +75,13 @@ async function getBudgetReport(from) {
     });
   }
 
-  // 2. Add categories that had spending but no budget (optional)
-  for (const [catLower, spent] of Object.entries(spentMap)) {
-    if (budgetMap[catLower] === undefined) {
-      const originalCat = snapshot.docs.find(doc => doc.data().category?.toLowerCase() === catLower)?.data().category || 'Other';
+  // 2. Add categories that had spending but no budget
+  for (const [cat, spent] of Object.entries(spentMap)) {
+    if (budgetMap[cat.toLowerCase()] === undefined) {
       report.push({
-        category: originalCat,
+        category: cat,
         limit: 0,
-        spent: Math.round(spent * 100) / 100,
+        spent,
         remaining: Math.round(-spent * 100) / 100,
         percentage: 0,
       });
