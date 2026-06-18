@@ -1,5 +1,7 @@
 const admin = require('firebase-admin');
 const { aggregateSpendingByCategory } = require('./query');
+const { normalizeMerchant } = require('./validate');
+
 
 // Tool declarations in Gemini function-calling format
 const TOOL_DECLARATIONS = [
@@ -131,8 +133,8 @@ async function queryReceipts({ startDate, endDate, merchant, category } = {}) {
   let docs = snapshot.docs.map(d => d.data());
 
   if (merchant) {
-    const needle = merchant.toLowerCase();
-    docs = docs.filter(d => d.merchant?.toLowerCase().includes(needle));
+    const needle = normalizeMerchant(merchant).toLowerCase();
+    docs = docs.filter(d => d.merchant && normalizeMerchant(d.merchant).toLowerCase().includes(needle));
   }
   if (category) {
     const needle = category.toLowerCase();
@@ -166,15 +168,17 @@ async function getTopMerchants({ startDate, endDate, limit = 10 } = {}) {
   const merchants = {};
   for (const d of docs) {
     if (!d.merchant || d.total == null) continue;
-    if (!merchants[d.merchant]) merchants[d.merchant] = { total: 0, visits: 0 };
-    merchants[d.merchant].total  = Math.round((merchants[d.merchant].total + d.total) * 100) / 100;
-    merchants[d.merchant].visits += 1;
+    const normalized = normalizeMerchant(d.merchant);
+    if (!merchants[normalized]) merchants[normalized] = { total: 0, visits: 0 };
+    merchants[normalized].total  = Math.round((merchants[normalized].total + d.total) * 100) / 100;
+    merchants[normalized].visits += 1;
   }
   return Object.entries(merchants)
     .sort(([, a], [, b]) => b.total - a.total)
     .slice(0, limit)
     .map(([merchant, stats]) => ({ merchant, ...stats }));
 }
+
 
 async function getRecentReceipts({ limit = 10, merchant } = {}) {
   const db = admin.firestore();
@@ -189,13 +193,14 @@ async function getRecentReceipts({ limit = 10, merchant } = {}) {
   }
 
   return docs.map(d => ({
-    merchant:  d.merchant,
+    merchant:  normalizeMerchant(d.merchant),
     total:     d.total,
     category:  d.category,
     date:      d.date,
     createdAt: d.createdAt?.toDate?.()?.toISOString?.() ?? null,
     currency:  d.currency,
   }));
+
 }
 
 async function getMonthlySummary({ year, month } = {}) {
@@ -213,13 +218,15 @@ async function getMonthlySummary({ year, month } = {}) {
   const merchantMap = {};
   for (const d of docs) {
     if (d.total == null || !d.merchant) continue;
-    merchantMap[d.merchant] = Math.round(((merchantMap[d.merchant] || 0) + d.total) * 100) / 100;
+    const normalized = normalizeMerchant(d.merchant);
+    merchantMap[normalized] = Math.round(((merchantMap[normalized] || 0) + d.total) * 100) / 100;
   }
 
   const topMerchants = Object.entries(merchantMap)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
     .map(([merchant, amount]) => ({ merchant, amount }));
+
 
   const sortedCategories = Object.entries(categories)
     .sort(([,a],[,b]) => b - a)
@@ -267,7 +274,7 @@ async function searchReceipts({ query, minAmount, maxAmount, startDate, endDate,
   });
 
   return filtered.slice(0, limit).map(d => ({
-    merchant:  d.merchant,
+    merchant:  normalizeMerchant(d.merchant),
     total:     d.total,
     category:  d.category,
     subCategory: d.subCategory,
@@ -276,6 +283,7 @@ async function searchReceipts({ query, minAmount, maxAmount, startDate, endDate,
     createdAt: d.createdAt?.toDate?.()?.toISOString?.() ?? null,
     currency:  d.currency,
   }));
+
 }
 
 const { setBudget, getBudgetReport } = require('./budget');
@@ -299,11 +307,12 @@ async function getSubscriptions() {
     const data = doc.data();
     if (!data.merchant || data.total == null) continue;
     
-    const key = data.merchant.toLowerCase();
+    const normalized = normalizeMerchant(data.merchant);
+    const key = normalized.toLowerCase();
     const createdTime = data.createdAt?.toDate?.() || new Date(0);
     if (!subscriptions[key] || createdTime > subscriptions[key].lastBilled) {
       subscriptions[key] = {
-        merchant: data.merchant,
+        merchant: normalized,
         amount: data.total,
         category: data.category,
         currency: data.currency,
@@ -311,6 +320,7 @@ async function getSubscriptions() {
       };
     }
   }
+
 
   const list = Object.values(subscriptions).map(s => ({
     merchant: s.merchant,
