@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central [functions/lib/config.js](file:///functions/lib/config.js).
 - **Latency Optimization and Parallelization**: Optimized response times by parallelizing sequential web requests, GCS file uploads, and database lookups using `Promise.all`. Multiple incoming Twilio media downloads are now fetched concurrently, GCS image saves are uploaded in parallel, and GCS storage operations run concurrently with the Firestore duplicate receipt query. This reduces inline webhook execution time by up to 2-3 seconds for multi-image messages.
+- **Function Resource Optimization**: Configured memory allocation to `512MiB` and set concurrency to `1` in `functions/index.js` to handle memory-heavy image buffer processing safely. Isolating execution to a single request per container prevents Out-of-Memory (OOM) failures under concurrent request spikes while maintaining zero cost when idle.
+
 
 
 ### Fixed
