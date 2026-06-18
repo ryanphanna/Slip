@@ -17,6 +17,9 @@ module.exports = {
   RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,    // 1 hour
 
 
+  // === Casual Error Openers ===
+  ERROR_OPENERS: ['Uh oh!', 'Whoops!', 'Whoopsie!', 'Shoot!', 'Dang it!', 'Oh no!', 'Yikes!', 'That wasn\'t supposed to happen!'],
+
   // === Duplicate Detection ===
   DUPLICATE_WINDOW_MS: 10 * 60 * 1000,     // 10 minutes
 

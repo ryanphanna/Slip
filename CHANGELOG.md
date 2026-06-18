@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **TOTAL command overhaul**: `TOTAL` now defaults to last 30 days with a hint to try `TOTAL MONTH` or `TOTAL YEAR`. Added `TOTAL MONTH` (current month), `TOTAL YEAR` (current year), and `TOTAL 30` (explicit 30-day window). Fixed "1 receipts" grammar bug.
+- **Randomized error openers**: Error SMS messages now open with a randomly chosen casual exclamation (Uh oh!, Whoops!, Whoopsie!, Shoot!, Dang it!, Oh no!, Yikes!, That wasn't supposed to happen!) instead of a static prefix.
+
+### Changed
+- Rewrote error messages (rate limit, too many attachments, unreadable image, text too long, invalid budget syntax, receipt parse failure) to be friendlier and drop technical details like MB limits.
+
 ## [1.4.0] — 2026-06-18
 
 ### Added
