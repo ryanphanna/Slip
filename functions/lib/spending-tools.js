@@ -4,23 +4,26 @@ const admin = require('firebase-admin');
 const TOOL_DECLARATIONS = [
   {
     name: 'getSpendingTotal',
-    description: 'Get the total amount spent across all receipts, optionally filtered by date range.',
+    description: 'Get the total amount spent across all receipts, optionally filtered by date range, merchant, or category.',
     parameters: {
       type: 'OBJECT',
       properties: {
         startDate: { type: 'STRING', description: 'Start date ISO 8601 e.g. 2025-01-01 (inclusive). Omit for all time.' },
         endDate:   { type: 'STRING', description: 'End date ISO 8601 e.g. 2025-12-31 (inclusive). Omit for all time.' },
+        merchant:  { type: 'STRING', description: 'Filter to receipts from this merchant (case-insensitive partial match). Omit for all merchants.' },
+        category:  { type: 'STRING', description: 'Filter to receipts in this category (case-insensitive exact match). Omit for all categories.' },
       },
     },
   },
   {
     name: 'getSpendingByCategory',
-    description: 'Get spending broken down by category, optionally filtered by date range.',
+    description: 'Get spending broken down by category, optionally filtered by date range or merchant.',
     parameters: {
       type: 'OBJECT',
       properties: {
         startDate: { type: 'STRING', description: 'Start date ISO 8601. Omit for all time.' },
         endDate:   { type: 'STRING', description: 'End date ISO 8601. Omit for all time.' },
+        merchant:  { type: 'STRING', description: 'Filter to receipts from this merchant (case-insensitive partial match). Omit for all merchants.' },
       },
     },
   },
@@ -58,6 +61,21 @@ const TOOL_DECLARATIONS = [
       },
     },
   },
+  {
+    name: 'searchReceipts',
+    description: 'Search receipts by matching a text query against merchant, category, subcategory, or items, with optional amount and date filters.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query:      { type: 'STRING', description: 'Search term to match against merchant, category, subcategory, or item names (case-insensitive partial match). Omit for no text filter.' },
+        minAmount:  { type: 'NUMBER', description: 'Minimum total amount.' },
+        maxAmount:  { type: 'NUMBER', description: 'Maximum total amount.' },
+        startDate:  { type: 'STRING', description: 'Start date ISO 8601. Omit for all time.' },
+        endDate:    { type: 'STRING', description: 'End date ISO 8601. Omit for all time.' },
+        limit:      { type: 'NUMBER', description: 'Max receipts to return. Defaults to 10.' },
+      },
+    },
+  },
 ];
 
 function buildDateRange(startDate, endDate) {
@@ -71,7 +89,7 @@ function buildDateRange(startDate, endDate) {
   return constraints;
 }
 
-async function queryReceipts({ startDate, endDate } = {}) {
+async function queryReceipts({ startDate, endDate, merchant, category } = {}) {
   const db = admin.firestore();
   const { start, end } = buildDateRange(startDate, endDate);
 
@@ -81,11 +99,22 @@ async function queryReceipts({ startDate, endDate } = {}) {
   if (end)   q = q.where('createdAt', '<=', end);
 
   const snapshot = await q.get();
-  return snapshot.docs.map(d => d.data());
+  let docs = snapshot.docs.map(d => d.data());
+
+  if (merchant) {
+    const needle = merchant.toLowerCase();
+    docs = docs.filter(d => d.merchant?.toLowerCase().includes(needle));
+  }
+  if (category) {
+    const needle = category.toLowerCase();
+    docs = docs.filter(d => d.category?.toLowerCase() === needle || d.subCategory?.toLowerCase() === needle);
+  }
+
+  return docs;
 }
 
-async function getSpendingTotal({ startDate, endDate } = {}) {
-  const docs = await queryReceipts({ startDate, endDate });
+async function getSpendingTotal({ startDate, endDate, merchant, category } = {}) {
+  const docs = await queryReceipts({ startDate, endDate, merchant, category });
   let total = 0;
   let count = 0;
   for (const d of docs) {
@@ -94,8 +123,8 @@ async function getSpendingTotal({ startDate, endDate } = {}) {
   return { total: Math.round(total * 100) / 100, receiptCount: count };
 }
 
-async function getSpendingByCategory({ startDate, endDate } = {}) {
-  const docs = await queryReceipts({ startDate, endDate });
+async function getSpendingByCategory({ startDate, endDate, merchant } = {}) {
+  const docs = await queryReceipts({ startDate, endDate, merchant });
   const categories = {};
   let total = 0;
   for (const d of docs) {
@@ -186,6 +215,48 @@ async function getMonthlySummary({ year, month } = {}) {
   };
 }
 
+async function searchReceipts({ query, minAmount, maxAmount, startDate, endDate, limit = 10 } = {}) {
+  const docs = await queryReceipts({ startDate, endDate });
+  let filtered = docs;
+
+  if (query) {
+    const needle = query.toLowerCase();
+    filtered = filtered.filter(d => {
+      const matchMerchant = d.merchant?.toLowerCase().includes(needle);
+      const matchCategory = d.category?.toLowerCase().includes(needle);
+      const matchSubCategory = d.subCategory?.toLowerCase().includes(needle);
+      const matchItems = Array.isArray(d.items) && d.items.some(item => item.name?.toLowerCase().includes(needle));
+      return matchMerchant || matchCategory || matchSubCategory || matchItems;
+    });
+  }
+
+  if (minAmount != null) {
+    filtered = filtered.filter(d => d.total != null && d.total >= minAmount);
+  }
+
+  if (maxAmount != null) {
+    filtered = filtered.filter(d => d.total != null && d.total <= maxAmount);
+  }
+
+  // Sort by createdAt descending
+  filtered.sort((a, b) => {
+    const timeA = a.createdAt?.toDate?.()?.getTime() || 0;
+    const timeB = b.createdAt?.toDate?.()?.getTime() || 0;
+    return timeB - timeA;
+  });
+
+  return filtered.slice(0, limit).map(d => ({
+    merchant:  d.merchant,
+    total:     d.total,
+    category:  d.category,
+    subCategory: d.subCategory,
+    date:      d.date,
+    items:     d.items || [],
+    createdAt: d.createdAt?.toDate?.()?.toISOString?.() ?? null,
+    currency:  d.currency,
+  }));
+}
+
 async function executeTool(name, args) {
   switch (name) {
     case 'getSpendingTotal':      return getSpendingTotal(args);
@@ -193,6 +264,7 @@ async function executeTool(name, args) {
     case 'getTopMerchants':       return getTopMerchants(args);
     case 'getRecentReceipts':     return getRecentReceipts(args);
     case 'getMonthlySummary':     return getMonthlySummary(args);
+    case 'searchReceipts':        return searchReceipts(args);
     default: throw new Error(`Unknown tool: ${name}`);
   }
 }
