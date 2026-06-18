@@ -23,6 +23,7 @@ All notable changes to this project will be documented in this file.
 - **Function Resource Optimization**: Configured memory allocation to `512MiB` and concurrency to `1` in `functions/index.js` to prevent OOM failures under concurrent request spikes.
 
 ### Fixed
+- **Gemini Model Update**: Updated receipt parsing models from the defunct `gemini-3.1-pro` (404 since May 2026) to `gemini-flash-latest` (Flash tier) and `gemini-pro-latest` (Pro fallback). This restores receipt image and text parsing, which has been broken since late May.
 - **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to enforce root-level version alignment (`^14.0.0`), correcting the npm ERESOLVE crash on the Functions CI server.
 - **Two-Tier Rate Limiting**: Redesigned `checkRateLimit` to check both hourly (25/hr) and daily (100/day) limits in a single Firestore read, supporting bulk backfills while preventing spam.
 - **Twilio Webhook Verification Hardening**: Enforced signature validation unconditionally; removed insecure `?token=` query parameter fallback that exposed `TWILIO_AUTH_TOKEN` in Cloud Run request logs.
