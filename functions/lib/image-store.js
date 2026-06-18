@@ -27,20 +27,20 @@ async function saveImages(images, messageSid, receipt = null) {
     }
   }
 
-  for (let i = 0; i < images.length; i++) {
-    const { base64, mimeType } = images[i];
-    const ext = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-    const path = `${prefix}/${safeSid}/${i}.${ext}`;
+  const uploadPromises = images.map(async (img, idx) => {
+    const ext = img.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+    const path = `${prefix}/${safeSid}/${idx}.${ext}`;
     const file = bucket.file(path);
 
-    await file.save(Buffer.from(base64, 'base64'), {
-      metadata: { contentType: mimeType },
+    await file.save(Buffer.from(img.base64, 'base64'), {
+      metadata: { contentType: img.mimeType },
     });
 
-    paths.push(path);
-  }
+    return path;
+  });
 
-  return paths;
+  return Promise.all(uploadPromises);
+
 }
 
 module.exports = { saveImages };
