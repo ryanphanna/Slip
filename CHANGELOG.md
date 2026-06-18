@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- **CVE: js-yaml DoS vulnerability**: Added `js-yaml ^4.2.0` override to resolve the quadratic-complexity DoS vulnerability (CVE-2026-53550 / GHSA-h67p-54hq-rp68) in nested dependencies via Jest's dependency chain.
+
 ## [1.3.0] — 2026-06-17
 
 ### Added
