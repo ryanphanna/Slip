@@ -129,4 +129,46 @@ describe('spending-tools helper', () => {
       { category: 'Shopping', amount: 30.0 },
     ]));
   });
+
+  it('identifies and aggregates recurring subscriptions', async () => {
+    const subDocs = [
+      {
+        merchant: 'Netflix',
+        total: 19.99,
+        category: 'Entertainment',
+        isSubscription: true,
+        currency: 'CAD',
+        createdAt: { toDate: () => new Date('2026-06-01T12:00:00Z') },
+      },
+      {
+        merchant: 'Spotify',
+        total: 10.99,
+        category: 'Entertainment',
+        isSubscription: true,
+        currency: 'CAD',
+        createdAt: { toDate: () => new Date('2026-06-02T12:00:00Z') },
+      },
+      {
+        merchant: 'Netflix',
+        total: 19.99,
+        category: 'Entertainment',
+        isSubscription: true,
+        currency: 'CAD',
+        createdAt: { toDate: () => new Date('2026-05-01T12:00:00Z') },
+      },
+    ];
+
+    mockGet.mockResolvedValue({
+      docs: subDocs.map(d => ({ data: () => d })),
+    });
+
+    const result = await executeTool('getSubscriptions', {});
+
+    expect(result.totalMonthlyOverhead).toBe(30.98);
+    expect(result.subscriptions).toHaveLength(2);
+    expect(result.subscriptions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ merchant: 'Netflix', amount: 19.99, lastBilled: '2026-06-01' }),
+      expect.objectContaining({ merchant: 'Spotify', amount: 10.99, lastBilled: '2026-06-02' }),
+    ]));
+  });
 });

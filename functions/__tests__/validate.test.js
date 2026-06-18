@@ -38,6 +38,7 @@ describe('validateReceipt', () => {
       ],
       currency: 'USD',
       type: 'purchase',
+      isSubscription: false,
       loyaltyPointsEarned: 10,
       loyaltyPointsBalance: 150
     });
@@ -65,6 +66,7 @@ describe('validateReceipt', () => {
       items: [], // Defaults to empty array
       currency: 'CAD', // Default
       type: 'purchase', // Default
+      isSubscription: false,
       loyaltyPointsEarned: null,
       loyaltyPointsBalance: null
     });

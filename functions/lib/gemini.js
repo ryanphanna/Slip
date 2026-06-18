@@ -18,12 +18,14 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "items": [{ "name": "item name", "price": number, "category": "one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other" }],
   "currency": "Currency code (e.g. CAD, USD, EUR). Infer from location if implied.",
   "type": "purchase or refund",
+  "isSubscription": boolean,
   "loyaltyPointsEarned": number or null,
   "loyaltyPointsBalance": number or null,
   "confidence": 0.0 to 1.0 (how certain you are about the extraction)
 }
 Use null for anything you can't determine. Items can be an empty array.
 For each item in the items array, assign a "category" matching one of the eight valid options (Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other). For example, at a department store like Walmart or Costco, assign "Grocery" for food items, "Shopping" for apparel/electronics, "Health" for vitamins/pharmacy, and "Home" for housewares.
+Determine if the receipt represents a recurring subscription or recurring membership (e.g. streaming plans, SaaS tools, phone/internet bills, gym fees). Set "isSubscription" to true if it is recurring, or false if it is a standard one-off purchase.
 For each item, record the final net price paid after any inline per-item discount shown beneath it on the receipt. Do not add a separate line item for any discount summary or coupon total that appears at the bottom — if per-item discounts are already reflected in individual prices, the summary line is redundant and should be omitted.`;
 
 /**
