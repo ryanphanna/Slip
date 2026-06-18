@@ -51,8 +51,7 @@
         { "fieldPath": "total", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
-    }
-  ],
+    },
     {
       "collectionGroup": "receipts",
       "queryScope": "COLLECTION",
