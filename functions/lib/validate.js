@@ -62,4 +62,5 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt };
+module.exports = { validateReceipt, normalizeMerchant };
+
