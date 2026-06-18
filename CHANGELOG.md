@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.2] — 2026-06-17
 
 ### Changed
 - **Roadmap restructuring**: Restructured the project roadmap into a top-level `ROADMAP.md` indexing specialized sub-roadmaps under the `docs/` directory (`docs/FEATURES.md`, `docs/PRODUCT.md`, and `docs/TECHNICAL.md`) for cleaner tracking. (resolves Linear issue AI-86)
