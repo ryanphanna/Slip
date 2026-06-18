@@ -20,4 +20,16 @@ module.exports = {
 
   // === Cloud Function / Runtime ===
   FUNCTION_TIMEOUT_SECONDS: 180,           // Cloud Run timeout for the sms function
+
+  // === Storage Routing ===
+  STORAGE_PREFIX_TEMPORARY: 'receipts-temporary',
+  STORAGE_PREFIX_PERMANENT: 'receipts-permanent',
+  PERMANENT_TOTAL_THRESHOLD: 100,
+  PERMANENT_CATEGORIES: ['Health', 'Home'],
+  PERMANENT_CONFIDENCE_THRESHOLD: 0.8,
+  PERMANENT_MERCHANTS: ['ikea'],
+
+  // === Onboarding & Commands ===
+  ONBOARDING_KEYWORDS: ['HELLO', 'HI', 'START', 'GET STARTED', 'ONBOARD', 'ONBOARDING', 'HELP', 'WELCOME', 'COMMANDS', 'GUIDE', 'INFO'],
+  ONBOARDING_MESSAGE: 'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.\n\nCommands:\n• TOTAL — monthly spend\n• SUMMARY — category breakdown\n• LAST — latest receipt\n• INFO — show commands list',
 };

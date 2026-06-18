@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const config = require('./config');
 
 async function saveImages(images, messageSid, receipt = null) {
   const bucket = admin.storage().bucket();
@@ -8,7 +9,7 @@ async function saveImages(images, messageSid, receipt = null) {
   const safeSid = (messageSid || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
 
   // Determine prefix: permanent vs temporary
-  let prefix = 'receipts-temporary';
+  let prefix = config.STORAGE_PREFIX_TEMPORARY;
   
   if (receipt) {
     const total = receipt.total != null ? Math.abs(receipt.total) : 0;
@@ -16,13 +17,13 @@ async function saveImages(images, messageSid, receipt = null) {
     const confidence = receipt.confidence != null ? Number(receipt.confidence) : 1.0;
     const merchant = (receipt.merchant || '').toLowerCase();
 
-    const isHighValue = total >= 100;
-    const isTaxOrMedical = ['Health', 'Home'].includes(category);
-    const isLowConfidence = confidence < 0.8;
-    const isRndMerchant = merchant.includes('ikea');
+    const isHighValue = total >= config.PERMANENT_TOTAL_THRESHOLD;
+    const isTaxOrMedical = config.PERMANENT_CATEGORIES.includes(category);
+    const isLowConfidence = confidence < config.PERMANENT_CONFIDENCE_THRESHOLD;
+    const isRndMerchant = config.PERMANENT_MERCHANTS.some(m => merchant.includes(m.toLowerCase()));
 
     if (isHighValue || isTaxOrMedical || isLowConfidence || isRndMerchant) {
-      prefix = 'receipts-permanent';
+      prefix = config.STORAGE_PREFIX_PERMANENT;
     }
   }
 
