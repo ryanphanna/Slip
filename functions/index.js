@@ -224,17 +224,17 @@ exports.sms = onRequest(
         raw = await parseReceiptFromBase64(images);
       }
 
+      const receipt = validateReceipt(raw);
+
       // Store images non-blocking — a storage failure shouldn't kill the receipt save
       let imagePaths = [];
       if (images.length > 0) {
         try {
-          imagePaths = await saveImages(images, messageSid);
+          imagePaths = await saveImages(images, messageSid, receipt);
         } catch (err) {
           logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
         }
       }
-
-      const receipt = validateReceipt(raw);
       
       const duplicateId = await findDuplicate(receipt, from);
       if (duplicateId) {

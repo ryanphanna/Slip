@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Permanent and Temporary Image Routing**: Route receipt images saved in Google Cloud Storage into either `receipts-temporary/` (for auto-deletion after 30 days) or `receipts-permanent/` (for indefinite retention) based on validated receipt properties. Specifically, images are saved to `receipts-permanent/` if the receipt total is $100 or higher, the category is "Health" or "Home", the extraction confidence is low (< 0.8), or the merchant matches "ikea" (case-insensitive). All other receipt images default to `receipts-temporary/`. (resolves Linear issue AI-87)
+
 ## [1.3.2] — 2026-06-17
 
 ### Changed
