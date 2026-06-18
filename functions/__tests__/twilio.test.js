@@ -161,23 +161,7 @@ describe('twilio url generation helpers', () => {
       delete process.env.TWILIO_AUTH_TOKEN;
     });
 
-    it('returns true when query token matches the expected TWILIO_AUTH_TOKEN', () => {
-      const req = {
-        query: { token: 'supersecrettoken' },
-        headers: {},
-      };
-      expect(validateTwilioSignature(req)).toBe(true);
-    });
-
-    it('returns false when query token is invalid', () => {
-      const req = {
-        query: { token: 'wrongtoken' },
-        headers: {},
-      };
-      expect(validateTwilioSignature(req)).toBe(false);
-    });
-
-    it('returns false when query token and signature header are missing', () => {
+    it('returns false when signature header is missing', () => {
       const req = {
         query: {},
         headers: {},
