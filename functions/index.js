@@ -114,13 +114,19 @@ exports.sms = onRequest(
       return;
     }
 
-    if (await checkRateLimit(from)) {
-      logger.warn('Rate limit exceeded', { messageSid, from: maskedFrom });
-      await sendSms(from, 'Hourly limit reached. Please wait a bit before logging more receipts.');
+    const rateLimit = await checkRateLimit(from);
+    if (rateLimit && (rateLimit === true || rateLimit.exceeded)) {
+      const reason = rateLimit.reason || 'hourly';
+      logger.warn('Rate limit exceeded', { messageSid, from: maskedFrom, reason });
+      const msg = reason === 'daily'
+        ? `Daily limit reached (max ${config.RATE_LIMIT_PER_DAY} receipts/day). Please wait until tomorrow to log more receipts.`
+        : `Hourly limit reached (max ${config.RATE_LIMIT_PER_HOUR} receipts/hour). Please wait a bit before logging more.`;
+      await sendSms(from, msg);
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;
     }
+
 
     if (numMedia > config.MAX_MEDIA_ATTACHMENTS) {
       await sendSms(from, `Too many attachments. Send up to ${config.MAX_MEDIA_ATTACHMENTS} images per message.`);

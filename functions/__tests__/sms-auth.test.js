@@ -79,7 +79,9 @@ describe('sms webhook authentication', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.ALLOWED_PHONES = '+14165551234';
+    checkRateLimit.mockResolvedValue({ exceeded: false });
   });
+
 
   afterEach(() => {
     delete process.env.ALLOWED_PHONES;
@@ -109,6 +111,59 @@ describe('sms webhook authentication', () => {
     expect(checkRateLimit).not.toHaveBeenCalled();
     expect(sendSms).not.toHaveBeenCalled();
   });
+
+  it('rejects requests when hourly rate limit is exceeded', async () => {
+    isAllowed.mockReturnValue(true);
+    validateTwilioSignature.mockReturnValue(true);
+    checkRateLimit.mockResolvedValue({ exceeded: true, reason: 'hourly' });
+
+    const req = {
+      method: 'POST',
+      body: {
+        From: '+14165551234',
+        MessageSid: 'SM123',
+        NumMedia: '0',
+        Body: ' ',
+      },
+      headers: {},
+    };
+    const res = makeResponse();
+
+    await sms(req, res);
+
+    expect(sendSms).toHaveBeenCalledWith(
+      '+14165551234',
+      expect.stringContaining('Hourly limit reached')
+    );
+    expect(res.send).toHaveBeenCalledWith('<Response/>');
+  });
+
+  it('rejects requests when daily rate limit is exceeded', async () => {
+    isAllowed.mockReturnValue(true);
+    validateTwilioSignature.mockReturnValue(true);
+    checkRateLimit.mockResolvedValue({ exceeded: true, reason: 'daily' });
+
+    const req = {
+      method: 'POST',
+      body: {
+        From: '+14165551234',
+        MessageSid: 'SM123',
+        NumMedia: '0',
+        Body: ' ',
+      },
+      headers: {},
+    };
+    const res = makeResponse();
+
+    await sms(req, res);
+
+    expect(sendSms).toHaveBeenCalledWith(
+      '+14165551234',
+      expect.stringContaining('Daily limit reached')
+    );
+    expect(res.send).toHaveBeenCalledWith('<Response/>');
+  });
+
 
 
   it('still rejects unlisted senders when the Twilio signature fails', async () => {
