@@ -6,7 +6,7 @@ const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio')
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
 const { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
-const { getMonthlyStats, getLastReceipt } = require('./lib/query');
+const { getMonthlyStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
@@ -310,16 +310,11 @@ exports.sms = onRequest(
               .where('createdAt', '>=', startOfMonth)
               .get();
 
-            let spent = 0;
-            const categoryLower = receipt.category.toLowerCase();
-            snapshot.forEach(doc => {
-              const data = doc.data();
-              if (data.category?.toLowerCase() === categoryLower && data.total != null) {
-                spent += data.total;
-              }
-            });
+            const docs = snapshot.docs.map(doc => doc.data());
+            const { categories } = aggregateSpendingByCategory(docs);
+            const spentKey = Object.keys(categories).find(k => k.toLowerCase() === receipt.category.toLowerCase());
+            const spent = spentKey ? categories[spentKey] : 0;
 
-            spent = Math.round(spent * 100) / 100;
             const remaining = Math.round((budget.limit - spent) * 100) / 100;
             const budgetLine = `\nBudget: $${spent.toFixed(2)}/$${budget.limit.toFixed(2)} spent`;
 

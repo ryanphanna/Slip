@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { aggregateSpendingByCategory } = require('./query');
 
 // Tool declarations in Gemini function-calling format
 const TOOL_DECLARATIONS = [
@@ -145,18 +146,11 @@ async function getSpendingTotal({ startDate, endDate, merchant, category } = {})
 
 async function getSpendingByCategory({ startDate, endDate, merchant } = {}) {
   const docs = await queryReceipts({ startDate, endDate, merchant });
-  const categories = {};
-  let total = 0;
-  for (const d of docs) {
-    if (d.total == null) continue;
-    const cat = d.category || 'Other';
-    categories[cat] = Math.round(((categories[cat] || 0) + d.total) * 100) / 100;
-    total += d.total;
-  }
+  const { categories, total } = aggregateSpendingByCategory(docs);
   const sorted = Object.entries(categories)
     .sort(([, a], [, b]) => b - a)
     .map(([category, amount]) => ({ category, amount }));
-  return { categories: sorted, total: Math.round(total * 100) / 100, receiptCount: docs.length };
+  return { categories: sorted, total, receiptCount: docs.length };
 }
 
 async function getTopMerchants({ startDate, endDate, limit = 10 } = {}) {
@@ -206,17 +200,12 @@ async function getMonthlySummary({ year, month } = {}) {
 
   const docs = await queryReceipts({ startDate: start.toISOString(), endDate: end.toISOString() });
 
-  const categories = {};
+  const { total, categories } = aggregateSpendingByCategory(docs);
+  
   const merchantMap = {};
-  let total = 0;
   for (const d of docs) {
-    if (d.total == null) continue;
-    total += d.total;
-    const cat = d.category || 'Other';
-    categories[cat] = Math.round(((categories[cat] || 0) + d.total) * 100) / 100;
-    if (d.merchant) {
-      merchantMap[d.merchant] = Math.round(((merchantMap[d.merchant] || 0) + d.total) * 100) / 100;
-    }
+    if (d.total == null || !d.merchant) continue;
+    merchantMap[d.merchant] = Math.round(((merchantMap[d.merchant] || 0) + d.total) * 100) / 100;
   }
 
   const topMerchants = Object.entries(merchantMap)
@@ -224,13 +213,17 @@ async function getMonthlySummary({ year, month } = {}) {
     .slice(0, 5)
     .map(([merchant, amount]) => ({ merchant, amount }));
 
+  const sortedCategories = Object.entries(categories)
+    .sort(([,a],[,b]) => b - a)
+    .map(([category, amount]) => ({ category, amount }));
+
   return {
     year: y,
     month: m,
     monthName: start.toLocaleString('default', { month: 'long' }),
-    total: Math.round(total * 100) / 100,
+    total,
     receiptCount: docs.length,
-    categories: Object.entries(categories).sort(([,a],[,b]) => b - a).map(([category, amount]) => ({ category, amount })),
+    categories: sortedCategories,
     topMerchants,
   };
 }
