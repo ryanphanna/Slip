@@ -63,6 +63,16 @@ async function getMonthlyStats(from) {
   return { total, categories, count: docs.length, month: now.toLocaleString('default', { month: 'long' }) };
 }
 
+async function getSpendingStats(from, startDate) {
+  const db = admin.firestore();
+  let query = db.collection('receipts').where('from', '==', from);
+  if (startDate) query = query.where('createdAt', '>=', startDate);
+  const snapshot = await query.get();
+  const docs = snapshot.docs.map(doc => doc.data());
+  const { total, categories } = aggregateSpendingByCategory(docs);
+  return { total, categories, count: docs.length };
+}
+
 async function getLastReceipt(from) {
   const db = admin.firestore();
   const snapshot = await db.collection('receipts')
@@ -74,4 +84,4 @@ async function getLastReceipt(from) {
   return snapshot.empty ? null : snapshot.docs[0].data();
 }
 
-module.exports = { getMonthlyStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
+module.exports = { getMonthlyStats, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };

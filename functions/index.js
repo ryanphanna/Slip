@@ -18,12 +18,14 @@ const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio')
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
 const { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
-const { getMonthlyStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
+const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
 const config = require('./lib/config');
+
+const oops = () => config.ERROR_OPENERS[Math.floor(Math.random() * config.ERROR_OPENERS.length)];
 
 admin.initializeApp();
 
@@ -135,8 +137,8 @@ exports.sms = onRequest(
       const reason = rateLimit.reason || 'hourly';
       logger.warn('Rate limit exceeded', { messageSid, from: maskedFrom, reason });
       const msg = reason === 'daily'
-        ? `Daily limit reached (max ${config.RATE_LIMIT_PER_DAY} receipts/day). Please wait until tomorrow to log more receipts.`
-        : `Hourly limit reached (max ${config.RATE_LIMIT_PER_HOUR} receipts/hour). Please wait a bit before logging more.`;
+        ? `${oops()} You've hit your daily limit (${config.RATE_LIMIT_PER_DAY} receipts). Come back tomorrow!`
+        : `${oops()} Slow down! You've hit the hourly limit (${config.RATE_LIMIT_PER_HOUR} receipts/hr). Try again in a bit.`;
       await sendSms(from, msg);
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
@@ -145,7 +147,7 @@ exports.sms = onRequest(
 
 
     if (numMedia > config.MAX_MEDIA_ATTACHMENTS) {
-      await sendSms(from, `Too many attachments. Send up to ${config.MAX_MEDIA_ATTACHMENTS} images per message.`);
+      await sendSms(from, `${oops()} I can only handle ${config.MAX_MEDIA_ATTACHMENTS} photos at a time. Try sending one receipt at a time.`);
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
       return;
@@ -155,9 +157,27 @@ exports.sms = onRequest(
     if (numMedia === 0) {
         const bodyText = (req.body.Body || '').trim().toUpperCase();
         
-        if (bodyText === 'TOTAL') {
-          const stats = await getMonthlyStats(from);
-          await sendSms(from, `${stats.month} Total: $${stats.total.toFixed(2)} (${stats.count} receipts)`);
+        if (bodyText === 'TOTAL' || bodyText.startsWith('TOTAL ')) {
+          const now = new Date();
+          let startDate = null;
+          let label = 'All Time';
+
+          if (bodyText === 'TOTAL MONTH') {
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            label = now.toLocaleString('default', { month: 'long' });
+          } else if (bodyText === 'TOTAL YEAR') {
+            startDate = new Date(now.getFullYear(), 0, 1);
+            label = String(now.getFullYear());
+          } else {
+            // TOTAL or TOTAL 30 → last 30 days
+            startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            label = 'Last 30 days';
+          }
+
+          const stats = await getSpendingStats(from, startDate);
+          const receiptWord = stats.count === 1 ? 'receipt' : 'receipts';
+          const hint = bodyText === 'TOTAL' ? '\nSend TOTAL MONTH or TOTAL YEAR for other ranges.' : '';
+          await sendSms(from, `${label}: $${stats.total.toFixed(2)} (${stats.count} ${receiptWord})${hint}`);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -214,7 +234,7 @@ exports.sms = onRequest(
             await setBudget(from, category, limit);
             await sendSms(from, `Budget set: ${category} limit is now $${limit.toFixed(2)}.`);
           } else {
-            await sendSms(from, 'Invalid syntax. Use: BUDGET <category> <limit> (e.g., BUDGET Grocery 500)');
+            await sendSms(from, `${oops()} That didn't look right. Try: BUDGET <category> <limit> (e.g., BUDGET Grocery 500)`);
           }
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
@@ -246,7 +266,7 @@ exports.sms = onRequest(
           }
 
           if (bodyText.length > config.MAX_BODY_TEXT_LENGTH) {
-            await sendSms(from, `Receipt text is too long. Keep it under ${config.MAX_BODY_TEXT_LENGTH} characters.`);
+            await sendSms(from, `${oops()} That's a lot of text! Try pasting just the key lines from the receipt.`);
             return;
           }
 
@@ -280,7 +300,7 @@ exports.sms = onRequest(
           }
 
           if (images.length === 0) {
-            await sendSms(from, `No valid images were found. Use up to ${config.MAX_MEDIA_ATTACHMENTS} images under ${config.MAX_IMAGE_SIZE / 1024 / 1024}MB each.`);
+            await sendSms(from, `${oops()} I couldn't read that photo. Try sending a clearer image, one receipt at a time.`);
             return;
           }
 
@@ -375,7 +395,7 @@ exports.sms = onRequest(
           logger.error('Failed to query last receipt for onboarding check', { messageSid, error: dbErr.message });
         }
 
-        await sendSms(from, 'Sorry, couldn\'t read that receipt. Please try again with a clearer image or shorter text.').catch(() => {});
+        await sendSms(from, `${oops()} Couldn't read that receipt. Try again with a clearer image or shorter text.`).catch(() => {});
       });
   }
 );
