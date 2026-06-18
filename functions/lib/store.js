@@ -29,12 +29,13 @@ async function checkRateLimit(from, limit = config.RATE_LIMIT_PER_HOUR) {
   const db = admin.firestore();
   const oneHourAgo = new Date(Date.now() - config.RATE_LIMIT_WINDOW_MS);
   const snapshot = await db.collection('receipts')
-    .orderBy('createdAt', 'desc')
-    .limit(Math.max(limit * 10, 50))
+    .where('from', '==', from)
+    .where('createdAt', '>=', oneHourAgo)
     .get();
 
-  return countRecentReceipts(snapshot.docs, from, oneHourAgo, limit);
+  return snapshot.size >= limit;
 }
+
 
 async function findDuplicate(receipt, from) {
   if (!receipt.merchant || receipt.total == null) return null;
