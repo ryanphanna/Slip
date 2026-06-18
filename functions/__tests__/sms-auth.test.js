@@ -57,6 +57,8 @@ const { sms } = require('../index');
 const { validateTwilioSignature, sendSms } = require('../lib/twilio');
 const { isMessageProcessed, checkRateLimit } = require('../lib/store');
 const { isAllowed } = require('../lib/allowlist');
+const { getLastReceipt } = require('../lib/query');
+const { parseReceiptFromText } = require('../lib/receipt');
 
 function makeResponse() {
   return {
@@ -123,5 +125,86 @@ describe('sms webhook authentication', () => {
     expect(res.send).toHaveBeenCalledWith('Forbidden');
     expect(isAllowed).toHaveBeenCalledWith('+14165550000');
     expect(sendSms).not.toHaveBeenCalled();
+  });
+
+  describe('onboarding and greetings', () => {
+    it('sends welcome onboarding message for greetings (e.g. HELLO)', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'HELLO',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('Welcome to Slip! 🧾')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('sends welcome onboarding message on parsing failure if user has 0 receipts', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      parseReceiptFromText.mockRejectedValue(new Error('Parsing failed'));
+      getLastReceipt.mockResolvedValue(null);
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'some random non-receipt text',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('Welcome to Slip! 🧾')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('sends normal parsing failure message if user has existing receipts', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      parseReceiptFromText.mockRejectedValue(new Error('Parsing failed'));
+      getLastReceipt.mockResolvedValue({ total: 10 });
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'some random non-receipt text',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining("Couldn't read that receipt.")
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
   });
 });
