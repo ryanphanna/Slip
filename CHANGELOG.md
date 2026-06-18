@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.3.0] — 2026-06-17
 
 ### Added
 - **AI spending query tools & CLI**: Introduced five Gemini function-calling tools (`getSpendingTotal`, `getSpendingByCategory`, `getTopMerchants`, `getRecentReceipts`, `getMonthlySummary`) and a CLI utility at `functions/scripts/ask.js` to query spending in natural language.
