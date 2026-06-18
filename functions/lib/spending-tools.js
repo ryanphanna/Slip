@@ -97,6 +97,14 @@ const TOOL_DECLARATIONS = [
       properties: {},
     },
   },
+  {
+    name: 'getSubscriptions',
+    description: 'Get a list of recurring subscriptions and monthly fixed overhead expenses.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+    },
+  },
 ];
 
 function buildDateRange(startDate, endDate) {
@@ -278,6 +286,48 @@ function getDefaultUser() {
   return firstPhone || '+14165551234';
 }
 
+async function getSubscriptions() {
+  const db = admin.firestore();
+  const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+  const snapshot = await db.collection('receipts')
+    .where('isSubscription', '==', true)
+    .where('createdAt', '>=', sixtyDaysAgo)
+    .get();
+
+  const subscriptions = {};
+  for (const doc of snapshot.docs) {
+    const data = doc.data();
+    if (!data.merchant || data.total == null) continue;
+    
+    const key = data.merchant.toLowerCase();
+    const createdTime = data.createdAt?.toDate?.() || new Date(0);
+    if (!subscriptions[key] || createdTime > subscriptions[key].lastBilled) {
+      subscriptions[key] = {
+        merchant: data.merchant,
+        amount: data.total,
+        category: data.category,
+        currency: data.currency,
+        lastBilled: createdTime,
+      };
+    }
+  }
+
+  const list = Object.values(subscriptions).map(s => ({
+    merchant: s.merchant,
+    amount: s.amount,
+    category: s.category,
+    currency: s.currency,
+    lastBilled: s.lastBilled.toISOString().slice(0, 10),
+  }));
+
+  const totalMonthlyOverhead = list.reduce((sum, s) => sum + s.amount, 0);
+
+  return {
+    subscriptions: list,
+    totalMonthlyOverhead: Math.round(totalMonthlyOverhead * 100) / 100,
+  };
+}
+
 async function executeTool(name, args) {
   const from = getDefaultUser();
   switch (name) {
@@ -289,6 +339,7 @@ async function executeTool(name, args) {
     case 'searchReceipts':        return searchReceipts(args);
     case 'setCategoryBudget':     return setBudget(from, args.category, args.limit);
     case 'getBudgetStatus':       return getBudgetReport(from);
+    case 'getSubscriptions':      return getSubscriptions();
     default: throw new Error(`Unknown tool: ${name}`);
   }
 }

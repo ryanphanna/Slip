@@ -13,6 +13,9 @@ All notable changes to this project will be documented in this file.
 - **Firestore Security Hardening**: Added rules to [firestore.rules](file:///Users/ryan/Desktop/Dev/Coding/Backend/Slip/firestore.rules) to block client-side access to the new `budgets` collection.
 - **Line-Item Category Splits**: Extended the Gemini Vision prompt in `gemini.js` to extract individual categories for each line item on the receipt (e.g. at Walmart, milk is classified as "Grocery", socks as "Shopping"). The validation layer sanitizes these category assignments with robust fallback to the receipt's main category.
 - **Granular Spending Aggregations**: Created a shared spending aggregation utility in `query.js` to sum category spending at the item level. Apportions receipt differences (such as tax, tips, or discounts) back to the main category, ensuring exact dollar-for-dollar calculations. Used this utility across all budgets, SMS summaries, and Gemini spending tools.
+- **Smart Subscription Tracking**: Extended the Gemini extraction schema and receipt validation layer to flag subscriptions with an `isSubscription` boolean. Added a new `getSubscriptions` query tool to fetch and aggregate active subscription overhead (last 60 days) grouped and deduplicated by merchant.
+- **Cross-Receipt Product Searching Roadmap**: Documented future natural language query features for comparing historical product prices across different receipts in `docs/FEATURES.md`.
+
 
 ### Changed
 - **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central [functions/lib/config.js](file:///Users/ryan/Desktop/Dev/Coding/Backend/Slip/functions/lib/config.js).

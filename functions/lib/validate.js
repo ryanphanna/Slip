@@ -23,6 +23,7 @@ function validateReceipt(raw) {
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',
     type: VALID_TYPES.includes(raw.type) ? raw.type : 'purchase',
+    isSubscription: typeof raw.isSubscription === 'boolean' ? raw.isSubscription : false,
     loyaltyPointsEarned: toNumber(raw.loyaltyPointsEarned),
     loyaltyPointsBalance: toNumber(raw.loyaltyPointsBalance),
   };
