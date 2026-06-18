@@ -127,7 +127,10 @@ exports.sms = onRequest(
       return;
     }
 
-    const rateLimit = await checkRateLimit(from);
+    const rateLimit = await checkRateLimit(from).catch(err => {
+      logger.error('checkRateLimit failed, allowing request', { messageSid, error: err.message });
+      return null;
+    });
     if (rateLimit && (rateLimit === true || rateLimit.exceeded)) {
       const reason = rateLimit.reason || 'hourly';
       logger.warn('Rate limit exceeded', { messageSid, from: maskedFrom, reason });
