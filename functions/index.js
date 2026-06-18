@@ -176,7 +176,7 @@ exports.sms = onRequest(
 
           const stats = await getSpendingStats(from, startDate);
           const receiptWord = stats.count === 1 ? 'receipt' : 'receipts';
-          const hint = bodyText === 'TOTAL' ? '\nSend TOTAL MONTH or TOTAL YEAR for other ranges.' : '';
+          const hint = bodyText === 'TOTAL' ? '\n\nSend TOTAL MONTH or TOTAL YEAR for other ranges.' : '';
           await sendSms(from, `${label}: $${stats.total.toFixed(2)} (${stats.count} ${receiptWord})${hint}`);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
