@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - **Natural Language Spending Query CLI**: Added `scripts/ask.js` — a local CLI tool powered by Gemini function calling that answers natural language questions about spending (e.g. `node scripts/ask.js "how much did I spend last month?"`).
 
 ### Changed
+- **Minimum Instance Warm-up**: Set `minInstances: 1` to keep one Cloud Run instance always alive, eliminating cold start timeouts (Twilio's 15s webhook limit was regularly exceeded after idle periods or deployments).
 - **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central `lib/config.js`.
 - **Latency Optimization and Parallelization**: Parallelized Twilio media downloads, GCS uploads, and Firestore duplicate checking using `Promise.all`, reducing webhook execution time by up to 2-3 seconds for multi-image messages.
 - **Function Resource Optimization**: Configured memory allocation to `512MiB` and concurrency to `1` in `functions/index.js` to prevent OOM failures under concurrent request spikes.

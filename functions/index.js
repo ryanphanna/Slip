@@ -56,6 +56,7 @@ exports.sms = onRequest(
     timeoutSeconds: config.FUNCTION_TIMEOUT_SECONDS,
     memory: '512MiB',
     concurrency: 1,
+    minInstances: 1,
   },
 
   async (req, res) => {
