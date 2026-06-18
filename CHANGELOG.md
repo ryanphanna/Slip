@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.5.0] — 2026-06-18
 
 ### Added
 - **TOTAL command overhaul**: `TOTAL` now defaults to last 30 days with a hint to try `TOTAL MONTH` or `TOTAL YEAR`. Added `TOTAL MONTH` (current month), `TOTAL YEAR` (current year), and `TOTAL 30` (explicit 30-day window). Fixed "1 receipts" grammar bug.
