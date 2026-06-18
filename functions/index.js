@@ -42,7 +42,10 @@ exports.sms = onRequest(
       webhookUrlSecret,
     ],
     timeoutSeconds: config.FUNCTION_TIMEOUT_SECONDS,
+    memory: '512MiB',
+    concurrency: 1,
   },
+
   async (req, res) => {
     if (!startupHealthLogged) {
       logger.info('Startup runtime health', summarizeRuntimeHealth({
