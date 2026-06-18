@@ -76,6 +76,26 @@ const TOOL_DECLARATIONS = [
       },
     },
   },
+  {
+    name: 'setCategoryBudget',
+    description: 'Set or update the monthly budget limit for a specific spending category.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        category: { type: 'STRING', description: 'The spending category name (e.g. Grocery, Health, Home, Takeout/Dining, etc.).' },
+        limit:    { type: 'NUMBER', description: 'The monthly budget limit amount.' },
+      },
+      required: ['category', 'limit'],
+    },
+  },
+  {
+    name: 'getBudgetStatus',
+    description: 'Get the status of all category budgets for the current month, showing limit, spent, and remaining amounts.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+    },
+  },
 ];
 
 function buildDateRange(startDate, endDate) {
@@ -257,7 +277,16 @@ async function searchReceipts({ query, minAmount, maxAmount, startDate, endDate,
   }));
 }
 
+const { setBudget, getBudgetReport } = require('./budget');
+
+function getDefaultUser() {
+  const raw = process.env.ALLOWED_PHONES || '';
+  const firstPhone = raw.split(',')[0]?.trim();
+  return firstPhone || '+14165551234';
+}
+
 async function executeTool(name, args) {
+  const from = getDefaultUser();
   switch (name) {
     case 'getSpendingTotal':      return getSpendingTotal(args);
     case 'getSpendingByCategory': return getSpendingByCategory(args);
@@ -265,6 +294,8 @@ async function executeTool(name, args) {
     case 'getRecentReceipts':     return getRecentReceipts(args);
     case 'getMonthlySummary':     return getMonthlySummary(args);
     case 'searchReceipts':        return searchReceipts(args);
+    case 'setCategoryBudget':     return setBudget(from, args.category, args.limit);
+    case 'getBudgetStatus':       return getBudgetReport(from);
     default: throw new Error(`Unknown tool: ${name}`);
   }
 }

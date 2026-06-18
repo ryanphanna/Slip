@@ -53,12 +53,19 @@ jest.mock('../lib/allowlist', () => ({
   isAllowed: jest.fn(),
 }));
 
+jest.mock('../lib/budget', () => ({
+  setBudget: jest.fn(),
+  getBudget: jest.fn(),
+  getBudgetReport: jest.fn(),
+}));
+
 const { sms } = require('../index');
 const { validateTwilioSignature, sendSms } = require('../lib/twilio');
 const { isMessageProcessed, checkRateLimit } = require('../lib/store');
 const { isAllowed } = require('../lib/allowlist');
 const { getLastReceipt } = require('../lib/query');
 const { parseReceiptFromText } = require('../lib/receipt');
+const { setBudget, getBudget, getBudgetReport } = require('../lib/budget');
 
 function makeResponse() {
   return {
@@ -203,6 +210,63 @@ describe('sms webhook authentication', () => {
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
         expect.stringContaining("Couldn't read that receipt.")
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+  });
+
+  describe('budget commands', () => {
+    it('handles BUDGET query command', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      getBudgetReport.mockResolvedValue([
+        { category: 'Grocery', limit: 500, spent: 120.5, percentage: 24 },
+      ]);
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'BUDGET',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('Monthly Budgets:\nGrocery: $120.50 / $500.00 (24%)')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('handles BUDGET set command', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      setBudget.mockResolvedValue({ category: 'Grocery', limit: 500 });
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'BUDGET Grocery 500',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(setBudget).toHaveBeenCalledWith('+14165551234', 'Grocery', 500);
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('Budget set: Grocery limit is now $500.00.')
       );
       expect(res.send).toHaveBeenCalledWith('<Response/>');
     });

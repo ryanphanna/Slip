@@ -9,6 +9,7 @@ const { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit } = requi
 const { getMonthlyStats, getLastReceipt } = require('./lib/query');
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
+const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
 const config = require('./lib/config');
 
@@ -164,6 +165,39 @@ exports.sms = onRequest(
           return;
         }
 
+        if (bodyText === 'BUDGET') {
+          const report = await getBudgetReport(from);
+          const activeBudgets = report.filter(r => r.limit > 0);
+          if (activeBudgets.length === 0) {
+            await sendSms(from, 'No active budgets. Set one via: BUDGET <category> <limit>');
+          } else {
+            const lines = activeBudgets
+              .map(r => `${r.category}: $${r.spent.toFixed(2)} / $${r.limit.toFixed(2)} (${r.percentage}%)`)
+              .join('\n');
+            await sendSms(from, `Monthly Budgets:\n${lines}`);
+          }
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
+        if (bodyText.startsWith('BUDGET ')) {
+          const parts = (req.body.Body || '').trim().split(/\s+/);
+          const limitStr = parts[parts.length - 1];
+          const limit = parseFloat(limitStr);
+
+          if (parts.length >= 3 && !isNaN(limit) && limit >= 0) {
+            const category = parts.slice(1, -1).join(' ');
+            await setBudget(from, category, limit);
+            await sendSms(from, `Budget set: ${category} limit is now $${limit.toFixed(2)}.`);
+          } else {
+            await sendSms(from, 'Invalid syntax. Use: BUDGET <category> <limit> (e.g., BUDGET Grocery 500)');
+          }
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
         if (config.ONBOARDING_KEYWORDS.includes(bodyText)) {
           await sendSms(from, config.ONBOARDING_MESSAGE);
           res.set('Content-Type', 'text/xml');
@@ -260,6 +294,44 @@ exports.sms = onRequest(
       if (raw.confidence != null && raw.confidence < 0.7) {
         message = `⚠️ ${message}`;
         logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
+      }
+
+      // Budget status integration
+      if (receipt.category) {
+        try {
+          const budget = await getBudget(from, receipt.category);
+          if (budget && budget.limit > 0) {
+            const db = admin.firestore();
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            
+            const snapshot = await db.collection('receipts')
+              .where('from', '==', from)
+              .where('createdAt', '>=', startOfMonth)
+              .get();
+
+            let spent = 0;
+            const categoryLower = receipt.category.toLowerCase();
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.category?.toLowerCase() === categoryLower && data.total != null) {
+                spent += data.total;
+              }
+            });
+
+            spent = Math.round(spent * 100) / 100;
+            const remaining = Math.round((budget.limit - spent) * 100) / 100;
+            const budgetLine = `\nBudget: $${spent.toFixed(2)}/$${budget.limit.toFixed(2)} spent`;
+
+            if (spent > budget.limit) {
+              message += `${budgetLine} (⚠️ over by $${Math.abs(remaining).toFixed(2)})`;
+            } else {
+              message += `${budgetLine} ($${remaining.toFixed(2)} left)`;
+            }
+          }
+        } catch (budgetErr) {
+          logger.error('Failed to append budget status to receipt confirmation', { messageSid, error: budgetErr.message });
+        }
       }
 
       await sendSms(from, message);
