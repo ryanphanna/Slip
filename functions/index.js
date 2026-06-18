@@ -164,8 +164,12 @@ exports.sms = onRequest(
           return;
         }
 
-        if (bodyText === 'INFO') {
-          await sendSms(from, 'Commands: TOTAL (monthly spend), SUMMARY (by category), LAST (latest receipt), or send a photo to log.');
+        const GREETINGS = ['HELLO', 'HI', 'START', 'GET STARTED', 'ONBOARD', 'ONBOARDING', 'HELP', 'WELCOME', 'COMMANDS', 'GUIDE', 'INFO'];
+        if (GREETINGS.includes(bodyText)) {
+          await sendSms(
+            from,
+            'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.\n\nCommands:\n• TOTAL — monthly spend\n• SUMMARY — category breakdown\n• LAST — latest receipt\n• INFO — show commands list'
+          );
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -271,6 +275,22 @@ exports.sms = onRequest(
         error: err && err.message ? err.message : err,
         cause: err && err.cause && err.cause.message ? err.cause.message : undefined,
       });
+
+      try {
+        const lastReceipt = await getLastReceipt(from);
+        if (!lastReceipt) {
+          await sendSms(
+            from,
+            'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.\n\nCommands:\n• TOTAL — monthly spend\n• SUMMARY — category breakdown\n• LAST — latest receipt\n• INFO — show commands list'
+          );
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+      } catch (dbErr) {
+        logger.error('Failed to query last receipt for onboarding check', { messageSid, error: dbErr.message });
+      }
+
       const errorMessage = err && err.message ? err.message : 'Unknown error';
       const safeMessage = errorMessage.replace(/\s+/g, ' ').slice(0, 140);
       await sendSms(from, `Couldn't read that receipt. ${safeMessage}. Try again with a clearer image or shorter text.`);

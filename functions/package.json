@@ -20,6 +20,7 @@
     "twilio": "^6.0.2"
   },
   "overrides": {
+    "firebase-admin": "$firebase-admin",
     "@grpc/grpc-js": "^1.14.4",
     "@napi-rs/wasm-runtime": "^1.1.5",
     "unrs-resolver": "1.9.2",
