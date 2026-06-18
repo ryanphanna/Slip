@@ -28,6 +28,8 @@ All notable changes to this project will be documented in this file.
 - **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to `functions/package.json` to enforce root-level version alignment (`^14.0.0`) across transitively dependent peer packages (like `firebase-functions`), correcting the npm ERESOLVE crash on the Functions CI server.
 - **Two-Tier Rate Limiting and Query Optimization**: Optimized and redesigned the `checkRateLimit` query in `functions/lib/store.js` to retrieve receipts over a 24-hour period. In a single efficient Firestore read, it checks both a soft hourly limit (max 25 receipts/hour) and a hard daily limit (max 100 receipts/day). This supports legitimate bulk user backfills while maintaining secure loop-spam protection, and reduces Firestore costs.
 - **Twilio Webhook Verification Hardening**: Enforced webhook request signature validation unconditionally, removing the insecure bypass that allowed allowlisted senders to proceed even if signature verification failed. Added a query parameter token auth fallback (`?token=YOUR_TWILIO_AUTH_TOKEN`) using timing-safe comparisons to handle proxy/protocol header discrepancies behind Cloud Run.
+- **firebase-admin v14 API Compatibility**: Added a polyfill compatibility layer for `admin.firestore()`, `admin.firestore.FieldValue`, and `admin.storage()` at the application entry points. This resolves breaking changes from the SDK v14 modular upgrade and fixes crashes in local query, delete, and replay scripts.
+
 
 
 

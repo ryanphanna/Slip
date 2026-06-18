@@ -2,6 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 
+// Polyfill firebase-admin v14 top-level service getters for compatibility
+if (!admin.firestore) {
+  const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+  admin.firestore = getFirestore;
+  admin.firestore.FieldValue = FieldValue;
+}
+if (!admin.storage) {
+  const { getStorage } = require('firebase-admin/storage');
+  admin.storage = getStorage;
+}
+
+
 function resolveServiceAccountPath() {
   const candidates = [
     process.env.GOOGLE_APPLICATION_CREDENTIALS,
@@ -21,8 +33,9 @@ function initializeAdminApp() {
   const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || 'slip-c742b.firebasestorage.app';
   const serviceAccountPath = resolveServiceAccountPath();
   if (serviceAccountPath) {
-    const credential = admin.credential.cert(require(serviceAccountPath));
+    const credential = admin.cert(require(serviceAccountPath));
     admin.initializeApp({ credential, storageBucket });
+
     return { admin, credentialSource: serviceAccountPath };
   }
 
