@@ -31,7 +31,33 @@ module.exports = {
   PERMANENT_CONFIDENCE_THRESHOLD: 0.8,
   PERMANENT_MERCHANTS: ['ikea'],
 
+  // === Merchant Normalization ===
+  MERCHANT_NORMALIZE_MAP: {
+    'fresh co': 'FreshCo',
+    'freshco': 'FreshCo',
+    'whole foods': 'Whole Foods Market',
+    'whole foods market': 'Whole Foods Market',
+    'trader joe\'s': "Trader Joe's",
+    'trader joes': "Trader Joe's",
+    'wal-mart': 'Walmart',
+    'walbart': 'Walmart',
+    'walmart': 'Walmart',
+    'tim hortons': 'Tim Hortons',
+    't&t supermarket': 'T&T Supermarket',
+    'shoppers drug mart': 'Shoppers Drug Mart',
+    'ikea': 'IKEA',
+    'loblaws': 'Loblaws',
+    'uniqlo': 'Uniqlo',
+    'superstore': 'Superstore',
+    'homesense': 'Homesense',
+    'walgreens': 'Walgreens',
+    'rexall': 'Rexall',
+    'metro': 'Metro',
+    'target': 'Target',
+  },
+
   // === Onboarding & Commands ===
   ONBOARDING_KEYWORDS: ['HELLO', 'HI', 'START', 'GET STARTED', 'ONBOARD', 'ONBOARDING', 'HELP', 'WELCOME', 'COMMANDS', 'GUIDE', 'INFO'],
   ONBOARDING_MESSAGE: 'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.\n\nCommands:\n• TOTAL — monthly spend\n• SUMMARY — category breakdown\n• LAST — latest receipt\n• INFO — show commands list',
+
 };
