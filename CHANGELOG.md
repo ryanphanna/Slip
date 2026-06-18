@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - **Extended Gemini Spending Tools**: Added `merchant` and `category` query filters to the `getSpendingTotal` and `getSpendingByCategory` tool definitions and backend logic.
 - **Search Receipts Tool**: Implemented a new `searchReceipts` Gemini function-calling tool that searches receipts by merchant name, category, subcategory, or item name matches (case-insensitive partial match), with support for minimum/maximum amount constraints and dates.
 
+### Changed
+- **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central [functions/lib/config.js](file:///Users/ryan/Desktop/Dev/Coding/Backend/Slip/functions/lib/config.js).
+
 ### Fixed
 - **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to `functions/package.json` to enforce root-level version alignment (`^14.0.0`) across transitively dependent peer packages (like `firebase-functions`), correcting the npm ERESOLVE crash on the Functions CI server.
 
