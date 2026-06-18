@@ -87,16 +87,15 @@ exports.sms = onRequest(
     const signatureValid = validateTwilioSignature(req);
 
     if (!signatureValid) {
-      logger.warn('Invalid Twilio signature', {
+      logger.warn('Unauthorized Twilio webhook request', {
         messageSid,
         from: maskedFrom,
         allowedSender,
       });
-      if (!allowedSender) {
-        res.status(403).send('Forbidden');
-        return;
-      }
+      res.status(403).send('Forbidden');
+      return;
     }
+
 
     if (!allowedSender) {
       logger.warn('Rejected request from unlisted number', { messageSid, from: maskedFrom });

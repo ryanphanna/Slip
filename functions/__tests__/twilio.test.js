@@ -1,4 +1,17 @@
-const { buildRequestUrls, parseForwardedValues } = require('../lib/twilio');
+jest.mock('firebase-functions/params', () => ({
+  defineSecret: jest.fn(name => ({
+    value: jest.fn(() => process.env[name] || ''),
+  })),
+}));
+
+jest.mock('firebase-functions/logger', () => ({
+  warn: jest.fn(),
+  info: jest.fn(),
+  error: jest.fn(),
+}));
+
+const { buildRequestUrls, parseForwardedValues, validateTwilioSignature } = require('../lib/twilio');
+
 
 describe('twilio url generation helpers', () => {
   const originalEnv = { ...process.env };
@@ -138,4 +151,39 @@ describe('twilio url generation helpers', () => {
       expect(urls).toContain('https://us-central1-test-proj.cloudfunctions.net/myfunc/');
     });
   });
+
+  describe('validateTwilioSignature', () => {
+    beforeEach(() => {
+      process.env.TWILIO_AUTH_TOKEN = 'supersecrettoken';
+    });
+
+    afterEach(() => {
+      delete process.env.TWILIO_AUTH_TOKEN;
+    });
+
+    it('returns true when query token matches the expected TWILIO_AUTH_TOKEN', () => {
+      const req = {
+        query: { token: 'supersecrettoken' },
+        headers: {},
+      };
+      expect(validateTwilioSignature(req)).toBe(true);
+    });
+
+    it('returns false when query token is invalid', () => {
+      const req = {
+        query: { token: 'wrongtoken' },
+        headers: {},
+      };
+      expect(validateTwilioSignature(req)).toBe(false);
+    });
+
+    it('returns false when query token and signature header are missing', () => {
+      const req = {
+        query: {},
+        headers: {},
+      };
+      expect(validateTwilioSignature(req)).toBe(false);
+    });
+  });
 });
+

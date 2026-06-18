@@ -81,13 +81,24 @@ function signatureMatches(authToken, signature, url, params) {
 }
 
 function validateTwilioSignature(req) {
+  // Try query token parameter authentication fallback first
+  const token = req.query?.token;
+  const authToken = readRequiredConfig('TWILIO_AUTH_TOKEN', twilioAuthToken);
+
+  if (token && authToken) {
+    const tokenBuffer = Buffer.from(token);
+    const authBuffer = Buffer.from(authToken);
+    if (tokenBuffer.length === authBuffer.length && crypto.timingSafeEqual(tokenBuffer, authBuffer)) {
+      return true;
+    }
+  }
+
   const signature = req.headers['x-twilio-signature'];
   if (!signature) {
-    logger.warn('No x-twilio-signature header found');
+    logger.warn('No x-twilio-signature header found and query token invalid');
     return false;
   }
 
-  const authToken = readRequiredConfig('TWILIO_AUTH_TOKEN', twilioAuthToken);
   const params = req.body && typeof req.body === 'object' ? req.body : {};
   const candidates = buildRequestUrls(req);
 
@@ -103,6 +114,7 @@ function validateTwilioSignature(req) {
   logger.warn('Twilio signature validation failed for all candidate request URLs', { candidates });
   return false;
 }
+
 
 async function sendSms(to, body) {
   const client = twilio(
