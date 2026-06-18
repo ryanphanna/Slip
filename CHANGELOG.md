@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.4.0] — 2026-06-18
 
 ### Added
 - **Permanent and Temporary Image Routing**: Route receipt images saved in Google Cloud Storage into either `receipts-temporary/` (for auto-deletion after 30 days) or `receipts-permanent/` (for indefinite retention) based on validated receipt properties. Specifically, images are saved to `receipts-permanent/` if the receipt total is $100 or higher, the category is "Health" or "Home", the extraction confidence is low (< 0.8), or the merchant matches "ikea" (case-insensitive). All other receipt images default to `receipts-temporary/`. (resolves Linear issue AI-87)
@@ -10,31 +10,26 @@ All notable changes to this project will be documented in this file.
 - **Extended Gemini Spending Tools**: Added `merchant` and `category` query filters to the `getSpendingTotal` and `getSpendingByCategory` tool definitions and backend logic.
 - **Search Receipts Tool**: Implemented a new `searchReceipts` Gemini function-calling tool that searches receipts by merchant name, category, subcategory, or item name matches (case-insensitive partial match), with support for minimum/maximum amount constraints and dates.
 - **Budgeting System & Targets**: Added a Firestore-backed `budgets` collection. Designed SMS commands `BUDGET` (lists active budgets and percentage spent this month) and `BUDGET <category> <limit>` (sets a limit for a category). Integrates budget progress inside success SMS receipts confirmations (e.g. `Budget: $25.50/$500 spent ($474.50 left)`). Exposes `setCategoryBudget` and `getBudgetStatus` function-calling tools to Gemini for natural language query/set capabilities.
-- **Firestore Security Hardening**: Added rules to [firestore.rules](file:///Users/ryan/Desktop/Dev/Coding/Backend/Slip/firestore.rules) to block client-side access to the new `budgets` collection.
+- **Firestore Security Hardening**: Added rules to `firestore.rules` to block client-side access to the new `budgets` collection.
 - **Line-Item Category Splits**: Extended the Gemini Vision prompt in `gemini.js` to extract individual categories for each line item on the receipt (e.g. at Walmart, milk is classified as "Grocery", socks as "Shopping"). The validation layer sanitizes these category assignments with robust fallback to the receipt's main category.
 - **Granular Spending Aggregations**: Created a shared spending aggregation utility in `query.js` to sum category spending at the item level. Apportions receipt differences (such as tax, tips, or discounts) back to the main category, ensuring exact dollar-for-dollar calculations. Used this utility across all budgets, SMS summaries, and Gemini spending tools.
 - **Smart Subscription Tracking**: Extended the Gemini extraction schema and receipt validation layer to flag subscriptions with an `isSubscription` boolean. Added a new `getSubscriptions` query tool to fetch and aggregate active subscription overhead (last 60 days) grouped and deduplicated by merchant.
-- **Cross-Receipt Product Searching Roadmap**: Documented future natural language query features for comparing historical product prices across different receipts in `docs/FEATURES.md`.
-- **Merchant Name Normalization Map**: Added a centralized `MERCHANT_NORMALIZE_MAP` in [functions/lib/config.js](file:///functions/lib/config.js) that maps various raw merchant spelling and casing styles (e.g. `'FRESH CO'`, `'freshco'`) to a canonical version. The validation layer in [functions/lib/validate.js](file:///functions/lib/validate.js) automatically cleans up incoming merchant names using this mapping, including suffix/substring matching (e.g. `'Walmart Supercenter'` -> `'Walmart'`), ensuring clean and deduplicated database aggregates. Added dynamic read-time normalization in [functions/lib/spending-tools.js](file:///functions/lib/spending-tools.js) for report aggregation and query filters so historic or un-normalized records group and match correctly without requiring database backfills.
-- **Natural Language Spending Query CLI**: Added `scripts/ask.js` — a local CLI tool powered by Gemini function calling that answers natural language questions about spending (e.g. `node scripts/ask.js "how much did I spend last month?"`). Uses an agentic loop to dispatch Firestore queries via `spending-tools.js` and return a conversational answer.
-
-
+- **Merchant Name Normalization Map**: Added a centralized `MERCHANT_NORMALIZE_MAP` in `lib/config.js` that maps various raw merchant spelling and casing styles to canonical versions, including suffix/substring matching (e.g. `'Walmart Supercenter'` → `'Walmart'`). Applied at write time in `validate.js` and at read time in `spending-tools.js` for correct aggregation without database backfills.
+- **Natural Language Spending Query CLI**: Added `scripts/ask.js` — a local CLI tool powered by Gemini function calling that answers natural language questions about spending (e.g. `node scripts/ask.js "how much did I spend last month?"`).
 
 ### Changed
-- **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central [functions/lib/config.js](file:///functions/lib/config.js).
-- **Latency Optimization and Parallelization**: Optimized response times by parallelizing sequential web requests, GCS file uploads, and database lookups using `Promise.all`. Multiple incoming Twilio media downloads are now fetched concurrently, GCS image saves are uploaded in parallel, and GCS storage operations run concurrently with the Firestore duplicate receipt query. This reduces inline webhook execution time by up to 2-3 seconds for multi-image messages.
-- **Function Resource Optimization**: Configured memory allocation to `512MiB` and set concurrency to `1` in `functions/index.js` to handle memory-heavy image buffer processing safely. Isolating execution to a single request per container prevents Out-of-Memory (OOM) failures under concurrent request spikes while maintaining zero cost when idle.
-
-
+- **Centralized Configurations**: Refactored the storage routing logic (prefixes, thresholds, categories, merchants) and onboarding greeting assets (keywords, message copy) out of `image-store.js` and `index.js` and into the central `lib/config.js`.
+- **Latency Optimization and Parallelization**: Parallelized Twilio media downloads, GCS uploads, and Firestore duplicate checking using `Promise.all`, reducing webhook execution time by up to 2-3 seconds for multi-image messages.
+- **Function Resource Optimization**: Configured memory allocation to `512MiB` and concurrency to `1` in `functions/index.js` to prevent OOM failures under concurrent request spikes.
 
 ### Fixed
-- **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to `functions/package.json` to enforce root-level version alignment (`^14.0.0`) across transitively dependent peer packages (like `firebase-functions`), correcting the npm ERESOLVE crash on the Functions CI server.
-- **Two-Tier Rate Limiting and Query Optimization**: Optimized and redesigned the `checkRateLimit` query in `functions/lib/store.js` to retrieve receipts over a 24-hour period. In a single efficient Firestore read, it checks both a soft hourly limit (max 25 receipts/hour) and a hard daily limit (max 100 receipts/day). This supports legitimate bulk user backfills while maintaining secure loop-spam protection, and reduces Firestore costs.
-- **Twilio Webhook Verification Hardening**: Enforced webhook request signature validation unconditionally, removing the insecure bypass that allowed allowlisted senders to proceed even if signature verification failed. Added a query parameter token auth fallback (`?token=YOUR_TWILIO_AUTH_TOKEN`) using timing-safe comparisons to handle proxy/protocol header discrepancies behind Cloud Run.
-- **firebase-admin v14 API Compatibility**: Added a polyfill compatibility layer for `admin.firestore()`, `admin.firestore.FieldValue`, and `admin.storage()` at the application entry points. This resolves breaking changes from the SDK v14 modular upgrade and fixes crashes in local query, delete, and replay scripts.
-- **Replay Script Credential Propagation**: Fixed `scripts/replay.js` not passing Twilio and Gemini credentials to `process.env` after loading from Secret Manager, causing 401 Twilio media fetch errors and 403 Gemini API errors during local replay runs.
-- **Missing Firestore Composite Index for Monthly Queries**: Added `(createdAt ASC)` index to `firestore.indexes.json` to support date-range queries in `spending-tools.js`, fixing "missing required index" errors when querying receipts by month.
-- **Storage Bucket Not Configured in Local Scripts**: Fixed `admin.initializeApp()` in `lib/admin.js` to always pass `storageBucket`, resolving "Bucket name not specified or invalid" errors when running `replay.js` locally.
+- **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to enforce root-level version alignment (`^14.0.0`), correcting the npm ERESOLVE crash on the Functions CI server.
+- **Two-Tier Rate Limiting**: Redesigned `checkRateLimit` to check both hourly (25/hr) and daily (100/day) limits in a single Firestore read, supporting bulk backfills while preventing spam.
+- **Twilio Webhook Verification Hardening**: Enforced signature validation unconditionally; removed insecure `?token=` query parameter fallback that exposed `TWILIO_AUTH_TOKEN` in Cloud Run request logs.
+- **firebase-admin v14 API Compatibility**: Added polyfill for `admin.firestore()` and `admin.storage()` top-level getters, fixing crashes in local scripts after the v14 modular SDK upgrade.
+- **Replay Script Credential Propagation**: Fixed `scripts/replay.js` not writing secrets to `process.env`, causing 401 Twilio and 403 Gemini errors during local replay runs.
+- **Missing Firestore Indexes**: Added composite indexes for date-range queries in `spending-tools.js` and `isSubscription`-scoped queries, fixing "missing required index" errors.
+- **Storage Bucket Not Configured in Local Scripts**: Fixed `admin.initializeApp()` to always pass `storageBucket`, resolving bucket errors when running scripts locally.
 
 
 
