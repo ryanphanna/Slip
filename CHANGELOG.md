@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **AI spending query tools & CLI**: Introduced five Gemini function-calling tools (`getSpendingTotal`, `getSpendingByCategory`, `getTopMerchants`, `getRecentReceipts`, `getMonthlySummary`) and a CLI utility at `functions/scripts/ask.js` to query spending in natural language.
+
+### Fixed
+- **Local replay script storage**: Passed `storageBucket` to `admin.initializeApp` inside `functions/lib/admin.js` to ensure local replay scripts resolve image paths correctly.
+- **Local replay script env & index**: Set `TWILIO_*` and `GEMINI_API_KEY` in `process.env` inside the replay script, and added the composite index `(from, merchant, total, createdAt ASC)` in `firestore.indexes.json` for duplicate checking.
+- **Cloud Build npm resolution**: Added `@emnapi/core` and `@emnapi/runtime` as dev dependencies in `functions/package.json` to prevent Cloud Build deployment lockfile mismatches on Linux.
+
+### Security
+- **Dependency overrides**: Patched CRLF injection in `form-data` (override to `^4.0.6`) and DoS/shadow vulnerabilities in `protobufjs` (override to `^7.6.4`) in `functions/package.json`.
+
 ## [1.2.6] — 2026-06-17
 
 ### Security
