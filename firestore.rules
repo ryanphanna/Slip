@@ -5,5 +5,9 @@ service cloud.firestore {
     match /receipts/{docId} {
       allow read, write: if false;
     }
+    // Only server-side can read/write budgets
+    match /budgets/{docId} {
+      allow read, write: if false;
+    }
   }
 }
