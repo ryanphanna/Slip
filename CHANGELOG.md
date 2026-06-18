@@ -23,6 +23,8 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - **CI Dependency Resolution Conflict**: Added `firebase-admin` package override to `functions/package.json` to enforce root-level version alignment (`^14.0.0`) across transitively dependent peer packages (like `firebase-functions`), correcting the npm ERESOLVE crash on the Functions CI server.
 - **Rate Limiter Query Optimization**: Optimized the `checkRateLimit` query in `functions/lib/store.js` to filter directly by sender number and the 1-hour window timeframe. This prevents potential rate limiter bypass under high collection load and significantly reduces Firestore read costs by eliminating the global scan.
+- **Twilio Webhook Verification Hardening**: Enforced webhook request signature validation unconditionally, removing the insecure bypass that allowed allowlisted senders to proceed even if signature verification failed. Added a query parameter token auth fallback (`?token=YOUR_TWILIO_AUTH_TOKEN`) using timing-safe comparisons to handle proxy/protocol header discrepancies behind Cloud Run.
+
 
 
 ## [1.3.2] — 2026-06-17
