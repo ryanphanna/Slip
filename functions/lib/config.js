@@ -12,8 +12,10 @@ module.exports = {
   MAX_BODY_TEXT_LENGTH: 8000,              // Max characters for pasted receipt text
 
   // === Rate Limiting ===
-  RATE_LIMIT_PER_HOUR: 15,
+  RATE_LIMIT_PER_HOUR: 25,
+  RATE_LIMIT_PER_DAY: 100,
   RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,    // 1 hour
+
 
   // === Duplicate Detection ===
   DUPLICATE_WINDOW_MS: 10 * 60 * 1000,     // 10 minutes

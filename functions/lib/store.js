@@ -25,16 +25,36 @@ async function isMessageProcessed(messageSid) {
   return !snapshot.empty;
 }
 
-async function checkRateLimit(from, limit = config.RATE_LIMIT_PER_HOUR) {
+async function checkRateLimit(from) {
   const db = admin.firestore();
   const oneHourAgo = new Date(Date.now() - config.RATE_LIMIT_WINDOW_MS);
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
   const snapshot = await db.collection('receipts')
     .where('from', '==', from)
-    .where('createdAt', '>=', oneHourAgo)
+    .where('createdAt', '>=', twentyFourHoursAgo)
     .get();
 
-  return snapshot.size >= limit;
+  const dailyCount = snapshot.size;
+  if (dailyCount >= config.RATE_LIMIT_PER_DAY) {
+    return { exceeded: true, reason: 'daily' };
+  }
+
+  let hourlyCount = 0;
+  for (const doc of snapshot.docs) {
+    const createdAt = doc.get('createdAt')?.toDate?.();
+    if (createdAt && createdAt >= oneHourAgo) {
+      hourlyCount++;
+    }
+  }
+
+  if (hourlyCount >= config.RATE_LIMIT_PER_HOUR) {
+    return { exceeded: true, reason: 'hourly' };
+  }
+
+  return { exceeded: false };
 }
+
 
 
 async function findDuplicate(receipt, from) {
