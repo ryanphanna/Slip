@@ -78,9 +78,9 @@ describe('twilio url generation helpers', () => {
       const urls = buildRequestUrls(req);
 
       // Should include variants for both forwarded hosts
-      expect(urls.some(u => u.startsWith('https://forwarded1.com'))).toBe(true);
-      expect(urls.some(u => u.startsWith('http://forwarded2.com'))).toBe(true);
-      expect(urls.some(u => u.startsWith('https://internal-host'))).toBe(true);
+      expect(urls).toContain('https://forwarded1.com/sms');
+      expect(urls).toContain('http://forwarded2.com/sms');
+      expect(urls).toContain('https://internal-host/sms');
     });
 
     it('handles paths that do not match the function name', () => {

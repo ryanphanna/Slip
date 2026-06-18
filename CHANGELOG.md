@@ -5,7 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Security
-- **CVE: js-yaml DoS vulnerability**: Added `js-yaml ^4.2.0` override to resolve the quadratic-complexity DoS vulnerability (CVE-2026-53550 / GHSA-h67p-54hq-rp68) in nested dependencies via Jest's dependency chain.
+- **CVE: js-yaml DoS vulnerability**: Added `js-yaml ^4.2.0` override to resolve the quadratic-complexity DoS vulnerability (CVE-2026-53550 / GHSA-h67p-54hq-rp68) in nested dependencies via Jest's dependency chain. (resolves Linear issue AI-84)
+- **CodeQL: Incomplete URL substring sanitization**: Replaced `startsWith` substring assertions in `twilio.test.js` with exact `toContain` matches to satisfy CodeQL's security scanning alerts (js/incomplete-url-substring-sanitization). (resolves Linear issue AI-85)
 
 ## [1.3.0] — 2026-06-17
 
