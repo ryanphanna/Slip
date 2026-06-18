@@ -108,4 +108,17 @@ describe('validateReceipt', () => {
       { name: 'Pens', price: 3.0, category: 'Grocery' }
     ]);
   });
+
+  it('should normalize merchant names using the config map', () => {
+    const raw1 = { merchant: 'FRESH CO' };
+    const raw2 = { merchant: 'freshco' };
+    const raw3 = { merchant: 'Walmart Supercenter' };
+    const raw4 = { merchant: 'Unknown Store' };
+
+    expect(validateReceipt(raw1).merchant).toBe('FreshCo');
+    expect(validateReceipt(raw2).merchant).toBe('FreshCo');
+    expect(validateReceipt(raw3).merchant).toBe('Walmart');
+    expect(validateReceipt(raw4).merchant).toBe('Unknown Store');
+  });
 });
+

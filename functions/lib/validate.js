@@ -1,10 +1,33 @@
+const config = require('./config');
+
 const VALID_CATEGORIES = ['Takeout/Dining', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Home', 'Other'];
 const VALID_TYPES = ['purchase', 'refund'];
+
+function normalizeMerchant(name) {
+  if (typeof name !== 'string') return null;
+  const clean = name.trim();
+  const lower = clean.toLowerCase();
+
+  // Try direct lookup in the normalization map
+  if (config.MERCHANT_NORMALIZE_MAP && config.MERCHANT_NORMALIZE_MAP[lower]) {
+    return config.MERCHANT_NORMALIZE_MAP[lower];
+  }
+
+  // Try substring checks for safety (e.g. "Walmart Supercenter" -> "Walmart")
+  for (const [key, canonical] of Object.entries(config.MERCHANT_NORMALIZE_MAP || {})) {
+    if (lower.includes(key)) {
+      return canonical;
+    }
+  }
+
+  return clean;
+}
 
 // Clean and validate the parsed receipt object before writing to Firestore.
 function validateReceipt(raw) {
   return {
-    merchant: typeof raw.merchant === 'string' ? raw.merchant.trim() : null,
+    merchant: normalizeMerchant(raw.merchant),
+
     location: typeof raw.location === 'string' ? raw.location.trim() : null,
     date: isValidDate(raw.date) ? raw.date : null,
     total: toNumber(raw.total),
