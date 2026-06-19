@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] — 2026-06-18
+
+### Fixed
+- Double line break before TOTAL hint message.
+- Updated tests to account for async IIFE receipt processing pattern and reworded error messages.
+
 ## [1.5.0] — 2026-06-18
 
 ### Added
