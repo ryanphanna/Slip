@@ -395,7 +395,7 @@ exports.sms = onRequest(
           logger.error('Failed to query last receipt for onboarding check', { messageSid, error: dbErr.message });
         }
 
-        await sendSms(from, `${oops()} Couldn't read that receipt. Try again with a clearer image or shorter text.`).catch(() => {});
+        await Promise.resolve(sendSms(from, `${oops()} Couldn't read that receipt. Try again with a clearer image or shorter text.`)).catch(() => {});
       });
   }
 );

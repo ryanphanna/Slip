@@ -133,7 +133,7 @@ describe('sms webhook authentication', () => {
 
     expect(sendSms).toHaveBeenCalledWith(
       '+14165551234',
-      expect.stringContaining('Hourly limit reached')
+      expect.stringContaining("hit the hourly limit")
     );
     expect(res.send).toHaveBeenCalledWith('<Response/>');
   });
@@ -159,7 +159,7 @@ describe('sms webhook authentication', () => {
 
     expect(sendSms).toHaveBeenCalledWith(
       '+14165551234',
-      expect.stringContaining('Daily limit reached')
+      expect.stringContaining("hit your daily limit")
     );
     expect(res.send).toHaveBeenCalledWith('<Response/>');
   });
@@ -235,6 +235,7 @@ describe('sms webhook authentication', () => {
       const res = makeResponse();
 
       await sms(req, res);
+      await new Promise(resolve => setImmediate(resolve));
 
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
@@ -262,6 +263,7 @@ describe('sms webhook authentication', () => {
       const res = makeResponse();
 
       await sms(req, res);
+      await new Promise(resolve => setImmediate(resolve));
 
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
