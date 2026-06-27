@@ -23,10 +23,11 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "loyaltyPointsBalance": number or null,
   "confidence": 0.0 to 1.0 (how certain you are about the extraction)
 }
-Use null for anything you can't determine. Items can be an empty array.
-For each item in the items array, assign a "category" matching one of the eight valid options (Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other). For example, at a department store like Walmart or Costco, assign "Grocery" for food items, "Shopping" for apparel/electronics, "Health" for vitamins/pharmacy, and "Home" for housewares.
-Determine if the receipt represents a recurring subscription or recurring membership (e.g. streaming plans, SaaS tools, phone/internet bills, gym fees). Set "isSubscription" to true if it is recurring, or false if it is a standard one-off purchase.
-For each item, record the final net price paid after any inline per-item discount shown beneath it on the receipt. Do not add a separate line item for any discount summary or coupon total that appears at the bottom — if per-item discounts are already reflected in individual prices, the summary line is redundant and should be omitted.`;
+Date: Every receipt has a date printed somewhere — check the top, bottom, header, and footer of the receipt. It may appear as a timestamp, a short date like "Jun 22 2026", or embedded in a receipt number. Always extract it; only use null if the receipt is genuinely cut off and no date is visible anywhere.
+Items: Include every line item on the receipt. Do not skip items or summarize groups. If the receipt has 20 items, return all 20. For each item, assign a "category" matching one of the eight valid options (Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other). At mixed stores like Walmart or Costco, assign per-item: "Grocery" for food, "Shopping" for apparel/electronics, "Health" for pharmacy/vitamins, "Home" for housewares.
+Zero totals: If items were redeemed via loyalty points or rewards and cost $0, set total to 0 and still capture all items and the receipt date.
+Subscriptions: Set "isSubscription" to true for recurring charges (streaming, SaaS, phone/internet, gym), false otherwise.
+Discounts: Record the final net price paid for each item after any inline per-item discount. Do not add a separate line item for a bottom-of-receipt discount summary — if per-item prices already reflect the discount, the summary line is redundant.`;
 
 /**
  * Strip markdown code fences and parse JSON. Attempts a fallback extraction
@@ -117,6 +118,11 @@ async function parseReceiptFromBase64(images, apiKey) {
     const parsed = cleanJsonResponse(result.response.text());
 
     if (parsed.confidence != null && parsed.confidence < 0.8) {
+      return await parseWithPro(promptParts, apiKey);
+    }
+
+    // Image receipts always have a date — null date from Flash means a missed extraction
+    if (parsed.date == null) {
       return await parseWithPro(promptParts, apiKey);
     }
 

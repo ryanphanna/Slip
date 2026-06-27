@@ -308,6 +308,7 @@ exports.sms = onRequest(
         }
 
         const receipt = validateReceipt(raw);
+        if (raw.confidence != null) receipt.confidence = raw.confidence;
 
         // Store images and check for duplicates in parallel to optimize latency
         const [imagePathsResult, duplicateId] = await Promise.all([
@@ -323,7 +324,7 @@ exports.sms = onRequest(
         const imagePaths = imagePathsResult;
         if (duplicateId) {
           logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
-          await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged recently.`);
+          await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged.`);
           return;
         }
 
@@ -341,6 +342,11 @@ exports.sms = onRequest(
         if (raw.confidence != null && raw.confidence < 0.7) {
           message = `⚠️ ${message}`;
           logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
+        }
+
+        if (!receipt.date) {
+          message += '\n\nCouldn\'t find a date on this one — re-send if it matters.';
+          logger.warn('Receipt saved with no date', { messageSid, merchant });
         }
 
         if (receipt.category) {

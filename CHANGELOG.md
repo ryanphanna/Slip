@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Duplicate detection across days**: `findDuplicate` now runs a second query matching `merchant + total + date` with no time window, so re-uploading an old receipt days later is correctly rejected. Previously only a 10-minute recency window was checked.
+- **Old Navy merchant normalization**: Added "old navy" to the normalization map so "OLD NAVY" and "Old Navy" both resolve to "Old Navy", enabling duplicate detection to match across casing variants.
+- **Null date re-parse**: Image receipts that return `date: null` from Gemini Flash now automatically retry with the Pro model. Every real receipt has a date; a null result from Flash indicates a missed extraction.
+- **Confidence saved to Firestore**: Receipt `confidence` score (from Gemini) is now persisted alongside the receipt document, enabling future queries for low-confidence entries.
+- **Confidence not saved on replay**: `replay.js` was not carrying `raw.confidence` through to Firestore, unlike the main handler. Now consistent.
+- **Duplicate SMS message**: Removed "recently" from the duplicate notification message since the match may be against a receipt logged days prior.
+- **Missing date user warning**: If a receipt saves with no date (after all fallbacks), the confirmation SMS now tells the user and invites a re-send.
+
+### Changed
+- **Gemini prompt**: Tightened date extraction guidance ("check top, bottom, header, footer"), made item completeness explicit ("include every line item, do not skip"), and added clarity on zero-total loyalty receipts.
+
+### Added
+- **Firestore index**: Added composite index on `from + merchant + total + date` to support the new date-based duplicate check query.
+- **`scripts/reparse.js`**: Re-parse one or more receipts from their stored GCS images and update Firestore in place. Supports `--dry-run`. Useful after prompt changes to fix historically bad parses.
+- **`scripts/setup-lifecycle.js`**: Applies GCS lifecycle rule to auto-delete `receipts-temporary/` objects after 30 days. Was previously documented in the changelog but never actually configured.
+
 ## [1.5.1] — 2026-06-18
 
 ### Fixed

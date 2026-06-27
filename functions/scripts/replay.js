@@ -154,6 +154,7 @@ async function processMessage(client, msg, { notify }) {
 
   const raw = await parseReceiptFromBase64(images);
   const receipt = validateReceipt(raw);
+  if (raw.confidence != null) receipt.confidence = raw.confidence;
 
   const duplicateId = await findDuplicate(receipt, msg.from);
   if (duplicateId) {
