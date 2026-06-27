@@ -50,6 +50,7 @@ module.exports = {
     'shoppers drug mart': 'Shoppers Drug Mart',
     'ikea': 'IKEA',
     'loblaws': 'Loblaws',
+    'old navy': 'Old Navy',
     'uniqlo': 'Uniqlo',
     'superstore': 'Superstore',
     'homesense': 'Homesense',

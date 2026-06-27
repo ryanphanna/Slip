@@ -114,11 +114,15 @@ describe('validateReceipt', () => {
     const raw2 = { merchant: 'freshco' };
     const raw3 = { merchant: 'Walmart Supercenter' };
     const raw4 = { merchant: 'Unknown Store' };
+    const raw5 = { merchant: 'OLD NAVY' };
+    const raw6 = { merchant: 'old navy' };
 
     expect(validateReceipt(raw1).merchant).toBe('FreshCo');
     expect(validateReceipt(raw2).merchant).toBe('FreshCo');
     expect(validateReceipt(raw3).merchant).toBe('Walmart');
     expect(validateReceipt(raw4).merchant).toBe('Unknown Store');
+    expect(validateReceipt(raw5).merchant).toBe('Old Navy');
+    expect(validateReceipt(raw6).merchant).toBe('Old Navy');
   });
 });
 
