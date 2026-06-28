@@ -1,7 +1,17 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const config = require('./config');
 
 const FLASH_MODEL = 'gemini-flash-latest';
 const PRO_MODEL = 'gemini-pro-latest';
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Gemini call timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
 // Authoritative prompt used by production and all test scripts.
 // Includes confidence scoring for quality fallback logic.
@@ -69,7 +79,7 @@ async function parseWithPro(promptParts, apiKey) {
     generationConfig: { responseMimeType: 'application/json' }
   });
 
-  const result = await model.generateContent(promptParts);
+  const result = await withTimeout(model.generateContent(promptParts), config.GEMINI_TIMEOUT_MS);
   return cleanJsonResponse(result.response.text());
 }
 
@@ -87,7 +97,7 @@ async function extractReceiptTextFromBase64(images, apiKey) {
     text: 'Transcribe the receipt text exactly as seen. Return plain text only with line breaks. Ignore any phone UI or background.'
   });
 
-  const result = await model.generateContent(promptParts);
+  const result = await withTimeout(model.generateContent(promptParts), config.GEMINI_TIMEOUT_MS);
   return (result.response.text() || '').trim();
 }
 
@@ -114,7 +124,7 @@ async function parseReceiptFromBase64(images, apiKey) {
       generationConfig: { responseMimeType: 'application/json' }
     });
 
-    const result = await model.generateContent(promptParts);
+    const result = await withTimeout(model.generateContent(promptParts), config.GEMINI_TIMEOUT_MS);
     const parsed = cleanJsonResponse(result.response.text());
 
     if (parsed.confidence != null && parsed.confidence < 0.8) {
@@ -159,7 +169,7 @@ async function parseReceiptFromText(text, apiKey) {
       generationConfig: { responseMimeType: 'application/json' }
     });
 
-    const result = await model.generateContent(promptParts);
+    const result = await withTimeout(model.generateContent(promptParts), config.GEMINI_TIMEOUT_MS);
     const parsed = cleanJsonResponse(result.response.text());
 
     if (parsed.confidence != null && parsed.confidence < 0.8) {

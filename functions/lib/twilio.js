@@ -3,6 +3,7 @@ const logger = require('firebase-functions/logger');
 const crypto = require('crypto');
 const twilio = require('twilio');
 const { readConfigValue } = require('./runtime-health');
+const config = require('./config');
 
 const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
@@ -144,7 +145,17 @@ async function fetchMedia(mediaUrl) {
 
   for (let i = 0; i < 4; i++) {
     const headers = shouldSendAuth(currentUrl) ? { Authorization: `Basic ${credentials}` } : {};
-    const res = await fetch(currentUrl, { headers, redirect: 'manual' });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.FETCH_MEDIA_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(currentUrl, { headers, redirect: 'manual', signal: controller.signal });
+    } catch (err) {
+      if (err.name === 'AbortError') throw new Error(`Media fetch timed out after ${config.FETCH_MEDIA_TIMEOUT_MS}ms`);
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
     if ([301, 302, 303, 307, 308].includes(res.status)) {
       const location = res.headers.get('location');
       if (!location) throw new Error('Redirected Twilio media response missing location header');
