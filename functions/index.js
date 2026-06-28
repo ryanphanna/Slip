@@ -1,4 +1,5 @@
 const { onRequest } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
@@ -22,6 +23,7 @@ const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCa
 const { saveImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
+const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
 const config = require('./lib/config');
 
@@ -403,5 +405,33 @@ exports.sms = onRequest(
 
         await Promise.resolve(sendSms(from, `${oops()} Couldn't read that receipt. Try again with a clearer image or shorter text.`)).catch(() => {});
       });
+  }
+);
+
+const SCHEDULED_SECRETS = [twilioAccountSid, twilioAuthToken, twilioPhoneNumber, allowedPhonesSecret];
+
+function parseAllowedPhones() {
+  return (allowedPhonesSecret.value() || '').split(',').map(p => p.trim()).filter(Boolean);
+}
+
+exports.monthlyDigest = onSchedule(
+  { schedule: '0 9 1 * *', timeZone: 'America/Toronto', secrets: SCHEDULED_SECRETS },
+  async () => {
+    const phones = parseAllowedPhones();
+    const results = await Promise.allSettled(phones.map(p => sendMonthlyDigest(p)));
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') logger.error('Monthly digest failed', { phone: phones[i], error: r.reason?.message });
+    });
+  }
+);
+
+exports.weeklyBudgetCheck = onSchedule(
+  { schedule: '0 18 * * 0', timeZone: 'America/Toronto', secrets: SCHEDULED_SECRETS },
+  async () => {
+    const phones = parseAllowedPhones();
+    const results = await Promise.allSettled(phones.map(p => sendWeeklyBudgetCheck(p)));
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') logger.error('Weekly budget check failed', { phone: phones[i], error: r.reason?.message });
+    });
   }
 );

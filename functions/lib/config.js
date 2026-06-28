@@ -25,6 +25,8 @@ module.exports = {
 
   // === Cloud Function / Runtime ===
   FUNCTION_TIMEOUT_SECONDS: 180,           // Cloud Run timeout for the sms function
+  FETCH_MEDIA_TIMEOUT_MS: 20 * 1000,       // Per-request timeout for Twilio media fetches
+  GEMINI_TIMEOUT_MS: 90 * 1000,            // Timeout for each Gemini generateContent call
 
   // === Storage Routing ===
   STORAGE_PREFIX_TEMPORARY: 'receipts-temporary',

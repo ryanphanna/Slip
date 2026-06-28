@@ -84,4 +84,23 @@ async function getLastReceipt(from) {
   return snapshot.empty ? null : snapshot.docs[0].data();
 }
 
-module.exports = { getMonthlyStats, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
+async function getLastMonthStats(from) {
+  const db = admin.firestore();
+  const now = new Date();
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const snapshot = await db.collection('receipts')
+    .where('from', '==', from)
+    .where('createdAt', '>=', startOfLastMonth)
+    .where('createdAt', '<', startOfThisMonth)
+    .get();
+
+  const docs = snapshot.docs.map(doc => doc.data());
+  const { total, categories } = aggregateSpendingByCategory(docs);
+  const monthName = startOfLastMonth.toLocaleString('en-CA', { month: 'long' });
+
+  return { total, categories, count: docs.length, month: monthName };
+}
+
+module.exports = { getMonthlyStats, getLastMonthStats, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };

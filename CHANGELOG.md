@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Monthly digest** (`exports.monthlyDigest`): Scheduled function (1st of each month, 9 AM ET) that sends each allowlisted user last month's total and category breakdown via SMS. Skips users with no receipts that month.
+- **Weekly budget check** (`exports.weeklyBudgetCheck`): Scheduled function (Sundays 6 PM ET) that sends each user their current-month budget status. Over-budget categories flagged with ⚠️, approaching-limit (≥80%) with 🔶. Skips users with no budgets set.
+- **`lib/digest.js`**: Shared logic for `sendMonthlyDigest` and `sendWeeklyBudgetCheck`.
+- **`query.getLastMonthStats`**: Query helper for previous-month receipts, used by the monthly digest.
+- **Gemini timeouts**: All `model.generateContent` calls now wrapped with `Promise.race` against a 90-second timeout (`GEMINI_TIMEOUT_MS`). Previously, a hung Gemini call could stall indefinitely.
+- **`fetchMedia` timeout**: Each fetch in the Twilio media redirect loop now uses `AbortController` with a 20-second per-request timeout (`FETCH_MEDIA_TIMEOUT_MS`). Previously, a slow CDN could hang the function.
+
 ### Fixed
 - **Duplicate detection across days**: `findDuplicate` now runs a second query matching `merchant + total + date` with no time window, so re-uploading an old receipt days later is correctly rejected. Previously only a 10-minute recency window was checked.
 - **Old Navy merchant normalization**: Added "old navy" to the normalization map so "OLD NAVY" and "Old Navy" both resolve to "Old Navy", enabling duplicate detection to match across casing variants.
