@@ -24,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - **Gemini prompt**: Tightened date extraction guidance ("check top, bottom, header, footer"), made item completeness explicit ("include every line item, do not skip"), and added clarity on zero-total loyalty receipts.
 - **Dependency Upgrades**: Upgraded `firebase-admin` to `^14.1.0`, `@emnapi/core` to `^1.11.2`, and `@emnapi/runtime` to `^1.11.2` in `functions` (merges Dependabot PR branches).
+- **Progressive onboarding and contextual tips**: Simplified the welcome message to remove the wall of commands. Added contextual tips that surface commands dynamically (e.g., suggesting `TOTAL` after their first logged receipt, and suggesting `BUDGET` when `TOTAL` is run without active budgets). Separated greetings (`HELLO`, `HI`, etc.) from help keywords (`INFO`, `HELP`) to deliver targeted welcome vs. command list responses.
 
 ### Added
 - **Firestore index**: Added composite index on `from + merchant + total + date` to support the new date-based duplicate check query.

@@ -63,7 +63,9 @@ module.exports = {
   },
 
   // === Onboarding & Commands ===
-  ONBOARDING_KEYWORDS: ['HELLO', 'HI', 'START', 'GET STARTED', 'ONBOARD', 'ONBOARDING', 'HELP', 'WELCOME', 'COMMANDS', 'GUIDE', 'INFO'],
-  ONBOARDING_MESSAGE: 'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.\n\nCommands:\n• TOTAL — monthly spend\n• SUMMARY — category breakdown\n• LAST — latest receipt\n• INFO — show commands list',
+  GREETING_KEYWORDS: ['HELLO', 'HI', 'START', 'GET STARTED', 'ONBOARD', 'ONBOARDING', 'WELCOME'],
+  ONBOARDING_MESSAGE: 'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.',
+  COMMAND_KEYWORDS: ['INFO', 'HELP', 'COMMANDS', 'GUIDE'],
+  COMMANDS_MESSAGE: 'Slip Commands:\n• TOTAL — spend in last 30 days (try TOTAL MONTH)\n• SUMMARY — category breakdown this month\n• BUDGET — view monthly budget status\n• BUDGET <category> <limit> — set a budget\n• LAST — latest receipt',
 
 };

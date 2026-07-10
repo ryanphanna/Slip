@@ -179,7 +179,21 @@ exports.sms = onRequest(
           const stats = await getSpendingStats(from, startDate);
           const receiptWord = stats.count === 1 ? 'receipt' : 'receipts';
           const hint = bodyText === 'TOTAL' ? '\n\nSend TOTAL MONTH or TOTAL YEAR for other ranges.' : '';
-          await sendSms(from, `${label}: $${stats.total.toFixed(2)} (${stats.count} ${receiptWord})${hint}`);
+          let message = `${label}: $${stats.total.toFixed(2)} (${stats.count} ${receiptWord})${hint}`;
+
+          try {
+            const report = await getBudgetReport(from);
+            if (Array.isArray(report)) {
+              const activeBudgets = report.filter(r => r.limit > 0);
+              if (activeBudgets.length === 0) {
+                message += '\n\n💡 Tip: Send BUDGET Grocery 500 to set category-specific budgets.';
+              }
+            }
+          } catch (budgetErr) {
+            logger.error('Failed to fetch budget report for tip check', { error: budgetErr.message });
+          }
+
+          await sendSms(from, message);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -243,8 +257,15 @@ exports.sms = onRequest(
           return;
         }
 
-        if (config.ONBOARDING_KEYWORDS.includes(bodyText)) {
+        if (config.GREETING_KEYWORDS.includes(bodyText)) {
           await sendSms(from, config.ONBOARDING_MESSAGE);
+          res.set('Content-Type', 'text/xml');
+          res.send('<Response/>');
+          return;
+        }
+
+        if (config.COMMAND_KEYWORDS.includes(bodyText)) {
+          await sendSms(from, config.COMMANDS_MESSAGE);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -312,18 +333,23 @@ exports.sms = onRequest(
         const receipt = validateReceipt(raw);
         if (raw.confidence != null) receipt.confidence = raw.confidence;
 
-        // Store images and check for duplicates in parallel to optimize latency
-        const [imagePathsResult, duplicateId] = await Promise.all([
+        // Store images, check duplicates, and check if it's the first receipt in parallel to optimize latency
+        const [imagePathsResult, duplicateId, lastReceiptResult] = await Promise.all([
           images.length > 0
             ? saveImages(images, messageSid, receipt).catch(err => {
                 logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
                 return [];
               })
             : Promise.resolve([]),
-          findDuplicate(receipt, from)
+          findDuplicate(receipt, from),
+          getLastReceipt(from).catch(err => {
+            logger.error('Failed to query last receipt for first receipt check', { messageSid, error: err.message });
+            return null;
+          })
         ]);
 
         const imagePaths = imagePathsResult;
+        const isFirstReceipt = !lastReceiptResult;
         if (duplicateId) {
           logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
           await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged.`);
@@ -381,6 +407,10 @@ exports.sms = onRequest(
           } catch (budgetErr) {
             logger.error('Failed to append budget status to receipt confirmation', { messageSid, error: budgetErr.message });
           }
+        }
+
+        if (isFirstReceipt) {
+          message += '\n\n💡 Tip: Send TOTAL to see your monthly spend, or INFO for all commands.';
         }
 
         await sendSms(from, message);
