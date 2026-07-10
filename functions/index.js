@@ -279,6 +279,14 @@ exports.sms = onRequest(
 
       // --- background processing starts here ---
       (async () => {
+        let isFirstReceipt = false;
+        try {
+          const lastReceipt = await getLastReceipt(from);
+          isFirstReceipt = !lastReceipt;
+        } catch (dbErr) {
+          logger.error('Failed to query last receipt for first receipt check', { messageSid, error: dbErr.message });
+        }
+
         let raw;
         const images = [];
         if (numMedia === 0) {
@@ -293,7 +301,7 @@ exports.sms = onRequest(
             return;
           }
 
-          raw = await parseReceiptFromText(bodyText);
+          raw = await parseReceiptFromText(bodyText, isFirstReceipt);
         } else {
           const mediaPromises = [];
           for (let i = 0; i < numMedia; i++) {
@@ -327,29 +335,24 @@ exports.sms = onRequest(
             return;
           }
 
-          raw = await parseReceiptFromBase64(images);
+          raw = await parseReceiptFromBase64(images, undefined, isFirstReceipt);
         }
 
         const receipt = validateReceipt(raw);
         if (raw.confidence != null) receipt.confidence = raw.confidence;
 
-        // Store images, check duplicates, and check if it's the first receipt in parallel to optimize latency
-        const [imagePathsResult, duplicateId, lastReceiptResult] = await Promise.all([
+        // Store images and check for duplicates in parallel to optimize latency
+        const [imagePathsResult, duplicateId] = await Promise.all([
           images.length > 0
             ? saveImages(images, messageSid, receipt).catch(err => {
                 logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
                 return [];
               })
             : Promise.resolve([]),
-          findDuplicate(receipt, from),
-          getLastReceipt(from).catch(err => {
-            logger.error('Failed to query last receipt for first receipt check', { messageSid, error: err.message });
-            return null;
-          })
+          findDuplicate(receipt, from)
         ]);
 
         const imagePaths = imagePathsResult;
-        const isFirstReceipt = !lastReceiptResult;
         if (duplicateId) {
           logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
           await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged.`);
