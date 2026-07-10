@@ -43,6 +43,7 @@ jest.mock('../lib/store', () => ({
 jest.mock('../lib/query', () => ({
   getMonthlyStats: jest.fn(),
   getLastReceipt: jest.fn(),
+  getSpendingStats: jest.fn(),
 }));
 
 jest.mock('../lib/image-store', () => ({
@@ -63,7 +64,7 @@ const { sms } = require('../index');
 const { validateTwilioSignature, sendSms } = require('../lib/twilio');
 const { isMessageProcessed, checkRateLimit } = require('../lib/store');
 const { isAllowed } = require('../lib/allowlist');
-const { getLastReceipt } = require('../lib/query');
+const { getLastReceipt, getSpendingStats } = require('../lib/query');
 const { parseReceiptFromText } = require('../lib/receipt');
 const { setBudget, getBudget, getBudgetReport } = require('../lib/budget');
 
@@ -325,6 +326,190 @@ describe('sms webhook authentication', () => {
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
         expect.stringContaining('Budget set: Grocery limit is now $500.00.')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+  });
+
+  describe('progressive onboarding and tips', () => {
+    it('sends simple onboarding welcome message for greeting keywords', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'HELLO',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.'
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('sends commands list for command keywords like INFO', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'INFO',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('Slip Commands:')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('appends budget tip on TOTAL command if user has no budgets', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      getSpendingStats.mockResolvedValue({ total: 150.0, count: 5 });
+      getBudgetReport.mockResolvedValue([]); // No budgets set
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'TOTAL',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('💡 Tip: Send BUDGET Grocery 500 to set category-specific budgets.')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('does not append budget tip on TOTAL command if user has active budgets', async () => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      getSpendingStats.mockResolvedValue({ total: 150.0, count: 5 });
+      getBudgetReport.mockResolvedValue([
+        { category: 'Grocery', limit: 500, spent: 100, percentage: 20 }
+      ]);
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'TOTAL',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.not.stringContaining('💡 Tip: Send BUDGET Grocery 500')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('appends first receipt tip when a new user logs their first receipt successfully', async () => {
+      const { parseReceiptFromText } = require('../lib/receipt');
+      const { validateReceipt, saveReceipt, findDuplicate } = require('../lib/store');
+      
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      isMessageProcessed.mockResolvedValue(false);
+      checkRateLimit.mockResolvedValue({ exceeded: false });
+      
+      getLastReceipt.mockResolvedValue(null); // First receipt!
+      parseReceiptFromText.mockResolvedValue({ merchant: 'Walmart', total: 23.14, category: 'Grocery', confidence: 0.95 });
+      const { validateReceipt: vrMock } = require('../lib/validate');
+      vrMock.mockReturnValue({ merchant: 'Walmart', total: 23.14, category: 'Grocery', confidence: 0.95, items: [] });
+      findDuplicate.mockResolvedValue(null);
+      getBudget.mockResolvedValue(null); // No budgets
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'Walmart receipt total 23.14',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+      await new Promise(resolve => setImmediate(resolve)); // Wait for background processing IIFE
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.stringContaining('💡 Tip: Send TOTAL to see your monthly spend, or INFO for all commands.')
+      );
+      expect(res.send).toHaveBeenCalledWith('<Response/>');
+    });
+
+    it('does not append first receipt tip when an existing user logs a receipt', async () => {
+      const { parseReceiptFromText } = require('../lib/receipt');
+      const { validateReceipt, saveReceipt, findDuplicate } = require('../lib/store');
+      
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      isMessageProcessed.mockResolvedValue(false);
+      checkRateLimit.mockResolvedValue({ exceeded: false });
+      
+      getLastReceipt.mockResolvedValue({ merchant: 'Target', total: 10.00 }); // Existing receipt!
+      parseReceiptFromText.mockResolvedValue({ merchant: 'Walmart', total: 23.14, category: 'Grocery', confidence: 0.95 });
+      const { validateReceipt: vrMock } = require('../lib/validate');
+      vrMock.mockReturnValue({ merchant: 'Walmart', total: 23.14, category: 'Grocery', confidence: 0.95, items: [] });
+      findDuplicate.mockResolvedValue(null);
+      getBudget.mockResolvedValue(null); // No budgets
+
+      const req = {
+        method: 'POST',
+        body: {
+          From: '+14165551234',
+          MessageSid: 'SM123',
+          NumMedia: '0',
+          Body: 'Walmart receipt total 23.14',
+        },
+        headers: {},
+      };
+      const res = makeResponse();
+
+      await sms(req, res);
+      await new Promise(resolve => setImmediate(resolve)); // Wait for background processing IIFE
+
+      expect(sendSms).toHaveBeenCalledWith(
+        '+14165551234',
+        expect.not.stringContaining('💡 Tip: Send TOTAL to see your monthly spend, or INFO for all commands.')
       );
       expect(res.send).toHaveBeenCalledWith('<Response/>');
     });
