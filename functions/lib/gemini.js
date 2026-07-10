@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const config = require('./config');
+const logger = require('firebase-functions/logger');
 
 const FLASH_MODEL = 'gemini-flash-latest';
 const PRO_MODEL = 'gemini-pro-latest';
@@ -105,8 +106,9 @@ async function extractReceiptTextFromBase64(images, apiKey) {
  * Parse one or more receipt images using Gemini.
  * @param {Array<{base64: string, mimeType: string}> | string} images - Array of images or legacy single base64 string
  * @param {string} apiKey - Gemini API key
+ * @param {boolean} forcePro - Whether to skip Flash and go directly to Pro
  */
-async function parseReceiptFromBase64(images, apiKey) {
+async function parseReceiptFromBase64(images, apiKey, forcePro = false) {
   // Backwards compatibility for single string signature (used by some scripts)
   if (typeof images === 'string') {
     images = [{ base64: arguments[0], mimeType: arguments[1] || 'image/jpeg' }];
@@ -116,6 +118,11 @@ async function parseReceiptFromBase64(images, apiKey) {
 
   const promptParts = buildImagePromptParts(images);
   promptParts.push({ text: PROMPT });
+
+  if (forcePro) {
+    logger.info('Bypassing Flash model: prioritizing first-time user parsing on Pro');
+    return await parseWithPro(promptParts, apiKey);
+  }
 
   // Try Flash first
   try {
@@ -156,12 +163,17 @@ async function parseReceiptFromBase64(images, apiKey) {
 /**
  * Parse receipt from raw pasted text.
  */
-async function parseReceiptFromText(text, apiKey) {
+async function parseReceiptFromText(text, apiKey, forcePro = false) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const promptParts = [
     { text: PROMPT },
     { text: `Receipt Text:\n${text}` }
   ];
+
+  if (forcePro) {
+    logger.info('Bypassing Flash model: prioritizing first-time user parsing on Pro');
+    return await parseWithPro(promptParts, apiKey);
+  }
 
   try {
     const model = genAI.getGenerativeModel({

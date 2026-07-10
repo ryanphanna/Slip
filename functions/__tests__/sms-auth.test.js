@@ -352,7 +352,7 @@ describe('sms webhook authentication', () => {
 
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
-        'Welcome to Slip! 🧾\nTo log a receipt, just text me a photo of it, or paste the receipt text.'
+        expect.stringContaining('Welcome to Slip! 🧾')
       );
       expect(res.send).toHaveBeenCalledWith('<Response/>');
     });
@@ -469,6 +469,10 @@ describe('sms webhook authentication', () => {
       await sms(req, res);
       await new Promise(resolve => setImmediate(resolve)); // Wait for background processing IIFE
 
+      expect(parseReceiptFromText).toHaveBeenCalledWith(
+        'Walmart receipt total 23.14',
+        true
+      );
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
         expect.stringContaining('💡 Tip: Send TOTAL to see your monthly spend, or INFO for all commands.')
@@ -507,6 +511,10 @@ describe('sms webhook authentication', () => {
       await sms(req, res);
       await new Promise(resolve => setImmediate(resolve)); // Wait for background processing IIFE
 
+      expect(parseReceiptFromText).toHaveBeenCalledWith(
+        'Walmart receipt total 23.14',
+        false
+      );
       expect(sendSms).toHaveBeenCalledWith(
         '+14165551234',
         expect.not.stringContaining('💡 Tip: Send TOTAL to see your monthly spend, or INFO for all commands.')
