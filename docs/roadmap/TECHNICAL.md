@@ -14,9 +14,9 @@ This sub-roadmap tracks goals and initiatives related to hardening Slip's functi
 - **Node.js 20 Deprecation**: Address deprecations by ensuring the runtime is migrated cleanly (upgraded to Node 22).
 
 ## Completed Initiatives
-- **Rate Limiting**: Added hourly rate limiting (max 15/hour) to protect the SMS endpoint from loops and abuse. (✅ Done)
-- **Retry Safety / Idempotency**: Implemented `MessageSid` check to prevent duplicate receipt logging from Twilio webhook retries. (✅ Done)
-- **firebase-functions Upgrade**: Upgraded core Firebase SDK dependencies to Node 22 aligned versions. (✅ Done)
+- **Rate Limiting**: Added hourly rate limiting (max 15/hour) to protect the SMS endpoint from loops and abuse. (Done)
+- **Retry Safety / Idempotency**: Implemented `MessageSid` check to prevent duplicate receipt logging from Twilio webhook retries. (Done)
+- **firebase-functions Upgrade**: Upgraded core Firebase SDK dependencies to Node 22 aligned versions. (Done)
 
 ---
-[Back to Roadmap](../ROADMAP.md)
+[Back to Roadmap](../../ROADMAP.md)

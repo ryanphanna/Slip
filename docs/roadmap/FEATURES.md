@@ -13,4 +13,4 @@ This sub-roadmap tracks new features and capabilities for Slip users.
 - **Cross-Receipt Product Searching**: Natural language query tools allowing users to search specific line-item contents, compare product prices historically (e.g., *"How much was that cheese I bought last week?"* or *"Compare avocado prices from Costco vs Walmart"*).
 
 ---
-[Back to Roadmap](../ROADMAP.md)
+[Back to Roadmap](../../ROADMAP.md)
