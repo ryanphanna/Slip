@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.6.0] — 2026-07-12
 
 ### Added
 - **Monthly digest** (`exports.monthlyDigest`): Scheduled function (1st of each month, 9 AM ET) that sends each allowlisted user last month's total and category breakdown via SMS. Skips users with no receipts that month.
