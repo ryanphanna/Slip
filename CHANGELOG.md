@@ -6,11 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Monthly digest** (`exports.monthlyDigest`): Scheduled function (1st of each month, 9 AM ET) that sends each allowlisted user last month's total and category breakdown via SMS. Skips users with no receipts that month.
-- **Weekly budget check** (`exports.weeklyBudgetCheck`): Scheduled function (Sundays 6 PM ET) that sends each user their current-month budget status. Over-budget categories flagged with ⚠️, approaching-limit (≥80%) with 🔶. Skips users with no budgets set.
+- **Weekly budget check** (`exports.weeklyBudgetCheck`): Scheduled function (Sundays 6 PM ET) that sends each user their current-month budget status. Over-budget categories are marked with a warning, and approaching-limit (≥80%) categories are marked as near limit. Skips users with no budgets set.
 - **`lib/digest.js`**: Shared logic for `sendMonthlyDigest` and `sendWeeklyBudgetCheck`.
 - **`query.getLastMonthStats`**: Query helper for previous-month receipts, used by the monthly digest.
 - **Gemini timeouts**: All `model.generateContent` calls now wrapped with `Promise.race` against a 90-second timeout (`GEMINI_TIMEOUT_MS`). Previously, a hung Gemini call could stall indefinitely.
 - **`fetchMedia` timeout**: Each fetch in the Twilio media redirect loop now uses `AbortController` with a 20-second per-request timeout (`FETCH_MEDIA_TIMEOUT_MS`). Previously, a slow CDN could hang the function.
+- **Firestore index**: Added composite index on `from + merchant + total + date` to support the new date-based duplicate check query.
+- **`scripts/reparse.js`**: Re-parse one or more receipts from their stored GCS images and update Firestore in place. Supports `--dry-run`. Useful after prompt changes to fix historically bad parses.
+- **`scripts/setup-lifecycle.js`**: Applies GCS lifecycle rule to auto-delete `receipts-temporary/` objects after 30 days. Was previously documented in the changelog but never actually configured.
 
 ### Fixed
 - **Duplicate detection across days**: `findDuplicate` now runs a second query matching `merchant + total + date` with no time window, so re-uploading an old receipt days later is correctly rejected. Previously only a 10-minute recency window was checked.
@@ -25,11 +28,6 @@ All notable changes to this project will be documented in this file.
 - **Gemini prompt**: Tightened date extraction guidance ("check top, bottom, header, footer"), made item completeness explicit ("include every line item, do not skip"), and added clarity on zero-total loyalty receipts.
 - **Dependency Upgrades**: Upgraded `firebase-admin` to `^14.1.0`, `@emnapi/core` to `^1.11.2`, and `@emnapi/runtime` to `^1.11.2` in `functions` (merges Dependabot PR branches).
 - **Progressive onboarding and contextual tips**: Simplified the welcome message to introduce Slip and invite users to text a photo, screenshot, or paste receipt text. Added contextual tips that surface commands dynamically (e.g., suggesting `TOTAL` after their first logged receipt, and suggesting `BUDGET` when `TOTAL` is run without active budgets). Separated greetings (`HELLO`, `HI`, etc.) from help keywords (`INFO`, `HELP`) to deliver targeted welcome vs. command list responses. Bypasses the Flash model and routes first-time user receipts directly to the Pro model (`gemini-pro-latest`) to guarantee maximum accuracy and quality for their initial experience.
-
-### Added
-- **Firestore index**: Added composite index on `from + merchant + total + date` to support the new date-based duplicate check query.
-- **`scripts/reparse.js`**: Re-parse one or more receipts from their stored GCS images and update Firestore in place. Supports `--dry-run`. Useful after prompt changes to fix historically bad parses.
-- **`scripts/setup-lifecycle.js`**: Applies GCS lifecycle rule to auto-delete `receipts-temporary/` objects after 30 days. Was previously documented in the changelog but never actually configured.
 
 ## [1.5.1] — 2026-06-18
 
@@ -178,7 +176,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **Confidence-Based Fallback**: The system now requests a `confidence` score from Gemini. If the primary `gemini-3-flash` model returns low confidence (< 0.8), it automatically falls back to `gemini-3.1-pro` for a more accurate re-parse.
 - **Item Count in SMS**: Confirmation messages now include the number of items extracted (e.g., `(Grocery, 8 items)`).
-- **Low Confidence Warning**: If the final extraction confidence is still low (< 0.7), the confirmation SMS is prefixed with a ⚠️ warning.
+- **Low Confidence Warning**: If the final extraction confidence is still low (< 0.7), the confirmation SMS is prefixed with a warning.
 - **Message Idempotency**: Added a check for Twilio `MessageSid` at the beginning of the function. Exact retries from Twilio are now handled instantly without invoking the Gemini API or Storage.
 - **Hourly Rate Limiting**: Added a safety valve to limit the number of receipts logged per phone number per hour (default: 15). Protects against abuse and accidental loops.
 - **SMS Text Commands**: Added support for direct querying via SMS. Use `TOTAL` (monthly spend), `SUMMARY` (category breakdown), `LAST` (latest receipt), or `INFO`.
