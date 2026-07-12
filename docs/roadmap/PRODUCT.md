@@ -12,7 +12,7 @@ This sub-roadmap tracks improvements to the accuracy, reliability, and coverage 
 
 ## Completed Initiatives
 
-- **Confidence Scoring**: Have Gemini return a confidence score and warn users or fall back to Pro on low-confidence parses. (✅ Done)
+- **Confidence Scoring**: Have Gemini return a confidence score and warn users or fall back to Pro on low-confidence parses. (Done)
 
 ---
-[Back to Roadmap](../ROADMAP.md)
+[Back to Roadmap](../../ROADMAP.md)

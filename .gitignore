@@ -10,6 +10,4 @@ functions/logs*.txt
 functions/full_logs.txt
 serviceAccountKey.json
 functions/serviceAccountKey.json
-CLAUDE.md
-GEMINI.md
 TODO.md
