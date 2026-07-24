@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.6.1] — 2026-07-24
 
 ### Fixed
 - **Dependency Upgrades (Security)**: Upgraded `axios` to `1.18.1` and `protobufjs` to `7.6.5` in `functions` to address 9 open Dependabot security vulnerabilities. Also updated `firebase-functions`, `firebase-admin`, and `@google-cloud/logging` to their latest versions.
