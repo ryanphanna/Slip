@@ -13,14 +13,16 @@
     "check:release": "node scripts/release-check.js"
   },
   "dependencies": {
-    "@google-cloud/logging": "^11.2.3",
+    "@google-cloud/logging": "^11.3.0",
     "@google/generative-ai": "^0.24.1",
-    "firebase-admin": "^14.1.0",
-    "firebase-functions": "^7.2.5",
+    "csv-parse": "^7.0.1",
+    "firebase-admin": "^14.2.0",
+    "firebase-functions": "^7.3.0",
     "twilio": "^6.0.2"
   },
   "overrides": {
     "firebase-admin": "$firebase-admin",
+    "axios": "^1.18.1",
     "@grpc/grpc-js": "^1.14.4",
     "@napi-rs/wasm-runtime": "^1.1.5",
     "unrs-resolver": "1.9.2",
@@ -29,7 +31,7 @@
     "form-data": "^4.0.6",
     "js-yaml": "^4.2.0",
     "path-to-regexp": "^0.1.13",
-    "protobufjs": "^7.6.4",
+    "protobufjs": "^7.6.5",
     "uuid": "^11.1.1"
   },
   "devDependencies": {
