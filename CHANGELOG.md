@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Receipt parsing accuracy**: fixed several parsing bugs found in a manual audit — a null `total` no longer slips past the Flash→Pro retry, ambiguous abbreviated dates (MM/DD/YY vs DD/MM/YY vs YY/MM/DD) are now inferred per-receipt instead of assumed, merchant names are no longer hallucinated or confused with app pickup-location names, and multi-unit line items now carry a `quantity` instead of collapsing into one combined-price entry. Non-receipt text messages (e.g. mistyped commands) no longer save empty junk receipts.
+
 ## [1.6.1] — 2026-07-24
 
 ### Fixed
