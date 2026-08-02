@@ -18,15 +18,15 @@ function withTimeout(promise, ms) {
 // Includes confidence scoring for quality fallback logic.
 const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markdown, no explanation:
 {
-  "merchant": "store name",
-  "location": "store address or location as printed on receipt, or null",
+  "merchant": "store/brand name as printed in the header or logo",
+  "location": "store address, or a named pickup/delivery location if the receipt has one, as printed on receipt, or null",
   "date": "YYYY-MM-DD or null",
   "total": number or null,
   "subtotal": number or null,
   "tax": number or null,
   "category": "one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other",
   "subCategory": "Provide a specific sub-category based on the merchant (e.g. Coffee Shop, Fast Food, Supermarket, Electronics, Pharmacy, Rideshare, Clothing, Alcohol)",
-  "items": [{ "name": "item name", "price": number, "category": "one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other" }],
+  "items": [{ "name": "item name", "price": number, "quantity": "unit count for this line, default 1", "category": "one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other" }],
   "currency": "Currency code (e.g. CAD, USD, EUR). Infer from location if implied.",
   "type": "purchase or refund",
   "isSubscription": boolean,
@@ -34,8 +34,9 @@ const PROMPT = `Extract the receipt data and return ONLY valid JSON — no markd
   "loyaltyPointsBalance": number or null,
   "confidence": 0.0 to 1.0 (how certain you are about the extraction)
 }
-Date: Every receipt has a date printed somewhere — check the top, bottom, header, and footer of the receipt. It may appear as a timestamp, a short date like "Jun 22 2026", or embedded in a receipt number. Always extract it; only use null if the receipt is genuinely cut off and no date is visible anywhere.
-Items: Include every line item on the receipt. Do not skip items or summarize groups. If the receipt has 20 items, return all 20. For each item, assign a "category" matching one of the eight valid options (Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other). At mixed stores like Walmart or Costco, assign per-item: "Grocery" for food, "Shopping" for apparel/electronics, "Health" for pharmacy/vitamins, "Home" for housewares.
+Merchant vs location: "merchant" is the store/brand name only — read it from a logo or header. If the receipt separately names a pickup counter, delivery spot, or branch nickname distinct from the brand (e.g. an app order confirmation with a "Pick up location" field), that name goes in "location", never in "merchant". Never invent or guess a plausible-sounding merchant name if the brand isn't clearly legible on the receipt — extract your best literal reading instead, and lower "confidence" accordingly.
+Date: Every receipt has a date printed somewhere — check the top, bottom, header, and footer of the receipt. It may appear as a timestamp, a short date like "Jun 22 2026", or embedded in a receipt number. Always extract it; only use null if the receipt is genuinely cut off and no date is visible anywhere. Abbreviated numeric dates (e.g. "07/27/26" or "26/07/25") do not follow one fixed token order — different POS systems use MM/DD/YY, DD/MM/YY, or YY/MM/DD. Do not default to a single assumed order. Instead: if the same receipt also prints an unambiguous 4-digit-year date anywhere (e.g. "2026-07-25"), that is authoritative — use it and read its digits carefully. If only an abbreviated date is present, infer the token order from context (a token over 31 can only be a year; a token that would place the date after the receipt's own timestamp is wrong). Do not transpose or misread adjacent digits.
+Items: Include every line item on the receipt. Do not skip items or summarize groups. If the receipt has 20 items, return all 20. For each item, assign a "category" matching one of the eight valid options (Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other). At mixed stores like Walmart or Costco, assign per-item: "Grocery" for food, "Shopping" for apparel/electronics, "Health" for pharmacy/vitamins, "Home" for housewares. If a line shows a quantity greater than 1 (e.g. "2 * $4.99"), keep it as a single item entry with the combined line price, but set "quantity" to the unit count rather than defaulting to 1.
 Zero totals: If items were redeemed via loyalty points or rewards and cost $0, set total to 0 and still capture all items and the receipt date.
 Subscriptions: Set "isSubscription" to true for recurring charges (streaming, SaaS, phone/internet, gym), false otherwise.
 Discounts: Record the final net price paid for each item after any inline per-item discount. Do not add a separate line item for a bottom-of-receipt discount summary — if per-item prices already reflect the discount, the summary line is redundant.`;
@@ -138,8 +139,8 @@ async function parseReceiptFromBase64(images, apiKey, forcePro = false) {
       return await parseWithPro(promptParts, apiKey);
     }
 
-    // Image receipts always have a date — null date from Flash means a missed extraction
-    if (parsed.date == null) {
+    // Image receipts always have a date and a total — null from Flash means a missed extraction
+    if (parsed.date == null || parsed.total == null) {
       return await parseWithPro(promptParts, apiKey);
     }
 

@@ -302,6 +302,14 @@ exports.sms = onRequest(
           }
 
           raw = await parseReceiptFromText(bodyText, isFirstReceipt);
+
+          const extractedNothing = raw.merchant == null && raw.total == null &&
+            (!Array.isArray(raw.items) || raw.items.length === 0);
+          if (extractedNothing) {
+            logger.info('Text message did not look like a receipt, skipping save', { messageSid });
+            await sendSms(from, "That didn't look like a receipt. Send INFO for commands.");
+            return;
+          }
         } else {
           const mediaPromises = [];
           for (let i = 0; i < numMedia; i++) {

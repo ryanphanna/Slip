@@ -33,8 +33,8 @@ describe('validateReceipt', () => {
       category: 'Grocery',
       subCategory: 'Supermarket',
       items: [
-        { name: 'Apple', price: 1.5, category: 'Grocery' },
-        { name: 'Banana', price: 0.99, category: 'Grocery' }
+        { name: 'Apple', price: 1.5, quantity: 1, category: 'Grocery' },
+        { name: 'Banana', price: 0.99, quantity: 1, category: 'Grocery' }
       ],
       currency: 'USD',
       type: 'purchase',
@@ -102,10 +102,10 @@ describe('validateReceipt', () => {
     const result = validateReceipt(raw);
 
     expect(result.items).toEqual([
-      { name: 'Milk', price: 5.5, category: 'Grocery' },
-      { name: 'T-Shirt', price: 15.0, category: 'Shopping' },
-      { name: 'Socks', price: 10.0, category: 'Grocery' },
-      { name: 'Pens', price: 3.0, category: 'Grocery' }
+      { name: 'Milk', price: 5.5, quantity: 1, category: 'Grocery' },
+      { name: 'T-Shirt', price: 15.0, quantity: 1, category: 'Shopping' },
+      { name: 'Socks', price: 10.0, quantity: 1, category: 'Grocery' },
+      { name: 'Pens', price: 3.0, quantity: 1, category: 'Grocery' }
     ]);
   });
 

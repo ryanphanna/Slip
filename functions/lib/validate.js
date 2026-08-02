@@ -41,6 +41,7 @@ function validateReceipt(raw) {
           .map(i => ({
             name: i.name.trim(),
             price: toNumber(i.price),
+            quantity: Number.isInteger(i.quantity) && i.quantity > 0 ? i.quantity : 1,
             category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
           }))
       : [],
