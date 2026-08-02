@@ -28,7 +28,9 @@ function validateReceipt(raw) {
   return {
     merchant: normalizeMerchant(raw.merchant),
 
-    location: typeof raw.location === 'string' ? raw.location.trim() : null,
+    location: typeof raw.location === 'string' && !['undefined', 'null'].includes(raw.location.trim().toLowerCase())
+      ? raw.location.trim()
+      : null,
     date: isValidDate(raw.date) ? raw.date : null,
     total: toNumber(raw.total),
     subtotal: toNumber(raw.subtotal),
