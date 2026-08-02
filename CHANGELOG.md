@@ -2,9 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.6.2] — 2026-07-27
-
-## [Unreleased]
+## [1.6.3] — 2026-08-01
 
 ### Fixed
 - **Receipt parsing accuracy**: fixed several parsing bugs found in a manual audit — a null `total` no longer slips past the Flash→Pro retry, ambiguous abbreviated dates (MM/DD/YY vs DD/MM/YY vs YY/MM/DD) are now inferred per-receipt instead of assumed, merchant names are no longer hallucinated or confused with app pickup-location names, and multi-unit line items now carry a `quantity` instead of collapsing into one combined-price entry. Non-receipt text messages (e.g. mistyped commands) no longer save empty junk receipts.
@@ -13,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - **Empty item list retry**: extended the Flash→Pro retry guard to also fire when a receipt parses with zero items — found a purchase where one parse attempt lost the entire item list despite a valid total.
 - **Refund totals inflating spending reports**: refund amounts weren't consistently stored as negative, so 3 of 4 refunds were being added to TOTAL/SUMMARY spend instead of subtracted. Refund sign is now enforced at write time regardless of what the parser returns.
 - **Voided POS lines hallucinated as fake charges**: a cancelled item (rung up then voided at the register) was being turned into extra fabricated line items instead of netting to zero. Corrected one affected receipt and added a prompt instruction to recognize the void pattern going forward.
+
+## [1.6.2] — 2026-07-27
 
 ## [1.6.1] — 2026-07-24
 
