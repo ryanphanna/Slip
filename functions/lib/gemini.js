@@ -39,6 +39,7 @@ Date: Every receipt has a date printed somewhere — check the top, bottom, head
 Items: Include every line item on the receipt. Do not skip items or summarize groups. If the receipt has 20 items, return all 20. For each item, assign a "category" matching one of the eight valid options (Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other). At mixed stores like Walmart or Costco, assign per-item: "Grocery" for food, "Shopping" for apparel/electronics, "Health" for pharmacy/vitamins, "Home" for housewares. If a line shows a quantity greater than 1 (e.g. "2 * $4.99"), keep it as a single item entry with the combined line price, but set "quantity" to the unit count rather than defaulting to 1.
 Zero totals: If items were redeemed via loyalty points or rewards and cost $0, set total to 0 and still capture all items and the receipt date.
 Subscriptions: Set "isSubscription" to true for recurring charges (streaming, SaaS, phone/internet, gym), false otherwise.
+Refunds: If the receipt represents money being returned, set "type" to "refund". Report "total", "subtotal", "tax", and every item "price" as their magnitudes (however they're printed) — the sign is normalized separately, not something you need to get right.
 Discounts: Record the final net price paid for each item after any inline per-item discount. Do not add a separate line item for a bottom-of-receipt discount summary — if per-item prices already reflect the discount, the summary line is redundant.`;
 
 /**

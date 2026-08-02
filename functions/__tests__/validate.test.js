@@ -124,5 +124,37 @@ describe('validateReceipt', () => {
     expect(validateReceipt(raw5).merchant).toBe('Old Navy');
     expect(validateReceipt(raw6).merchant).toBe('Old Navy');
   });
+
+  it('should always store refund amounts as negative, regardless of the sign Gemini returned', () => {
+    const raw = {
+      merchant: 'Target',
+      type: 'refund',
+      total: 16.56,
+      subtotal: 14.99,
+      tax: 1.57,
+      items: [{ name: 'HEYDAY', price: 14.99, category: 'Shopping' }],
+    };
+
+    const result = validateReceipt(raw);
+
+    expect(result.total).toBe(-16.56);
+    expect(result.subtotal).toBe(-14.99);
+    expect(result.tax).toBe(-1.57);
+    expect(result.items[0].price).toBe(-14.99);
+  });
+
+  it('should always store purchase amounts as positive, even if Gemini returned a negative sign', () => {
+    const raw = {
+      merchant: 'Target',
+      type: 'purchase',
+      total: -29.72,
+      items: [{ name: 'FD', price: -4.29, category: 'Grocery' }],
+    };
+
+    const result = validateReceipt(raw);
+
+    expect(result.total).toBe(29.72);
+    expect(result.items[0].price).toBe(4.29);
+  });
 });
 
