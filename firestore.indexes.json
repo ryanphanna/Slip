@@ -74,6 +74,26 @@
       "collectionGroup": "receipts",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "from", "order": "ASCENDING" },
+        { "fieldPath": "merchantKey", "order": "ASCENDING" },
+        { "fieldPath": "total", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "receipts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "from", "order": "ASCENDING" },
+        { "fieldPath": "merchantKey", "order": "ASCENDING" },
+        { "fieldPath": "total", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "receipts",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "isSubscription", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]

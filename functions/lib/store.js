@@ -61,12 +61,13 @@ async function findDuplicate(receipt, from) {
   if (!receipt.merchant || receipt.total == null) return null;
 
   const db = admin.firestore();
+  const merchantKey = receipt.merchant.trim().toLowerCase();
 
   // 1. Same merchant + total submitted within the time window (catches rapid re-sends)
   const tenMinutesAgo = new Date(Date.now() - config.DUPLICATE_WINDOW_MS);
   const recentSnap = await db.collection('receipts')
     .where('from', '==', from)
-    .where('merchant', '==', receipt.merchant)
+    .where('merchantKey', '==', merchantKey)
     .where('total', '==', receipt.total)
     .where('createdAt', '>=', tenMinutesAgo)
     .limit(1)
@@ -77,7 +78,7 @@ async function findDuplicate(receipt, from) {
   if (receipt.date) {
     const dateSnap = await db.collection('receipts')
       .where('from', '==', from)
-      .where('merchant', '==', receipt.merchant)
+      .where('merchantKey', '==', merchantKey)
       .where('total', '==', receipt.total)
       .where('date', '==', receipt.date)
       .limit(1)
@@ -92,6 +93,7 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = []) {
   const db = admin.firestore();
   const doc = await db.collection('receipts').add({
     ...receipt,
+    merchantKey: receipt.merchant ? receipt.merchant.trim().toLowerCase() : null,
     from,
     messageSid: messageSid || null,
     imagePaths,
