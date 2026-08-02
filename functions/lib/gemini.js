@@ -139,8 +139,10 @@ async function parseReceiptFromBase64(images, apiKey, forcePro = false) {
       return await parseWithPro(promptParts, apiKey);
     }
 
-    // Image receipts always have a date and a total — null from Flash means a missed extraction
-    if (parsed.date == null || parsed.total == null) {
+    // Image receipts always have a date, a total, and at least one item —
+    // any of those missing from Flash means a missed extraction
+    const itemsMissing = !Array.isArray(parsed.items) || parsed.items.length === 0;
+    if (parsed.date == null || parsed.total == null || itemsMissing) {
       return await parseWithPro(promptParts, apiKey);
     }
 
