@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Location field**: rejected the literal strings "undefined"/"null" instead of saving them as the receipt's location.
 - **Duplicate detection**: an audit found 14 real purchases logged 2-3 times each, undetected because duplicate matching compared merchant names case-sensitively (e.g. "OLD NAVY" vs "Old Navy" didn't match). Duplicate checks now compare a normalized merchant key instead. Backfilled the key onto all existing receipts and removed the 14 confirmed duplicates.
 - **Empty item list retry**: extended the Flash→Pro retry guard to also fire when a receipt parses with zero items — found a purchase where one parse attempt lost the entire item list despite a valid total.
+- **Refund totals inflating spending reports**: refund amounts weren't consistently stored as negative, so 3 of 4 refunds were being added to TOTAL/SUMMARY spend instead of subtracted. Refund sign is now enforced at write time regardless of what the parser returns.
 
 ## [1.6.1] — 2026-07-24
 

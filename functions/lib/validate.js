@@ -25,6 +25,17 @@ function normalizeMerchant(name) {
 
 // Clean and validate the parsed receipt object before writing to Firestore.
 function validateReceipt(raw) {
+  const type = VALID_TYPES.includes(raw.type) ? raw.type : 'purchase';
+  // Convention: refund amounts are always stored negative (money back reduces
+  // spend), regardless of how the sign was printed on the receipt/parsed by
+  // Gemini. This keeps sum-based spending totals correct without every
+  // caller having to special-case type === 'refund'.
+  const sign = type === 'refund' ? -1 : 1;
+  const signed = (val) => {
+    const n = toNumber(val);
+    return n == null ? null : sign * Math.abs(n);
+  };
+
   return {
     merchant: normalizeMerchant(raw.merchant),
 
@@ -32,9 +43,9 @@ function validateReceipt(raw) {
       ? raw.location.trim()
       : null,
     date: isValidDate(raw.date) ? raw.date : null,
-    total: toNumber(raw.total),
-    subtotal: toNumber(raw.subtotal),
-    tax: toNumber(raw.tax),
+    total: signed(raw.total),
+    subtotal: signed(raw.subtotal),
+    tax: signed(raw.tax),
     category: VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other',
     subCategory: typeof raw.subCategory === 'string' ? raw.subCategory.trim() : null,
     items: Array.isArray(raw.items)
@@ -42,13 +53,13 @@ function validateReceipt(raw) {
           .filter(i => i && typeof i.name === 'string')
           .map(i => ({
             name: i.name.trim(),
-            price: toNumber(i.price),
+            price: signed(i.price),
             quantity: Number.isInteger(i.quantity) && i.quantity > 0 ? i.quantity : 1,
             category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
           }))
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',
-    type: VALID_TYPES.includes(raw.type) ? raw.type : 'purchase',
+    type,
     isSubscription: typeof raw.isSubscription === 'boolean' ? raw.isSubscription : false,
     loyaltyPointsEarned: toNumber(raw.loyaltyPointsEarned),
     loyaltyPointsBalance: toNumber(raw.loyaltyPointsBalance),
