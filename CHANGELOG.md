@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Failed receipt recovery**: failed image parses now keep a quarantined Firestore record and preserved image copy for later retry, without affecting spending totals.
+
 ## [1.6.3] — 2026-08-01
 
 ### Fixed

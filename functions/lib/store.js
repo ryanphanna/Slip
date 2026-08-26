@@ -102,4 +102,31 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = []) {
   return doc.id;
 }
 
-module.exports = { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };
+async function saveProcessingFailure({ from, messageSid, error, imagePaths = [], numMedia = 0 }) {
+  const db = admin.firestore();
+  const data = {
+    from,
+    messageSid: messageSid || null,
+    status: 'failed',
+    error: error || 'Unknown receipt processing error',
+    imagePaths,
+    numMedia,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (messageSid) {
+    await db.collection('processing_failures').doc(messageSid).set({
+      ...data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return messageSid;
+  }
+
+  const doc = await db.collection('processing_failures').add({
+    ...data,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return doc.id;
+}
+
+module.exports = { saveReceipt, saveProcessingFailure, findDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };
