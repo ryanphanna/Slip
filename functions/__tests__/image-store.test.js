@@ -19,7 +19,7 @@ jest.mock('firebase-admin', () => {
 });
 
 const admin = require('firebase-admin');
-const { saveImages } = require('../lib/image-store');
+const { saveImages, saveFailedImages } = require('../lib/image-store');
 
 describe('image-store helper', () => {
   beforeEach(() => {
@@ -86,5 +86,14 @@ describe('image-store helper', () => {
     const images = [{ base64: 'abc', mimeType: 'image/png' }];
     const paths = await saveImages(images, 'SM123', { total: 10.0, category: 'Grocery', merchant: 'IKEA Toronto' });
     expect(paths).toEqual(['receipts-permanent/SM123/0.png']);
+  });
+
+  it('stores failed receipt images in the quarantine prefix', async () => {
+    const images = [{ base64: 'abc', mimeType: 'image/jpeg' }];
+
+    const paths = await saveFailedImages(images, 'MM123');
+
+    expect(paths).toEqual(['receipts-failed/MM123/0.jpg']);
+    expect(admin.__mocks.fileMock).toHaveBeenCalledWith('receipts-failed/MM123/0.jpg');
   });
 });

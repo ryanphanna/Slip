@@ -31,6 +31,7 @@ module.exports = {
   // === Storage Routing ===
   STORAGE_PREFIX_TEMPORARY: 'receipts-temporary',
   STORAGE_PREFIX_PERMANENT: 'receipts-permanent',
+  STORAGE_PREFIX_FAILED: 'receipts-failed',
   PERMANENT_TOTAL_THRESHOLD: 100,
   PERMANENT_CATEGORIES: ['Health', 'Home'],
   PERMANENT_CONFIDENCE_THRESHOLD: 0.8,
