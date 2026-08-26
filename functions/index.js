@@ -18,9 +18,9 @@ if (!admin.storage) {
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
-const { saveReceipt, findDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
+const { saveReceipt, saveProcessingFailure, findDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
 const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
-const { saveImages } = require('./lib/image-store');
+const { saveImages, saveFailedImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
 const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
@@ -278,6 +278,8 @@ exports.sms = onRequest(
       res.send('<Response/>');
 
       // --- background processing starts here ---
+      const images = [];
+      let storedImagePaths = [];
       (async () => {
         let isFirstReceipt = false;
         try {
@@ -288,7 +290,6 @@ exports.sms = onRequest(
         }
 
         let raw;
-        const images = [];
         if (numMedia === 0) {
           const bodyText = (req.body.Body || '').trim();
           if (!bodyText) {
@@ -361,6 +362,7 @@ exports.sms = onRequest(
         ]);
 
         const imagePaths = imagePathsResult;
+        storedImagePaths = imagePaths;
         if (duplicateId) {
           logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
           await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged.`);
@@ -433,6 +435,27 @@ exports.sms = onRequest(
           error: err && err.message ? err.message : err,
           cause: err && err.cause && err.cause.message ? err.cause.message : undefined,
         });
+
+        let failureImagePaths = storedImagePaths;
+        if (images.length > 0 && failureImagePaths.length === 0) {
+          try {
+            failureImagePaths = await saveFailedImages(images, messageSid);
+          } catch (storageErr) {
+            logger.error('Failed to preserve images for processing failure', { messageSid, error: storageErr.message });
+          }
+        }
+
+        try {
+          await saveProcessingFailure({
+            from,
+            messageSid,
+            error: err && err.message ? err.message : String(err),
+            imagePaths: failureImagePaths,
+            numMedia,
+          });
+        } catch (failureErr) {
+          logger.error('Failed to save processing failure record', { messageSid, error: failureErr.message });
+        }
 
         try {
           const lastReceipt = await getLastReceipt(from);

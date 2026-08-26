@@ -1,13 +1,28 @@
 const admin = require('firebase-admin');
 const config = require('./config');
 
-async function saveImages(images, messageSid, receipt = null) {
+async function saveImageFiles(images, messageSid, prefix) {
   const bucket = admin.storage().bucket();
-  const paths = [];
-  
+
   // Sanitize messageSid to prevent path traversal (alphanumeric only)
   const safeSid = (messageSid || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
 
+  const uploadPromises = images.map(async (img, idx) => {
+    const ext = img.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+    const path = `${prefix}/${safeSid}/${idx}.${ext}`;
+    const file = bucket.file(path);
+
+    await file.save(Buffer.from(img.base64, 'base64'), {
+      metadata: { contentType: img.mimeType },
+    });
+
+    return path;
+  });
+
+  return Promise.all(uploadPromises);
+}
+
+async function saveImages(images, messageSid, receipt = null) {
   // Determine prefix: permanent vs temporary
   let prefix = config.STORAGE_PREFIX_TEMPORARY;
   
@@ -27,20 +42,11 @@ async function saveImages(images, messageSid, receipt = null) {
     }
   }
 
-  const uploadPromises = images.map(async (img, idx) => {
-    const ext = img.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-    const path = `${prefix}/${safeSid}/${idx}.${ext}`;
-    const file = bucket.file(path);
-
-    await file.save(Buffer.from(img.base64, 'base64'), {
-      metadata: { contentType: img.mimeType },
-    });
-
-    return path;
-  });
-
-  return Promise.all(uploadPromises);
-
+  return saveImageFiles(images, messageSid, prefix);
 }
 
-module.exports = { saveImages };
+async function saveFailedImages(images, messageSid) {
+  return saveImageFiles(images, messageSid, config.STORAGE_PREFIX_FAILED);
+}
+
+module.exports = { saveImages, saveFailedImages };
