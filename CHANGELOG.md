@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **Dependency security**: updated transitive `brace-expansion` and `js-yaml` dependencies to remove two high-severity audit findings.
 - **Failed receipt recovery**: failed image parses now keep a quarantined Firestore record and preserved image copy for later retry, without affecting spending totals.
 
 ## [1.6.2] — 2026-08-01
