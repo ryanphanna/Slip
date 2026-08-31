@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - **Receipt detail cleanup**: removed internal parser confidence metadata from the user-facing editor.
 - **Items view**: added a standalone searchable view of items captured from receipts.
 - **Processing history access**: failed and previously reviewed receipts remain available for retry without an always-open alert panel.
+- **Item review**: parsed items stay out of the verified Items view until explicitly approved.
 - **Receipt detail navigation**: changing receipts while the detail panel is open now updates all displayed fields and line items together.
 - **Receipt image access**: web detail now streams stored images through the authenticated API instead of relying on runtime URL-signing permissions.
 - **Receipt images in web detail**: configured the deployed Functions runtime with Slip’s Storage bucket so original receipt images can be opened from the inbox.

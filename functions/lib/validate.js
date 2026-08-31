@@ -56,6 +56,7 @@ function validateReceipt(raw) {
             price: signed(i.price),
             quantity: Number.isInteger(i.quantity) && i.quantity > 0 ? i.quantity : 1,
             category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
+            ...(i.verified === true ? { verified: true } : {}),
           }))
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',
@@ -77,4 +78,3 @@ function toNumber(val) {
 }
 
 module.exports = { validateReceipt, normalizeMerchant };
-
