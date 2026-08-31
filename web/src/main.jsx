@@ -107,6 +107,7 @@ function ReceiptRow({ receipt, onSelect }) {
 function ReceiptDetail({ receipt, onClose, onSaved }) {
   const [draft, setDraft] = useState({ ...receipt, items: receipt.items || [] });
   const [images, setImages] = useState([]);
+  const [zoomedImage, setZoomedImage] = useState(null);
   const [status, setStatus] = useState('');
 
   useEffect(() => {
@@ -132,7 +133,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
 
   return <aside className="detail-panel">
     <div className="detail-header"><div><p className="eyebrow">RECEIPT DETAIL</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div>
-    {images.length > 0 && <div className="image-strip">{images.map((url) => <img key={url} src={url} alt="Original receipt" />)}</div>}
+    {images.length > 0 && <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div>}
     <form onSubmit={save} className="detail-form">
       <div className="field-grid">
         <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
@@ -146,6 +147,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
       <div className="actions"><button type="submit">Save corrections</button><button type="button" className="secondary" onClick={() => setDraft({ ...receipt, items: receipt.items || [] })}>Reset</button></div>
       {status && <p className="status">{status}</p>}
     </form>
+    {zoomedImage && <div className="image-modal" role="dialog" aria-label="Expanded receipt image" onClick={() => setZoomedImage(null)}><button className="image-modal-close" aria-label="Close expanded image" onClick={() => setZoomedImage(null)}>×</button><img src={zoomedImage} alt="Expanded original receipt" onClick={(event) => event.stopPropagation()} /></div>}
   </aside>;
 }
 
