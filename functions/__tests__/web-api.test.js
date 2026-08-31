@@ -1,4 +1,4 @@
-const { cleanPatch, requireAuth, EDITABLE_FIELDS, ACTIONABLE_FAILURE_STATUSES } = require('../lib/web-api');
+const { cleanPatch, requireAuth, EDITABLE_FIELDS, VISIBLE_FAILURE_STATUSES } = require('../lib/web-api');
 
 describe('web API helpers', () => {
   it('keeps only editable receipt fields', () => {
@@ -13,11 +13,11 @@ describe('web API helpers', () => {
       .toEqual({ uid: 'user-1', phone: '+14165551234' });
   });
 
-  it('only treats unresolved processing records as actionable', () => {
-    expect(ACTIONABLE_FAILURE_STATUSES.has('failed')).toBe(true);
-    expect(ACTIONABLE_FAILURE_STATUSES.has('pending')).toBe(true);
-    expect(ACTIONABLE_FAILURE_STATUSES.has('resolved')).toBe(false);
-    expect(ACTIONABLE_FAILURE_STATUSES.has('duplicate')).toBe(false);
-    expect(ACTIONABLE_FAILURE_STATUSES.has('recovered')).toBe(false);
+  it('keeps retryable and previously reviewed processing records available', () => {
+    expect(VISIBLE_FAILURE_STATUSES.has('failed')).toBe(true);
+    expect(VISIBLE_FAILURE_STATUSES.has('pending')).toBe(true);
+    expect(VISIBLE_FAILURE_STATUSES.has('resolved')).toBe(true);
+    expect(VISIBLE_FAILURE_STATUSES.has('duplicate')).toBe(true);
+    expect(VISIBLE_FAILURE_STATUSES.has('recovered')).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber, signOut } from 'firebase/auth';
@@ -149,10 +149,28 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
   </aside>;
 }
 
+function ItemsView({ receipts }) {
+  const [search, setSearch] = useState('');
+  const items = useMemo(() => receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
+    ...item,
+    id: `${receipt.id}-${index}`,
+    merchant: receipt.merchant || 'Unknown merchant',
+    date: receipt.date || 'No date',
+  }))), [receipts]);
+  const filtered = items.filter((item) => `${item.name} ${item.category} ${item.merchant}`.toLowerCase().includes(search.toLowerCase()));
+
+  return <section className="items-page">
+    <div className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items or merchants" /><span className="count">{filtered.length} items</span></div>
+    {filtered.length === 0 ? <div className="empty"><h2>No items found.</h2><p>Items captured from your receipts will appear here.</p></div> : <div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id}><div><strong>{item.name || 'Unnamed item'}</strong><small>{item.merchant} · {item.date}{item.category ? ` · ${item.category}` : ''}</small></div><strong>{formatMoney(item.price)}</strong></div>)}</div>}
+  </section>;
+}
+
 function Inbox({ user }) {
   const [receipts, setReceipts] = useState([]);
   const [failures, setFailures] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [view, setView] = useState('receipts');
+  const [showFailureHistory, setShowFailureHistory] = useState(false);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -175,13 +193,16 @@ function Inbox({ user }) {
   const filtered = receipts.filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()));
 
   return <main className="app-shell">
-    <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>Inbox</h1></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
-    <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
+    <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>{view === 'items' ? 'Items' : 'Inbox'}</h1><nav className="view-nav"><button className={view === 'receipts' ? 'active' : 'secondary'} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : 'secondary'} onClick={() => setView('items')}>Items</button></nav></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
-    {!loading && !error && filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
-    {!loading && !error && failures.length > 0 && <section className="failures"><div><h2>Receipts Slip couldn’t read</h2><p className="muted">Retry them if you want to recover the data.</p></div>{failures.map((failure) => <div className="failure-row" key={failure.id}><span><strong>{formatFailureDate(failure.createdAt, failure.numMedia)}</strong><small>Slip couldn’t read this receipt.</small></span><button onClick={async () => { try { await call('retryProcessing', { id: failure.id }); setFailures((all) => all.filter((item) => item.id !== failure.id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }}>Retry</button></div>)}</section>}
-    <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
+    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} />}
+    {!loading && !error && view === 'receipts' && <>
+      <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
+      {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
+      {failures.length > 0 && <><div className="failure-access"><span>{failures.length} receipt{failures.length === 1 ? '' : 's'} need processing history</span><button className="secondary" onClick={() => setShowFailureHistory((visible) => !visible)}>{showFailureHistory ? 'Hide processing history' : 'View processing history'}</button></div>{showFailureHistory && <section className="failures"><div><h2>Processing history</h2><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <div className="failure-row" key={failure.id}><span><strong>{formatFailureDate(failure.createdAt, failure.numMedia)}</strong><small>Slip couldn’t read this receipt.</small></span><button onClick={async () => { try { await call('retryProcessing', { id: failure.id }); setFailures((all) => all.filter((item) => item.id !== failure.id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }}>Retry</button></div>)}</section>}</>}
+      <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
+    </>}
     {selected && <ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} />}
   </main>;
 }

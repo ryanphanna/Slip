@@ -7,7 +7,7 @@ const EDITABLE_FIELDS = new Set([
   'subCategory', 'currency', 'type', 'isSubscription', 'loyaltyPointsEarned',
   'loyaltyPointsBalance', 'items',
 ]);
-const ACTIONABLE_FAILURE_STATUSES = new Set(['failed', 'pending', '']);
+const VISIBLE_FAILURE_STATUSES = new Set(['failed', 'pending', '', 'resolved', 'duplicate']);
 
 function requireAuth(request) {
   if (!request.auth?.uid || !request.auth.token?.phone_number) {
@@ -112,7 +112,7 @@ async function listProcessingFailures(request) {
     .limit(50)
     .get();
   const failures = snapshot.docs.map(serializeDoc)
-    .filter((failure) => ACTIONABLE_FAILURE_STATUSES.has(failure.status || ''));
+    .filter((failure) => VISIBLE_FAILURE_STATUSES.has(failure.status || ''));
   failures.sort((a, b) => {
     const aTime = a.createdAt?.toMillis?.() || 0;
     const bTime = b.createdAt?.toMillis?.() || 0;
@@ -159,7 +159,7 @@ async function retryProcessing(request) {
 
 module.exports = {
   EDITABLE_FIELDS,
-  ACTIONABLE_FAILURE_STATUSES,
+  VISIBLE_FAILURE_STATUSES,
   requireAuth,
   cleanPatch,
   listReceipts,
