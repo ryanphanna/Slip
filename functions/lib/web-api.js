@@ -32,6 +32,16 @@ function receiptQuery(db, uid, phone) {
   return db.collection('receipts').where('from', '==', phone).orderBy('createdAt', 'desc');
 }
 
+async function loadImageUrls(bucket, paths) {
+  const results = await Promise.allSettled(paths.map(async (path) => {
+    const file = bucket.file(path);
+    const [buffer] = await file.download();
+    const [metadata] = await file.getMetadata();
+    return `data:${metadata.contentType || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+  }));
+  return results.filter((result) => result.status === 'fulfilled').map((result) => result.value);
+}
+
 async function listReceipts(request) {
   const { uid, phone } = requireAuth(request);
   const db = admin.firestore();
@@ -95,13 +105,7 @@ async function getReceiptImageUrls(request) {
   }
 
   const bucket = admin.storage().bucket();
-  const urls = await Promise.all((doc.get('imagePaths') || []).map(async (path) => {
-    const file = bucket.file(path);
-    const [buffer] = await file.download();
-    const [metadata] = await file.getMetadata();
-    const mimeType = metadata.contentType || 'image/jpeg';
-    return `data:${mimeType};base64,${buffer.toString('base64')}`;
-  }));
+  const urls = await loadImageUrls(bucket, doc.get('imagePaths') || []);
   return { urls };
 }
 
@@ -133,12 +137,7 @@ async function getProcessingFailureImageUrls(request) {
     throw error;
   }
   const bucket = admin.storage().bucket();
-  const urls = await Promise.all((doc.get('imagePaths') || []).map(async (path) => {
-    const file = bucket.file(path);
-    const [buffer] = await file.download();
-    const [metadata] = await file.getMetadata();
-    return `data:${metadata.contentType || 'image/jpeg'};base64,${buffer.toString('base64')}`;
-  }));
+  const urls = await loadImageUrls(bucket, doc.get('imagePaths') || []);
   return { urls };
 }
 
