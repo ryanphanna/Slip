@@ -140,7 +140,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
         <label>Total<input type="number" step="0.01" value={draft.total ?? ''} onChange={(e) => update('total', e.target.value)} /></label>
         <label>Category<input value={draft.category || ''} onChange={(e) => update('category', e.target.value)} /></label>
       </div>
-      <p className="meta">{receipt.confidence != null ? `Parser confidence: ${Math.round(receipt.confidence * 100)}%` : 'No confidence score'} · {receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p>
+      <p className="meta">{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p>
       <h3>Items</h3>
       <div className="items">{draft.items.map((item, index) => <div className="item-row" key={`${item.name}-${index}`}><input value={item.name} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} /><input type="number" step="0.01" value={item.price ?? ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, price: Number(e.target.value) } : current))} /></div>)}</div>
       <div className="actions"><button type="submit">Save corrections</button><button type="button" className="secondary" onClick={() => setDraft({ ...receipt, items: receipt.items || [] })}>Reset</button></div>
