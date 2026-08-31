@@ -1,6 +1,21 @@
-const { validateReceipt } = require('../lib/validate');
+const { validateReceipt, extractIkeaItemNumber } = require('../lib/validate');
 
 describe('validateReceipt', () => {
+  it('preserves clear IKEA article numbers from OCR item names', () => {
+    const result = validateReceipt({
+      merchant: 'IKEA',
+      category: 'Home',
+      items: [
+        { name: 'ADLAD scented (article 905.027.28)', price: 4.72 },
+        { name: 'HÄRMHOK lavender bag (article 506149)', price: 2.29 },
+      ],
+    });
+
+    expect(extractIkeaItemNumber('DVALA (article 60577536)')).toBe('60577536');
+    expect(result.items[0].itemNumber).toBe('90502728');
+    expect(result.items[1].itemNumber).toBeUndefined();
+  });
+
   it('should sanitize basic valid input', () => {
     const raw = {
       merchant: '  Target  ',
@@ -157,4 +172,3 @@ describe('validateReceipt', () => {
     expect(result.items[0].price).toBe(4.29);
   });
 });
-
