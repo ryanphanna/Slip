@@ -20,6 +20,13 @@ const auth = app ? getAuth(app) : null;
 const functions = app ? getFunctions(app) : null;
 const call = (name, data) => httpsCallable(functions, name)(data).then((result) => result.data);
 
+function normalizePhone(value) {
+  const digits = String(value || '').replace(/[^\d]/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return String(value || '').trim().replace(/[^\d+]/g, '');
+}
+
 function formatMoney(value, currency = 'CAD') {
   if (value == null) return '—';
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
@@ -39,9 +46,14 @@ function Login() {
 
   async function sendCode(event) {
     event.preventDefault();
+    const normalizedPhone = normalizePhone(phone);
+    if (!/^\+\d{8,15}$/.test(normalizedPhone)) {
+      setMessage('Enter a valid phone number, such as (416) 555-1234.');
+      return;
+    }
     setMessage('Sending code…');
     try {
-      setConfirmation(await signInWithPhoneNumber(auth, phone, recaptcha.current));
+      setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, recaptcha.current));
       setMessage('Enter the six-digit code we texted you.');
     } catch (error) {
       setMessage(error.message || 'Could not send a code.');
