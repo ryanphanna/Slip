@@ -112,7 +112,9 @@ async function listProcessingFailures(request) {
     .limit(50)
     .get();
   const failures = snapshot.docs.map(serializeDoc)
-    .filter((failure) => VISIBLE_FAILURE_STATUSES.has(failure.status || ''));
+    .filter((failure) => VISIBLE_FAILURE_STATUSES.has(failure.status || '')
+      && Array.isArray(failure.imagePaths)
+      && failure.imagePaths.length > 0);
   failures.sort((a, b) => {
     const aTime = a.createdAt?.toMillis?.() || 0;
     const bTime = b.createdAt?.toMillis?.() || 0;
