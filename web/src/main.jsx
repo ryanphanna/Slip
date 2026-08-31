@@ -32,6 +32,8 @@ function formatMoney(value, currency = 'CAD') {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
 }
 
+const searchableMerchants = new Set(['target']);
+
 function formatFailureDate(createdAt, numMedia) {
   const seconds = createdAt?.seconds ?? createdAt?._seconds;
   const date = createdAt?.toDate?.() || (seconds ? new Date(seconds * 1000) : null);
@@ -214,6 +216,17 @@ function Inbox({ user }) {
     finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
+  const merchantSearch = search.trim().toLowerCase();
+  useEffect(() => {
+    if (!searchableMerchants.has(merchantSearch)) return;
+    call('listReceipts', { limit: 100, merchant: merchantSearch })
+      .then((result) => setReceipts((all) => {
+        const byId = new Map(all.map((receipt) => [receipt.id, receipt]));
+        (result.receipts || []).forEach((receipt) => byId.set(receipt.id, receipt));
+        return [...byId.values()];
+      }))
+      .catch((err) => setError(err.message || 'Could not load matching receipts.'));
+  }, [merchantSearch]);
   const filtered = receipts.filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()));
 
   return <main className="app-shell">
