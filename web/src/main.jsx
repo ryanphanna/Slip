@@ -149,19 +149,31 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
   </aside>;
 }
 
-function ItemsView({ receipts }) {
+function ItemsView({ receipts, onReceiptUpdated }) {
   const [search, setSearch] = useState('');
+  const [mode, setMode] = useState('verified');
   const items = useMemo(() => receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
     ...item,
     id: `${receipt.id}-${index}`,
+    receiptId: receipt.id,
+    index,
     merchant: receipt.merchant || 'Unknown merchant',
     date: receipt.date || 'No date',
   }))), [receipts]);
-  const filtered = items.filter((item) => `${item.name} ${item.category} ${item.merchant}`.toLowerCase().includes(search.toLowerCase()));
+  const visibleItems = items.filter((item) => mode === 'verified' ? item.verified === true : item.verified !== true);
+  const filtered = visibleItems.filter((item) => `${item.name} ${item.category} ${item.merchant}`.toLowerCase().includes(search.toLowerCase()));
+
+  async function verifyItem(item) {
+    const receipt = receipts.find((candidate) => candidate.id === item.receiptId);
+    if (!receipt) return;
+    const updated = await call('updateReceipt', { id: receipt.id, patch: { items: receipt.items.map((current, index) => index === item.index ? { ...current, verified: true } : current) } });
+    onReceiptUpdated(updated);
+  }
 
   return <section className="items-page">
+    <div className="item-tabs"><button className={mode === 'verified' ? 'active' : 'secondary'} onClick={() => setMode('verified')}>Verified</button><button className={mode === 'review' ? 'active' : 'secondary'} onClick={() => setMode('review')}>Needs review</button></div>
     <div className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items or merchants" /><span className="count">{filtered.length} items</span></div>
-    {filtered.length === 0 ? <div className="empty"><h2>No items found.</h2><p>Items captured from your receipts will appear here.</p></div> : <div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id}><div><strong>{item.name || 'Unnamed item'}</strong><small>{item.merchant} · {item.date}{item.category ? ` · ${item.category}` : ''}</small></div><strong>{formatMoney(item.price)}</strong></div>)}</div>}
+    {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id}><div><strong>{item.name || 'Unnamed item'}</strong><small>{item.merchant} · {item.date}{item.category ? ` · ${item.category}` : ''}</small></div><span className="item-action"><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={() => verifyItem(item)}>Approve</button>}</span></div>)}</div>}
   </section>;
 }
 
@@ -196,7 +208,7 @@ function Inbox({ user }) {
     <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>{view === 'items' ? 'Items' : 'Inbox'}</h1><nav className="view-nav"><button className={view === 'receipts' ? 'active' : 'secondary'} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : 'secondary'} onClick={() => setView('items')}>Items</button></nav></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
-    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} />}
+    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} onReceiptUpdated={(updated) => setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt))} />}
     {!loading && !error && view === 'receipts' && <>
       <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
