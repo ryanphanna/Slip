@@ -228,7 +228,7 @@ function Inbox({ user }) {
       {failures.length > 0 && <><div className="failure-access"><span>{failures.length} receipt{failures.length === 1 ? '' : 's'} need processing history</span><button className="secondary" onClick={() => setShowFailureHistory((visible) => !visible)}>{showFailureHistory ? 'Hide processing history' : 'View processing history'}</button></div>{showFailureHistory && <section className="failures"><div><h2>Processing history</h2><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />)}</section>}</>}
       <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
     </>}
-    {selected && <ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} />}
+    {selected && <><div className="detail-backdrop" onClick={() => setSelected(null)} /><ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} /></>}
   </main>;
 }
 
