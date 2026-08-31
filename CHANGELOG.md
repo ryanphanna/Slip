@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - **Processing history clarity**: retry rows now show the original receipt thumbnail and capture date.
 - **Processing history cleanup**: stale records without a stored receipt image no longer appear as retryable receipts.
 - **Receipt item quantities**: receipt details and the Items view now show captured quantities alongside each item.
+- **Receipt detail layout**: the original image and editable receipt fields now sit side by side on wide screens.
 - **Receipt detail navigation**: changing receipts while the detail panel is open now updates all displayed fields and line items together.
 - **Receipt image access**: web detail now streams stored images through the authenticated API instead of relying on runtime URL-signing permissions.
 - **Receipt images in web detail**: configured the deployed Functions runtime with Slip’s Storage bucket so original receipt images can be opened from the inbox.
