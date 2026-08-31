@@ -57,6 +57,9 @@ function validateReceipt(raw) {
             quantity: Number.isInteger(i.quantity) && i.quantity > 0 ? i.quantity : 1,
             category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
             ...(i.verified === true ? { verified: true } : {}),
+            ...(typeof i.publicName === 'string' && i.publicName.trim() ? { publicName: i.publicName.trim() } : {}),
+            ...(typeof i.itemNumber === 'string' && i.itemNumber.trim() ? { itemNumber: i.itemNumber.trim() } : {}),
+            ...(typeof i.productUrl === 'string' && i.productUrl.trim() ? { productUrl: i.productUrl.trim() } : {}),
           }))
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',

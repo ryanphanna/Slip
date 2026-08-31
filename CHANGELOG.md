@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Receipt item quantities**: receipt details and the Items view now show captured quantities alongside each item.
 - **Receipt detail layout**: the original image and editable receipt fields now sit side by side on wide screens.
 - **Receipt detail dismissal**: clicking outside the receipt panel now closes it.
+- **Canonical item metadata**: receipt items can now store a verified public name, retailer item number, and product URL alongside the original receipt name.
 - **Receipt image resilience**: one missing stored image no longer prevents the remaining receipt images from loading.
 - **Receipt detail navigation**: changing receipts while the detail panel is open now updates all displayed fields and line items together.
 - **Receipt image access**: web detail now streams stored images through the authenticated API instead of relying on runtime URL-signing permissions.
