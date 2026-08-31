@@ -108,10 +108,15 @@ async function listProcessingFailures(request) {
   const { phone } = requireAuth(request);
   const snapshot = await admin.firestore().collection('processing_failures')
     .where('from', '==', phone)
-    .orderBy('createdAt', 'desc')
     .limit(50)
     .get();
-  return { failures: snapshot.docs.map(serializeDoc) };
+  const failures = snapshot.docs.map(serializeDoc);
+  failures.sort((a, b) => {
+    const aTime = a.createdAt?.toMillis?.() || 0;
+    const bTime = b.createdAt?.toMillis?.() || 0;
+    return bTime - aTime;
+  });
+  return { failures };
 }
 
 async function retryProcessing(request) {
