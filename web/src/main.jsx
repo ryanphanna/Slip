@@ -104,6 +104,8 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
   const [status, setStatus] = useState('');
 
   useEffect(() => {
+    setDraft({ ...receipt, items: receipt.items || [] });
+    setStatus('');
     call('getReceiptImageUrls', { id: receipt.id }).then(({ urls }) => setImages(urls)).catch(() => setStatus('The receipt image could not be loaded.'));
   }, [receipt.id]);
 
