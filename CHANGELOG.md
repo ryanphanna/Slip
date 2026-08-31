@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Web receipt inbox**: added a phone-authenticated Firebase web interface for browsing, inspecting, correcting, and retrying receipt records without opening Firestore or Storage to the browser.
 
 ### Fixed
+- **Receipt recovery messaging**: stale resolved failures no longer appear as urgent, and genuine failures now explain what happened in plain language.
 - **Receipt detail navigation**: changing receipts while the detail panel is open now updates all displayed fields and line items together.
 - **Receipt image access**: web detail now streams stored images through the authenticated API instead of relying on runtime URL-signing permissions.
 - **Receipt images in web detail**: configured the deployed Functions runtime with Slip’s Storage bucket so original receipt images can be opened from the inbox.
