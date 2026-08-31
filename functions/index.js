@@ -30,7 +30,9 @@ const config = require('./lib/config');
 
 const oops = () => config.ERROR_OPENERS[Math.floor(Math.random() * config.ERROR_OPENERS.length)];
 
-admin.initializeApp();
+admin.initializeApp({
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'slip-c742b.firebasestorage.app',
+});
 
 const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
