@@ -523,4 +523,5 @@ exports.getReceipt = callable(webApi.getReceipt);
 exports.updateReceipt = callable(webApi.updateReceipt);
 exports.getReceiptImageUrls = callable(webApi.getReceiptImageUrls);
 exports.listProcessingFailures = callable(webApi.listProcessingFailures);
+exports.getProcessingFailureImageUrls = callable(webApi.getProcessingFailureImageUrls);
 exports.retryProcessing = callable(webApi.retryProcessing);

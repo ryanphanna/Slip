@@ -121,6 +121,25 @@ async function listProcessingFailures(request) {
   return { failures };
 }
 
+async function getProcessingFailureImageUrls(request) {
+  const { phone } = requireAuth(request);
+  const id = String(request.data?.id || '');
+  const doc = await admin.firestore().collection('processing_failures').doc(id).get();
+  if (!doc.exists || doc.get('from') !== phone) {
+    const error = new Error('Processing failure not found');
+    error.code = 'not-found';
+    throw error;
+  }
+  const bucket = admin.storage().bucket();
+  const urls = await Promise.all((doc.get('imagePaths') || []).map(async (path) => {
+    const file = bucket.file(path);
+    const [buffer] = await file.download();
+    const [metadata] = await file.getMetadata();
+    return `data:${metadata.contentType || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+  }));
+  return { urls };
+}
+
 async function retryProcessing(request) {
   const { phone } = requireAuth(request);
   const id = String(request.data?.id || '');
@@ -167,5 +186,6 @@ module.exports = {
   updateReceipt,
   getReceiptImageUrls,
   listProcessingFailures,
+  getProcessingFailureImageUrls,
   retryProcessing,
 };
