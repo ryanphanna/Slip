@@ -10,7 +10,8 @@
     "smoke": "node scripts/smoke.js",
     "replay": "node scripts/replay.js",
     "check:webhook-health": "node scripts/check-webhook-health.js",
-    "check:release": "node scripts/release-check.js"
+    "check:release": "node scripts/release-check.js",
+    "migrate:accounts": "node scripts/migrate-to-accounts.js"
   },
   "dependencies": {
     "@google-cloud/logging": "^12.0.1",

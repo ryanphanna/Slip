@@ -15,6 +15,18 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 - **Detailed History**: Stores itemized receipts with merchant, date, totals, tax, categories, and line items.
 - **Private by Design**: Built for personal use with server-side storage, locked-down client access, and allowlisted intake.
 
+## Web interface
+
+The React receipt inbox lives in `web/` and is hosted by Firebase Hosting. Copy `web/.env.example` to `web/.env.local`, fill in the Firebase web app configuration, then run:
+
+```sh
+cd web
+npm install
+npm run dev
+```
+
+The browser uses Firebase Phone Authentication and calls authenticated Cloud Functions; Firestore and Cloud Storage remain inaccessible directly from the client. Historical records can be attached to an account with `cd functions && npm run migrate:accounts -- --phone <E.164> --uid <firebase-uid> --apply`.
+
 ## Stack
 
 - **Backend**: Firebase Cloud Functions (Node.js)
