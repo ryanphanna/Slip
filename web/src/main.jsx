@@ -33,9 +33,18 @@ function formatMoney(value, currency = 'CAD') {
 }
 
 function formatFailureDate(createdAt, numMedia) {
-  const date = createdAt?.toDate?.() || (createdAt?.seconds ? new Date(createdAt.seconds * 1000) : null);
+  const seconds = createdAt?.seconds ?? createdAt?._seconds;
+  const date = createdAt?.toDate?.() || (seconds ? new Date(seconds * 1000) : null);
   const source = numMedia > 0 ? 'photo receipt' : 'pasted receipt';
   return `${date ? date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unprocessed'} · ${source}`;
+}
+
+function FailureRow({ failure, onRetry }) {
+  const [image, setImage] = useState(null);
+  useEffect(() => {
+    call('getProcessingFailureImageUrls', { id: failure.id }).then(({ urls }) => setImage(urls?.[0] || null)).catch(() => {});
+  }, [failure.id]);
+  return <div className="failure-row"><span className="failure-info">{image ? <img src={image} alt="Receipt awaiting processing" /> : <span className="failure-placeholder">Receipt</span>}<span><strong>{formatFailureDate(failure.createdAt, failure.numMedia)}</strong><small>Slip couldn’t read this receipt.</small></span></span><button onClick={() => onRetry(failure.id)}>Retry</button></div>;
 }
 
 function Login() {
@@ -214,7 +223,7 @@ function Inbox({ user }) {
     {!loading && !error && view === 'receipts' && <>
       <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
-      {failures.length > 0 && <><div className="failure-access"><span>{failures.length} receipt{failures.length === 1 ? '' : 's'} need processing history</span><button className="secondary" onClick={() => setShowFailureHistory((visible) => !visible)}>{showFailureHistory ? 'Hide processing history' : 'View processing history'}</button></div>{showFailureHistory && <section className="failures"><div><h2>Processing history</h2><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <div className="failure-row" key={failure.id}><span><strong>{formatFailureDate(failure.createdAt, failure.numMedia)}</strong><small>Slip couldn’t read this receipt.</small></span><button onClick={async () => { try { await call('retryProcessing', { id: failure.id }); setFailures((all) => all.filter((item) => item.id !== failure.id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }}>Retry</button></div>)}</section>}</>}
+      {failures.length > 0 && <><div className="failure-access"><span>{failures.length} receipt{failures.length === 1 ? '' : 's'} need processing history</span><button className="secondary" onClick={() => setShowFailureHistory((visible) => !visible)}>{showFailureHistory ? 'Hide processing history' : 'View processing history'}</button></div>{showFailureHistory && <section className="failures"><div><h2>Processing history</h2><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />)}</section>}</>}
       <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
     </>}
     {selected && <ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} />}
