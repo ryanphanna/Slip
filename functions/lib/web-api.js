@@ -95,11 +95,11 @@ async function getReceiptImageUrls(request) {
 
   const bucket = admin.storage().bucket();
   const urls = await Promise.all((doc.get('imagePaths') || []).map(async (path) => {
-    const [url] = await bucket.file(path).getSignedUrl({
-      action: 'read',
-      expires: Date.now() + 15 * 60 * 1000,
-    });
-    return url;
+    const file = bucket.file(path);
+    const [buffer] = await file.download();
+    const [metadata] = await file.getMetadata();
+    const mimeType = metadata.contentType || 'image/jpeg';
+    return `data:${mimeType};base64,${buffer.toString('base64')}`;
   }));
   return { urls };
 }
