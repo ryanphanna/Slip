@@ -25,6 +25,7 @@ function normalizeMerchant(name) {
 
 // Clean and validate the parsed receipt object before writing to Firestore.
 function validateReceipt(raw) {
+  const merchant = normalizeMerchant(raw.merchant);
   const type = VALID_TYPES.includes(raw.type) ? raw.type : 'purchase';
   // Convention: refund amounts are always stored negative (money back reduces
   // spend), regardless of how the sign was printed on the receipt/parsed by
@@ -37,7 +38,7 @@ function validateReceipt(raw) {
   };
 
   return {
-    merchant: normalizeMerchant(raw.merchant),
+    merchant,
 
     location: typeof raw.location === 'string' && !['undefined', 'null'].includes(raw.location.trim().toLowerCase())
       ? raw.location.trim()
@@ -58,7 +59,9 @@ function validateReceipt(raw) {
             category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
             ...(i.verified === true ? { verified: true } : {}),
             ...(typeof i.publicName === 'string' && i.publicName.trim() ? { publicName: i.publicName.trim() } : {}),
-            ...(typeof i.itemNumber === 'string' && i.itemNumber.trim() ? { itemNumber: i.itemNumber.trim() } : {}),
+            ...(typeof i.itemNumber === 'string' && i.itemNumber.trim()
+              ? { itemNumber: i.itemNumber.trim() }
+              : (merchant === 'IKEA' && extractIkeaItemNumber(i.name) ? { itemNumber: extractIkeaItemNumber(i.name) } : {})),
             ...(typeof i.productUrl === 'string' && i.productUrl.trim() ? { productUrl: i.productUrl.trim() } : {}),
           }))
       : [],
@@ -68,6 +71,15 @@ function validateReceipt(raw) {
     loyaltyPointsEarned: toNumber(raw.loyaltyPointsEarned),
     loyaltyPointsBalance: toNumber(raw.loyaltyPointsBalance),
   };
+}
+
+// IKEA receipt lines commonly include the article number in the OCR name, but
+// Gemini may omit the separate structured field. Only infer the canonical
+// eight-digit form; shorter OCR fragments are too risky to publish as IDs.
+function extractIkeaItemNumber(name) {
+  if (typeof name !== 'string') return null;
+  const match = name.match(/(?:article\s+)?(\d{3}[.\s]?\d{3}[.\s]?\d{2})\b/i);
+  return match ? match[1].replace(/[.\s]/g, '') : null;
 }
 
 function isValidDate(val) {
@@ -80,4 +92,4 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber };

@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Web receipt inbox**: added a phone-authenticated Firebase web interface for browsing, inspecting, correcting, and retrying receipt records without opening Firestore or Storage to the browser.
 
 ### Fixed
+- **IKEA article numbers**: clear eight-digit article numbers embedded in IKEA OCR item names now survive validation instead of being dropped.
 - **Receipt recovery messaging**: stale resolved failures no longer appear as urgent, and genuine failures now explain what happened in plain language.
 - **Receipt detail cleanup**: removed internal parser confidence metadata from the user-facing editor.
 - **Items view**: added a standalone searchable view of items captured from receipts.
