@@ -1,0 +1,177 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber, signOut } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import './styles.css';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+const isConfigured = Object.values(firebaseConfig).every(Boolean);
+const app = isConfigured ? (getApps().length ? getApp() : initializeApp(firebaseConfig)) : null;
+const auth = app ? getAuth(app) : null;
+const functions = app ? getFunctions(app) : null;
+const call = (name, data) => httpsCallable(functions, name)(data).then((result) => result.data);
+
+function formatMoney(value, currency = 'CAD') {
+  if (value == null) return '—';
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
+}
+
+function Login() {
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [confirmation, setConfirmation] = useState(null);
+  const [message, setMessage] = useState('');
+  const recaptcha = useRef(null);
+
+  useEffect(() => {
+    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'recaptcha', { size: 'invisible' });
+    return () => recaptcha.current?.clear();
+  }, []);
+
+  async function sendCode(event) {
+    event.preventDefault();
+    setMessage('Sending code…');
+    try {
+      setConfirmation(await signInWithPhoneNumber(auth, phone, recaptcha.current));
+      setMessage('Enter the six-digit code we texted you.');
+    } catch (error) {
+      setMessage(error.message || 'Could not send a code.');
+    }
+  }
+
+  async function verifyCode(event) {
+    event.preventDefault();
+    setMessage('Verifying…');
+    try {
+      await confirmation.confirm(code);
+    } catch (error) {
+      setMessage(error.message || 'That code did not work.');
+    }
+  }
+
+  return <main className="auth-card">
+    <p className="eyebrow">SLIP</p>
+    <h1>Your receipts, without the shoebox.</h1>
+    <p className="muted">Sign in with the phone number you use to text receipts to Slip.</p>
+    {!confirmation ? <form onSubmit={sendCode}>
+      <label>Phone number<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 416 555 1234" required /></label>
+      <button type="submit">Text me a code</button>
+    </form> : <form onSubmit={verifyCode}>
+      <label>Verification code<input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required /></label>
+      <button type="submit">Sign in</button>
+    </form>}
+    <div id="recaptcha" />
+    {message && <p className="status">{message}</p>}
+  </main>;
+}
+
+function SetupRequired() {
+  return <main className="auth-card"><p className="eyebrow">SLIP</p><h1>One small setup step.</h1><p className="muted">The web app is built, but Firebase configuration has not been provided for this environment. Add the values from <code>web/.env.example</code> as frontend environment variables, then reload.</p></main>;
+}
+
+function ReceiptRow({ receipt, onSelect }) {
+  return <button className="receipt-row" onClick={() => onSelect(receipt)}>
+    <span className="receipt-date">{receipt.date || 'No date'}</span>
+    <span className="receipt-name">{receipt.merchant || 'Unknown merchant'}<small>{receipt.category || 'Other'} · {receipt.items?.length || 0} items</small></span>
+    <strong className={receipt.type === 'refund' ? 'refund' : ''}>{formatMoney(receipt.total, receipt.currency)}</strong>
+  </button>;
+}
+
+function ReceiptDetail({ receipt, onClose, onSaved }) {
+  const [draft, setDraft] = useState({ ...receipt, items: receipt.items || [] });
+  const [images, setImages] = useState([]);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    call('getReceiptImageUrls', { id: receipt.id }).then(({ urls }) => setImages(urls)).catch(() => setStatus('The receipt image could not be loaded.'));
+  }, [receipt.id]);
+
+  const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
+  async function save(event) {
+    event.preventDefault();
+    setStatus('Saving…');
+    try {
+      const result = await call('updateReceipt', { id: receipt.id, patch: {
+        merchant: draft.merchant, location: draft.location, date: draft.date,
+        total: Number(draft.total), subtotal: Number(draft.subtotal), tax: Number(draft.tax),
+        category: draft.category, subCategory: draft.subCategory, items: draft.items,
+      } });
+      setStatus('Saved.');
+      onSaved(result);
+    } catch (error) { setStatus(error.message || 'Could not save.'); }
+  }
+
+  return <aside className="detail-panel">
+    <div className="detail-header"><div><p className="eyebrow">RECEIPT DETAIL</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div>
+    {images.length > 0 && <div className="image-strip">{images.map((url) => <img key={url} src={url} alt="Original receipt" />)}</div>}
+    <form onSubmit={save} className="detail-form">
+      <div className="field-grid">
+        <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
+        <label>Date<input type="date" value={draft.date || ''} onChange={(e) => update('date', e.target.value)} /></label>
+        <label>Total<input type="number" step="0.01" value={draft.total ?? ''} onChange={(e) => update('total', e.target.value)} /></label>
+        <label>Category<input value={draft.category || ''} onChange={(e) => update('category', e.target.value)} /></label>
+      </div>
+      <p className="meta">{receipt.confidence != null ? `Parser confidence: ${Math.round(receipt.confidence * 100)}%` : 'No confidence score'} · {receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p>
+      <h3>Items</h3>
+      <div className="items">{draft.items.map((item, index) => <div className="item-row" key={`${item.name}-${index}`}><input value={item.name} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} /><input type="number" step="0.01" value={item.price ?? ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, price: Number(e.target.value) } : current))} /></div>)}</div>
+      <div className="actions"><button type="submit">Save corrections</button><button type="button" className="secondary" onClick={() => setDraft({ ...receipt, items: receipt.items || [] })}>Reset</button></div>
+      {status && <p className="status">{status}</p>}
+    </form>
+  </aside>;
+}
+
+function Inbox({ user }) {
+  const [receipts, setReceipts] = useState([]);
+  const [failures, setFailures] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [result, failureResult] = await Promise.all([
+        call('listReceipts', { limit: 100 }),
+        call('listProcessingFailures', {}),
+      ]);
+      setReceipts(result.receipts || []);
+      setFailures((failureResult.failures || []).filter((failure) => failure.status !== 'recovered'));
+      setError('');
+    }
+    catch (err) { setError(err.message || 'Could not load receipts.'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, []);
+  const filtered = receipts.filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()));
+
+  return <main className="app-shell">
+    <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>Inbox</h1></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
+    {loading && <p className="empty">Loading your receipts…</p>}
+    {!loading && error && <p className="error">{error}</p>}
+    {!loading && !error && filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
+    {!loading && !error && failures.length > 0 && <section className="failures"><div><p className="eyebrow">NEEDS ATTENTION</p><h2>Receipts to retry</h2></div>{failures.map((failure) => <div className="failure-row" key={failure.id}><span><strong>{failure.createdAt?.toDate ? failure.createdAt.toDate().toLocaleDateString() : 'Unprocessed receipt'}</strong><small>{failure.error}</small></span><button onClick={async () => { try { await call('retryProcessing', { id: failure.id }); setFailures((all) => all.filter((item) => item.id !== failure.id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }}>Retry</button></div>)}</section>}
+    <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
+    {selected && <ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} />}
+  </main>;
+}
+
+function App() {
+  const [user, setUser] = useState(undefined);
+  useEffect(() => isConfigured ? onAuthStateChanged(auth, setUser) : undefined, []);
+  if (!isConfigured) return <SetupRequired />;
+  if (user === undefined) return <p className="loading">Loading Slip…</p>;
+  return user ? <Inbox user={user} /> : <Login />;
+}
+
+createRoot(document.getElementById('root')).render(<App />);

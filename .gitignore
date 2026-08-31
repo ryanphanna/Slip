@@ -8,6 +8,7 @@ firebase-debug *.log
 logs*.txt
 functions/logs*.txt
 functions/full_logs.txt
+web/dist/
 serviceAccountKey.json
 functions/serviceAccountKey.json
 TODO.md

@@ -1,4 +1,4 @@
-const { onRequest } = require('firebase-functions/v2/https');
+const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
@@ -25,6 +25,7 @@ const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
 const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
+const webApi = require('./lib/web-api');
 const config = require('./lib/config');
 
 const oops = () => config.ERROR_OPENERS[Math.floor(Math.random() * config.ERROR_OPENERS.length)];
@@ -499,3 +500,25 @@ exports.weeklyBudgetCheck = onSchedule(
     });
   }
 );
+
+// Browser API. Firestore and Storage remain server-only; every operation is
+// scoped to the verified phone number in the Firebase Auth token.
+function callable(handler) {
+  return onCall(async (request) => {
+    try {
+      return await handler(request);
+    } catch (error) {
+      const code = ['unauthenticated', 'not-found', 'invalid-argument', 'permission-denied'].includes(error.code)
+        ? error.code
+        : 'internal';
+      throw new HttpsError(code, error.message || 'Request failed');
+    }
+  });
+}
+
+exports.listReceipts = callable(webApi.listReceipts);
+exports.getReceipt = callable(webApi.getReceipt);
+exports.updateReceipt = callable(webApi.updateReceipt);
+exports.getReceiptImageUrls = callable(webApi.getReceiptImageUrls);
+exports.listProcessingFailures = callable(webApi.listProcessingFailures);
+exports.retryProcessing = callable(webApi.retryProcessing);

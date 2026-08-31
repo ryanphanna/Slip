@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Web receipt inbox**: added a phone-authenticated Firebase web interface for browsing, inspecting, correcting, and retrying receipt records without opening Firestore or Storage to the browser.
+
 ### Fixed
 - **Dependency security**: updated transitive `brace-expansion` and `js-yaml` dependencies to remove two high-severity audit findings.
 - **Failed receipt recovery**: failed image parses now keep a quarantined Firestore record and preserved image copy for later retry, without affecting spending totals.

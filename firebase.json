@@ -10,6 +10,10 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "hosting": {
+    "public": "web/dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  },
   "emulators": {
     "functions": { "port": 5001 },
     "firestore": { "port": 8080 },
