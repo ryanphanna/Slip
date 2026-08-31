@@ -32,6 +32,12 @@ function formatMoney(value, currency = 'CAD') {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
 }
 
+function formatFailureDate(createdAt, numMedia) {
+  const date = createdAt?.toDate?.() || (createdAt?.seconds ? new Date(createdAt.seconds * 1000) : null);
+  const source = numMedia > 0 ? 'photo receipt' : 'pasted receipt';
+  return `${date ? date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unprocessed'} · ${source}`;
+}
+
 function Login() {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
@@ -159,7 +165,7 @@ function Inbox({ user }) {
         call('listProcessingFailures', {}),
       ]);
       setReceipts(result.receipts || []);
-      setFailures((failureResult.failures || []).filter((failure) => failure.status !== 'recovered'));
+      setFailures(failureResult.failures || []);
       setError('');
     }
     catch (err) { setError(err.message || 'Could not load receipts.'); }
@@ -174,7 +180,7 @@ function Inbox({ user }) {
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
     {!loading && !error && filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
-    {!loading && !error && failures.length > 0 && <section className="failures"><div><p className="eyebrow">NEEDS ATTENTION</p><h2>Receipts to retry</h2></div>{failures.map((failure) => <div className="failure-row" key={failure.id}><span><strong>{failure.createdAt?.toDate ? failure.createdAt.toDate().toLocaleDateString() : 'Unprocessed receipt'}</strong><small>{failure.error}</small></span><button onClick={async () => { try { await call('retryProcessing', { id: failure.id }); setFailures((all) => all.filter((item) => item.id !== failure.id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }}>Retry</button></div>)}</section>}
+    {!loading && !error && failures.length > 0 && <section className="failures"><div><h2>Receipts Slip couldn’t read</h2><p className="muted">Retry them if you want to recover the data.</p></div>{failures.map((failure) => <div className="failure-row" key={failure.id}><span><strong>{formatFailureDate(failure.createdAt, failure.numMedia)}</strong><small>Slip couldn’t read this receipt.</small></span><button onClick={async () => { try { await call('retryProcessing', { id: failure.id }); setFailures((all) => all.filter((item) => item.id !== failure.id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }}>Retry</button></div>)}</section>}
     <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
     {selected && <ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} />}
   </main>;

@@ -30,7 +30,7 @@ button:hover { background: #803c22; }
 .toolbar input { background: transparent; border-radius: 0; border-width: 0 0 1px; padding-left: 0; }
 .count { color: #9a9286; font: .75rem 'DM Mono', monospace; white-space: nowrap; }
 .receipt-list { border-top: 1px solid #d9d0c2; }
-.failures { background: #f7e9d8; border-radius: 12px; margin: 2rem 0; padding: 1.25rem; }.failures h2 { margin-bottom: 1rem; }.failure-row { align-items: center; border-top: 1px solid #dec9ad; display: flex; gap: 1rem; justify-content: space-between; padding: .8rem 0; }.failure-row span { min-width: 0; }.failure-row small { color: #806d5a; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.failure-row button { flex: 0 0 auto; padding: .5rem .8rem; }
+.failures { background: #f7e9d8; border-radius: 12px; margin: 2rem 0; padding: 1.25rem; }.failures h2 { margin-bottom: .35rem; }.failures > div:first-child .muted { margin-bottom: 1rem; }.failure-row { align-items: center; border-top: 1px solid #dec9ad; display: flex; gap: 1rem; justify-content: space-between; padding: .8rem 0; }.failure-row span { min-width: 0; }.failure-row small { color: #806d5a; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.failure-row button { flex: 0 0 auto; padding: .5rem .8rem; }
 .receipt-row { align-items: center; background: transparent; border-bottom: 1px solid #d9d0c2; border-radius: 0; color: #25231f; display: grid; gap: 1rem; grid-template-columns: 110px 1fr auto; padding: 1.15rem .25rem; text-align: left; width: 100%; }
 .receipt-row:hover { background: #ebe5d9; }
 .receipt-date { color: #9a9286; font: .8rem 'DM Mono', monospace; }
