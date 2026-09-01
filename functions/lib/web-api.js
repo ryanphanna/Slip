@@ -262,7 +262,7 @@ async function importTargetReceipts(request) {
 
 async function listItems(request) {
   const { phone } = requireAuth(request);
-  const snapshot = await admin.firestore().collection('items').where('from', '==', phone).limit(100).get();
+  const snapshot = await admin.firestore().collection('items').where('from', '==', phone).limit(500).get();
   const items = snapshot.docs.map(serializeDoc);
   items.sort((a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0));
   return { items };
