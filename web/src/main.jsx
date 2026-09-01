@@ -179,6 +179,11 @@ function ItemsView({ receipts, catalogItems, onReceiptUpdated }) {
   const filtered = visibleItems.filter((item) => `${item.name} ${item.publicName || ''} ${item.category} ${item.merchant}`.toLowerCase().includes(search.toLowerCase()));
 
   async function verifyItem(item) {
+    if (item.id && !item.receiptId) {
+      await call('updateItem', { id: item.id, patch: { verified: true } });
+      onReceiptUpdated(null);
+      return;
+    }
     const receipt = receipts.find((candidate) => candidate.id === item.receiptId);
     if (!receipt) return;
     const updated = await call('updateReceipt', { id: receipt.id, patch: { items: receipt.items.map((current, index) => index === item.index ? { ...current, verified: true } : current) } });
@@ -236,7 +241,7 @@ function Inbox({ user }) {
     <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>{view === 'items' ? 'Items' : 'Inbox'}</h1><nav className="view-nav"><button className={view === 'receipts' ? 'active' : 'secondary'} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : 'secondary'} onClick={() => setView('items')}>Items</button></nav></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
-    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
+    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
     {!loading && !error && view === 'receipts' && <>
       <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}

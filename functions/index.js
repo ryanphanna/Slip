@@ -527,3 +527,4 @@ exports.getProcessingFailureImageUrls = callable(webApi.getProcessingFailureImag
 exports.retryProcessing = callable(webApi.retryProcessing);
 exports.importTargetReceipts = callable(webApi.importTargetReceipts);
 exports.listItems = callable(webApi.listItems);
+exports.updateItem = callable(webApi.updateItem);
