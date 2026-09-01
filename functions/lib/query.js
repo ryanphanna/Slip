@@ -92,8 +92,8 @@ async function getLastMonthStats(from) {
 
   const snapshot = await db.collection('receipts')
     .where('from', '==', from)
-    .where('createdAt', '>=', startOfLastMonth)
-    .where('createdAt', '<', startOfThisMonth)
+    .where('date', '>=', formatDate(startOfLastMonth))
+    .where('date', '<', formatDate(startOfThisMonth))
     .get();
 
   const docs = snapshot.docs.map(doc => doc.data());
@@ -101,6 +101,10 @@ async function getLastMonthStats(from) {
   const monthName = startOfLastMonth.toLocaleString('en-CA', { month: 'long' });
 
   return { total, categories, count: docs.length, month: monthName };
+}
+
+function formatDate(date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), '01'].join('-');
 }
 
 module.exports = { getMonthlyStats, getLastMonthStats, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
