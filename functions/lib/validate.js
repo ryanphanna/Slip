@@ -64,6 +64,8 @@ function validateReceipt(raw) {
             ...(typeof i.itemNumber === 'string' && i.itemNumber.trim()
               ? { itemNumber: i.itemNumber.trim() }
               : (merchant === 'IKEA' && extractIkeaItemNumber(i.name) ? { itemNumber: extractIkeaItemNumber(i.name) } : {})),
+            ...(typeof i.upc === 'string' && i.upc.trim() ? { upc: i.upc.trim() } : {}),
+            ...(typeof i.dpci === 'string' && i.dpci.trim() ? { dpci: i.dpci.trim() } : {}),
             ...(typeof i.productUrl === 'string' && i.productUrl.trim() ? { productUrl: i.productUrl.trim() } : {}),
             ...(typeof i.itemId === 'string' && i.itemId.trim() ? { itemId: i.itemId.trim() } : {}),
           }))

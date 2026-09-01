@@ -280,11 +280,13 @@ async function updateItem(request) {
     throw error;
   }
   const patch = request.data?.patch || {};
-  const allowed = ['publicName', 'name', 'itemNumber', 'productUrl', 'category', 'verified'];
+  const allowed = ['publicName', 'name', 'itemNumber', 'upc', 'dpci', 'productUrl', 'category', 'verified'];
   const clean = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
   if (typeof clean.publicName === 'string') clean.publicName = clean.publicName.trim();
   if (typeof clean.name === 'string') clean.name = clean.name.trim();
   if (typeof clean.itemNumber === 'string') clean.itemNumber = clean.itemNumber.trim();
+  if (typeof clean.upc === 'string') clean.upc = clean.upc.trim();
+  if (typeof clean.dpci === 'string') clean.dpci = clean.dpci.trim();
   if (typeof clean.productUrl === 'string') clean.productUrl = clean.productUrl.trim();
   await ref.set({ ...clean, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   return { id, ...snapshot.data(), ...clean };
