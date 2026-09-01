@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Target imports**: added an authenticated, duplicate-safe path for importing Target purchase history and maintaining canonical item records with receipt names, quantities, and source metadata.
+
 - **Older merchant searches**: searching for Target now loads matching receipts beyond the inbox’s first 100 records, making older online receipts auditable.
 ### Added
 - **Web receipt inbox**: added a phone-authenticated Firebase web interface for browsing, inspecting, correcting, and retrying receipt records without opening Firestore or Storage to the browser.

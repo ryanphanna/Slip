@@ -63,6 +63,7 @@ function validateReceipt(raw) {
               ? { itemNumber: i.itemNumber.trim() }
               : (merchant === 'IKEA' && extractIkeaItemNumber(i.name) ? { itemNumber: extractIkeaItemNumber(i.name) } : {})),
             ...(typeof i.productUrl === 'string' && i.productUrl.trim() ? { productUrl: i.productUrl.trim() } : {}),
+            ...(typeof i.itemId === 'string' && i.itemId.trim() ? { itemId: i.itemId.trim() } : {}),
           }))
       : [],
     currency: typeof raw.currency === 'string' ? raw.currency.toUpperCase() : 'CAD',

@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const crypto = require('node:crypto');
 const { validateReceipt } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
 
@@ -177,6 +178,89 @@ async function retryProcessing(request) {
   return { id: ref.id, ...receipt };
 }
 
+function canonicalItemId(phone, merchant, item) {
+  const identity = item.itemNumber || item.productUrl || item.publicName || item.name;
+  return crypto.createHash('sha256').update(`${phone}|${merchant}|${String(identity).trim().toLowerCase()}`).digest('hex').slice(0, 32);
+}
+
+async function importTargetReceipts(request) {
+  const { uid, phone } = requireAuth(request);
+  const records = request.data?.receipts;
+  if (!Array.isArray(records) || records.length === 0 || records.length > 100) {
+    const error = new Error('Provide between 1 and 100 Target receipts');
+    error.code = 'invalid-argument';
+    throw error;
+  }
+
+  const db = admin.firestore();
+  const imported = [];
+  const skipped = [];
+  for (const record of records) {
+    if (String(record.merchant || '').trim().toLowerCase() !== 'target' || !record.sourceOrderId) {
+      const error = new Error('Each import record must be a Target receipt with a sourceOrderId');
+      error.code = 'invalid-argument';
+      throw error;
+    }
+    const existing = await db.collection('receipts')
+      .where('from', '==', phone)
+      .where('sourceOrderId', '==', String(record.sourceOrderId))
+      .limit(1)
+      .get();
+    const receipt = validateReceipt({ ...record, merchant: 'Target' });
+    const itemWrites = [];
+    receipt.items = receipt.items.map((item) => {
+      const itemId = canonicalItemId(phone, 'target', item);
+      itemWrites.push(db.collection('items').doc(itemId).set({
+        ...item,
+        id: itemId,
+        merchant: 'Target',
+        merchantKey: 'target',
+        from: phone,
+        ownerUid: uid,
+        publicName: item.publicName || item.name,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }));
+      return { ...item, itemId };
+    });
+    await Promise.all(itemWrites);
+
+    const sourceFields = {
+      source: 'target',
+      sourceOrderId: String(record.sourceOrderId),
+      sourceOrderType: record.sourceOrderType === 'in-store' ? 'in-store' : 'online',
+      sourceUrl: typeof record.sourceUrl === 'string' ? record.sourceUrl : null,
+      sourceInvoiceUrl: typeof record.sourceInvoiceUrl === 'string' ? record.sourceInvoiceUrl : null,
+      audited: record.audited === true,
+      auditStatus: record.audited === true ? 'audited' : 'needs_review',
+    };
+    if (!existing.empty) {
+      await existing.docs[0].ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      skipped.push({ sourceOrderId: String(record.sourceOrderId), id: existing.docs[0].id, updated: true });
+      continue;
+    }
+
+    const legacy = receipt.date && receipt.total != null
+      ? await db.collection('receipts').where('from', '==', phone).where('merchantKey', '==', 'target').where('date', '==', receipt.date).where('total', '==', receipt.total).limit(1).get()
+      : { empty: true };
+    if (!legacy.empty) {
+      await legacy.docs[0].ref.set({ ...sourceFields, ...receipt, merchantKey: 'target', editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      skipped.push({ sourceOrderId: String(record.sourceOrderId), id: legacy.docs[0].id, updated: true });
+      continue;
+    }
+
+    const ref = db.collection('receipts').doc();
+    await ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', from: phone, ownerUid: uid, messageSid: null, imagePaths: [], createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    imported.push({ sourceOrderId: String(record.sourceOrderId), id: ref.id });
+  }
+  return { imported, skipped };
+}
+
+async function listItems(request) {
+  const { phone } = requireAuth(request);
+  const snapshot = await admin.firestore().collection('items').where('from', '==', phone).orderBy('updatedAt', 'desc').limit(100).get();
+  return { items: snapshot.docs.map(serializeDoc) };
+}
+
 module.exports = {
   EDITABLE_FIELDS,
   VISIBLE_FAILURE_STATUSES,
@@ -189,4 +273,6 @@ module.exports = {
   listProcessingFailures,
   getProcessingFailureImageUrls,
   retryProcessing,
+  importTargetReceipts,
+  listItems,
 };
