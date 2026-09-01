@@ -55,6 +55,8 @@ function validateReceipt(raw) {
           .map(i => ({
             name: i.name.trim(),
             price: signed(i.price),
+            ...(i.unitPrice != null ? { unitPrice: signed(i.unitPrice) } : {}),
+            ...(i.lineTotal != null ? { lineTotal: signed(i.lineTotal) } : {}),
             quantity: Number.isInteger(i.quantity) && i.quantity > 0 ? i.quantity : 1,
             category: VALID_CATEGORIES.includes(i.category) ? i.category : (VALID_CATEGORIES.includes(raw.category) ? raw.category : 'Other'),
             ...(i.verified === true ? { verified: true } : {}),

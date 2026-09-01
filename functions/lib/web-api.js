@@ -232,6 +232,11 @@ async function importTargetReceipts(request) {
       sourceInvoiceUrl: typeof record.sourceInvoiceUrl === 'string' ? record.sourceInvoiceUrl : null,
       audited: record.audited === true,
       auditStatus: record.audited === true ? 'audited' : 'needs_review',
+      sourceSubtotal: Number.isFinite(Number(record.sourceSubtotal)) ? Number(record.sourceSubtotal) : null,
+      sourceTax: Number.isFinite(Number(record.sourceTax)) ? Number(record.sourceTax) : null,
+      sourceDiscountTotal: Number.isFinite(Number(record.sourceDiscountTotal)) ? Number(record.sourceDiscountTotal) : null,
+      sourceTotal: Number.isFinite(Number(record.sourceTotal)) ? Number(record.sourceTotal) : null,
+      auditLineItemsTotal: receipt.items.reduce((sum, item) => sum + (item.lineTotal ?? item.price ?? 0), 0),
     };
     if (!existing.empty) {
       await existing.docs[0].ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -257,8 +262,32 @@ async function importTargetReceipts(request) {
 
 async function listItems(request) {
   const { phone } = requireAuth(request);
-  const snapshot = await admin.firestore().collection('items').where('from', '==', phone).orderBy('updatedAt', 'desc').limit(100).get();
-  return { items: snapshot.docs.map(serializeDoc) };
+  const snapshot = await admin.firestore().collection('items').where('from', '==', phone).limit(100).get();
+  const items = snapshot.docs.map(serializeDoc);
+  items.sort((a, b) => (b.updatedAt?.toMillis?.() || 0) - (a.updatedAt?.toMillis?.() || 0));
+  return { items };
+}
+
+async function updateItem(request) {
+  const { phone } = requireAuth(request);
+  const id = String(request.data?.id || '').trim();
+  if (!id) throw new Error('Item id is required');
+  const ref = admin.firestore().collection('items').doc(id);
+  const snapshot = await ref.get();
+  if (!snapshot.exists || snapshot.get('from') !== phone) {
+    const error = new Error('Item not found');
+    error.code = 'not-found';
+    throw error;
+  }
+  const patch = request.data?.patch || {};
+  const allowed = ['publicName', 'name', 'itemNumber', 'productUrl', 'category', 'verified'];
+  const clean = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
+  if (typeof clean.publicName === 'string') clean.publicName = clean.publicName.trim();
+  if (typeof clean.name === 'string') clean.name = clean.name.trim();
+  if (typeof clean.itemNumber === 'string') clean.itemNumber = clean.itemNumber.trim();
+  if (typeof clean.productUrl === 'string') clean.productUrl = clean.productUrl.trim();
+  await ref.set({ ...clean, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  return { id, ...snapshot.data(), ...clean };
 }
 
 module.exports = {
@@ -275,4 +304,5 @@ module.exports = {
   retryProcessing,
   importTargetReceipts,
   listItems,
+  updateItem,
 };
