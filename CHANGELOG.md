@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - **Target imports**: added an authenticated, duplicate-safe path for importing Target purchase history and maintaining canonical item records with receipt names, quantities, and source metadata.
 - **Target item review**: canonical Target items can now be approved directly from the Items view, with quantities and unit/line pricing preserved for audits.
+- **Target item identifiers**: receipt items now retain Target TCIN/item numbers, UPCs, and DPCIs when available for product-level verification.
 
 - **Older merchant searches**: searching for Target now loads matching receipts beyond the inbox’s first 100 records, making older online receipts auditable.
 ### Added
