@@ -528,3 +528,5 @@ exports.retryProcessing = callable(webApi.retryProcessing);
 exports.importTargetReceipts = callable(webApi.importTargetReceipts);
 exports.listItems = callable(webApi.listItems);
 exports.updateItem = callable(webApi.updateItem);
+exports.getSettings = callable(webApi.getUserSettings);
+exports.updateSettings = callable(webApi.updateUserSettings);

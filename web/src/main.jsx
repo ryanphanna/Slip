@@ -196,9 +196,29 @@ function ItemsView({ receipts, catalogItems, onReceiptUpdated }) {
   </section>;
 }
 
+function SettingsView({ settings, onDigestChange }) {
+  const [status, setStatus] = useState('');
+  async function toggle(event) {
+    setStatus('Saving…');
+    try {
+      await onDigestChange(event.target.checked);
+      setStatus('Saved.');
+    } catch (error) {
+      setStatus(error.message || 'Could not save settings.');
+    }
+  }
+  return <section className="settings-page">
+    <p className="eyebrow">SETTINGS</p>
+    <h2>Messages</h2>
+    <label className="setting-row"><span><strong>Monthly recap</strong><small>Get a text at the start of each month with your previous month’s spending.</small></span><input type="checkbox" checked={settings.monthlyDigestEnabled !== false} onChange={toggle} /></label>
+    {status && <p className="status">{status}</p>}
+  </section>;
+}
+
 function Inbox({ user }) {
   const [receipts, setReceipts] = useState([]);
   const [catalogItems, setCatalogItems] = useState([]);
+  const [settings, setSettings] = useState({ monthlyDigestEnabled: true });
   const [failures, setFailures] = useState([]);
   const [selected, setSelected] = useState(null);
   const [view, setView] = useState('receipts');
@@ -210,13 +230,15 @@ function Inbox({ user }) {
   async function load() {
     setLoading(true);
     try {
-      const [result, failureResult, itemResult] = await Promise.all([
+      const [result, failureResult, itemResult, settingsResult] = await Promise.all([
         call('listReceipts', { limit: 100 }),
         call('listProcessingFailures', {}),
         call('listItems', {}).catch(() => ({ items: [] })),
+        call('getSettings').catch(() => ({ monthlyDigestEnabled: true })),
       ]);
       setReceipts(result.receipts || []);
       setCatalogItems(itemResult.items || []);
+      setSettings(settingsResult);
       setFailures(failureResult.failures || []);
       setError('');
     }
@@ -238,10 +260,11 @@ function Inbox({ user }) {
   const filtered = receipts.filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()));
 
   return <main className="app-shell">
-    <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>{view === 'items' ? 'Items' : 'Inbox'}</h1><nav className="view-nav"><button className={view === 'receipts' ? 'active' : 'secondary'} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : 'secondary'} onClick={() => setView('items')}>Items</button></nav></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <header className="topbar"><div><p className="eyebrow">SLIP / RECEIPTS</p><h1>{view === 'items' ? 'Items' : view === 'settings' ? 'Settings' : 'Inbox'}</h1><nav className="view-nav"><button className={view === 'receipts' ? 'active' : 'secondary'} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : 'secondary'} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : 'secondary'} onClick={() => setView('settings')}>Settings</button></nav></div><div className="account"><span>{user.phoneNumber}</span><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
     {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
+    {!loading && !error && view === 'settings' && <SettingsView settings={settings} onDigestChange={async (monthlyDigestEnabled) => { const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } }); setSettings(updated); }} />}
     {!loading && !error && view === 'receipts' && <>
       <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
