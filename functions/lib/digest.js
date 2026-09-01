@@ -1,9 +1,12 @@
 const admin = require('firebase-admin');
 const { aggregateSpendingByCategory, getLastMonthStats } = require('./query');
 const { getAllBudgets } = require('./budget');
+const { getSettings } = require('./settings');
 const { sendSms } = require('./twilio');
 
 async function sendMonthlyDigest(from) {
+  const settings = await getSettings(from);
+  if (settings.monthlyDigestEnabled === false) return;
   const stats = await getLastMonthStats(from);
   if (stats.count === 0) return;
 

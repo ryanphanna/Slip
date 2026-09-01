@@ -2,6 +2,7 @@ const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const { validateReceipt } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
+const { getSettings, updateSettings } = require('./settings');
 
 const EDITABLE_FIELDS = new Set([
   'merchant', 'location', 'date', 'total', 'subtotal', 'tax', 'category',
@@ -292,6 +293,16 @@ async function updateItem(request) {
   return { id, ...snapshot.data(), ...clean };
 }
 
+async function getUserSettings(request) {
+  const { phone } = requireAuth(request);
+  return getSettings(phone);
+}
+
+async function updateUserSettings(request) {
+  const { phone } = requireAuth(request);
+  return updateSettings(phone, request.data?.patch);
+}
+
 module.exports = {
   EDITABLE_FIELDS,
   VISIBLE_FAILURE_STATUSES,
@@ -307,4 +318,6 @@ module.exports = {
   importTargetReceipts,
   listItems,
   updateItem,
+  getUserSettings,
+  updateUserSettings,
 };
