@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **App navigation**: simplified the header so page navigation and account actions no longer dominate the inbox.
 - **Receipt detail layout**: widened the detail panel and constrained its fields so imported receipts no longer clip horizontally.
 - **Phone sign-in recovery**: failed localhost reCAPTCHA attempts now reset cleanly so the next sign-in request can obtain a fresh credential.
 - **Monthly recap controls**: added a Settings toggle so users can turn recap texts off while existing users remain opted in.
