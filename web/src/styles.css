@@ -27,6 +27,7 @@ button:hover { background: #803c22; }
 .view-nav { display: flex; gap: 1.25rem; margin: 0; }.view-nav button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #777269; font-size: .9rem; font-weight: 600; padding: .35rem 0; }.view-nav button:hover { background: transparent; color: #25231f; }.view-nav .active { background: transparent; border-bottom-color: #9d4e2d; color: #25231f; }
 .account { align-items: center; display: flex; margin-left: auto; }.account button { font-size: .85rem; padding: .55rem .8rem; }
 .toolbar { align-items: center; display: flex; gap: 1rem; margin-bottom: .8rem; }
+.sort-control { align-items: center; display: flex; flex: 0 0 auto; flex-direction: row; gap: .5rem; white-space: nowrap; }.sort-control select { background: transparent; border: 1px solid #cfc5b4; border-radius: 9px; color: #625c51; padding: .55rem .7rem; }
 .toolbar input { background: transparent; border-radius: 0; border-width: 0 0 1px; padding-left: 0; }
 .count { color: #9a9286; font: .75rem 'DM Mono', monospace; white-space: nowrap; }
 .receipt-list { border-top: 1px solid #d9d0c2; }
