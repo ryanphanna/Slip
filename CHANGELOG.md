@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - **Processing history control**: removed the oversized button treatment from the inbox notice so it now matches the quiet inline action style.
 - **Processing history notice**: reduced the failed-receipt link to a quiet inline notice so it does not overpower the inbox.
 - **Brand hierarchy**: made Slip the primary site identity and reduced page labels to supporting navigation context.
+- **Header duplication**: removed the repeated page title so the header shows Slip branding and navigation only.
 - **Button styling**: unified action-button shapes across the inbox, processing history, settings, and receipt detail views.
 - **Receipt sorting**: added newest-first and oldest-first sorting to the inbox so receipts can be reviewed chronologically.
 - **App navigation**: simplified the header so page navigation and account actions no longer dominate the inbox.
