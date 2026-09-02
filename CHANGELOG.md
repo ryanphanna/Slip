@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Item filters**: matched the Verified and Needs review controls to the compact text-tab navigation style.
 - **Processing history control**: removed the oversized button treatment from the inbox notice so it now matches the quiet inline action style.
 - **Processing history notice**: reduced the failed-receipt link to a quiet inline notice so it does not overpower the inbox.
 - **Brand hierarchy**: made Slip the primary site identity and reduced page labels to supporting navigation context.
