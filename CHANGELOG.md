@@ -10,6 +10,8 @@ All notable changes to this project will be documented in this file.
 - **Brand hierarchy**: made Slip the primary site identity and reduced page labels to supporting navigation context.
 - **Header duplication**: removed the repeated page title so the header shows Slip branding and navigation only.
 - **Control styling**: matched account, sorting, and item-filter controls to the page-tab treatment for a consistent interface.
+- **Sort alignment**: aligned the sort label and dropdown text on the same baseline.
+- **Inbox controls**: moved search and processing history into compact header controls, with list counts below the results.
 - **Button styling**: unified action-button shapes across the inbox, processing history, settings, and receipt detail views.
 - **Receipt sorting**: added newest-first and oldest-first sorting to the inbox so receipts can be reviewed chronologically.
 - **App navigation**: simplified the header so page navigation and account actions no longer dominate the inbox.
