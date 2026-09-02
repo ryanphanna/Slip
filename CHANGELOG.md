@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - **End-user receipt view**: receipt details now open as a readable summary with editing behind an explicit Edit action.
 - **Receipt summary facts**: the read-only view now includes subtotal, tax, total, and item count.
+- **Receipt detail width**: narrowed the read-only detail panel so it feels lighter while preserving the side-by-side layout.
 - **Item name display**: identical public and receipt names no longer appear twice.
 - **Item metadata display**: blank item fields no longer create empty separators.
 - **Receipt pagination**: the inbox loads 20 receipts at a time and provides Load more for older records.
