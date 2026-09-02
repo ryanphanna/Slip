@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **End-user receipt view**: receipt details now open as a readable summary with editing behind an explicit Edit action.
+- **Item name display**: identical public and receipt names no longer appear twice.
 - **Receipt pagination**: the inbox loads 20 receipts at a time and provides Load more for older records.
 - **Item filters**: matched the Verified and Needs review controls to the compact text-tab navigation style.
 - **Processing history control**: removed the oversized button treatment from the inbox notice so it now matches the quiet inline action style.
