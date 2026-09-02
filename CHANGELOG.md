@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Brand hierarchy**: made Slip the primary site identity and reduced page labels to supporting navigation context.
 - **Button styling**: unified action-button shapes across the inbox, processing history, settings, and receipt detail views.
 - **Receipt sorting**: added newest-first and oldest-first sorting to the inbox so receipts can be reviewed chronologically.
 - **App navigation**: simplified the header so page navigation and account actions no longer dominate the inbox.

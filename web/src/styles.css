@@ -23,7 +23,7 @@ button:hover { background: #803c22; }
 .secondary:hover { background: #eee8dc; color: #25231f; }
 .status { font-size: .9rem; margin: 0; }
 .app-shell { margin: 0 auto; max-width: 980px; padding: 3rem 1.25rem 5rem; }
-.topbar { align-items: center; display: flex; gap: 2.5rem; margin-bottom: 2.5rem; }.topbar-brand { align-items: baseline; display: flex; gap: .9rem; }.topbar h1 { font-size: 2.35rem; letter-spacing: -.06em; margin: 0; }.topbar .eyebrow { margin: 0; }
+.topbar { align-items: center; display: flex; gap: 2.5rem; margin-bottom: 2.5rem; }.topbar-brand { align-items: baseline; display: flex; gap: .9rem; }.topbar h1 { color: #777269; font-size: 1rem; font-weight: 600; letter-spacing: .01em; margin: 0; }.topbar .eyebrow { font-size: 1.15rem; letter-spacing: .18em; margin: 0; }
 .view-nav { display: flex; gap: 1.25rem; margin: 0; }.view-nav button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: #777269; font-size: .9rem; font-weight: 600; padding: .35rem 0; }.view-nav button:hover { background: transparent; color: #25231f; }.view-nav .active { background: transparent; border-bottom-color: #9d4e2d; color: #25231f; }
 .account { align-items: center; display: flex; margin-left: auto; }.account button { font-size: .85rem; padding: .55rem .8rem; }
 .toolbar { align-items: center; display: flex; gap: 1rem; margin-bottom: .8rem; }
