@@ -49,8 +49,8 @@ describe('receipt queries', () => {
       categories: { Grocery: 12 },
       count: 1,
       month: 'August',
+      monthKey: '2026-08',
     });
-    expect(mockWhere).toHaveBeenCalledWith('date', '>=', '2026-08-01');
-    expect(mockWhere).toHaveBeenCalledWith('date', '<', '2026-09-01');
+    expect(mockWhere).toHaveBeenCalledWith('from', '==', '+14165551234');
   });
 });

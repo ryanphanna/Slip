@@ -133,6 +133,16 @@ async function listProcessingFailures(request) {
   return { failures };
 }
 
+async function listNotifications(request) {
+  const { phone } = requireAuth(request);
+  const snapshot = await admin.firestore().collection('notifications')
+    .where('from', '==', phone)
+    .orderBy('createdAt', 'desc')
+    .limit(50)
+    .get();
+  return { notifications: snapshot.docs.map(serializeDoc) };
+}
+
 async function getProcessingFailureImageUrls(request) {
   const { phone } = requireAuth(request);
   const id = String(request.data?.id || '');
@@ -317,6 +327,7 @@ module.exports = {
   updateReceipt,
   getReceiptImageUrls,
   listProcessingFailures,
+  listNotifications,
   getProcessingFailureImageUrls,
   retryProcessing,
   importTargetReceipts,

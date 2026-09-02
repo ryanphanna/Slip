@@ -90,17 +90,14 @@ async function getLastMonthStats(from) {
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const snapshot = await db.collection('receipts')
-    .where('from', '==', from)
-    .where('date', '>=', formatDate(startOfLastMonth))
-    .where('date', '<', formatDate(startOfThisMonth))
-    .get();
-
-  const docs = snapshot.docs.map(doc => doc.data());
+  const snapshot = await db.collection('receipts').where('from', '==', from).get();
+  const startDate = formatDate(startOfLastMonth);
+  const endDate = formatDate(startOfThisMonth);
+  const docs = snapshot.docs.map(doc => doc.data()).filter((doc) => doc.date >= startDate && doc.date < endDate);
   const { total, categories } = aggregateSpendingByCategory(docs);
   const monthName = startOfLastMonth.toLocaleString('en-CA', { month: 'long' });
 
-  return { total, categories, count: docs.length, month: monthName };
+  return { total, categories, count: docs.length, month: monthName, monthKey: formatDate(startOfLastMonth).slice(0, 7) };
 }
 
 function formatDate(date) {
