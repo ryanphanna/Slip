@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Phone sign-in recovery**: failed localhost reCAPTCHA attempts now reset cleanly so the next sign-in request can obtain a fresh credential.
 - **Monthly recap controls**: added a Settings toggle so users can turn recap texts off while existing users remain opted in.
 - **Monthly recap accuracy**: recaps now count receipts by purchase date instead of submission time, so late-entered purchases are assigned to the month they happened.
 - **Target imports**: added an authenticated, duplicate-safe path for importing Target purchase history and maintaining canonical item records with receipt names, quantities, and source metadata.

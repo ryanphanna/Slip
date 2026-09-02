@@ -56,9 +56,17 @@ function Login() {
   const [message, setMessage] = useState('');
   const recaptcha = useRef(null);
 
-  useEffect(() => {
+  function createRecaptcha() {
     if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'recaptcha', { size: 'invisible' });
-    return () => recaptcha.current?.clear();
+    return recaptcha.current;
+  }
+
+  useEffect(() => {
+    createRecaptcha();
+    return () => {
+      recaptcha.current?.clear();
+      recaptcha.current = null;
+    };
   }, []);
 
   async function sendCode(event) {
@@ -70,9 +78,11 @@ function Login() {
     }
     setMessage('Sending code…');
     try {
-      setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, recaptcha.current));
+      setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, createRecaptcha()));
       setMessage('Enter the six-digit code we texted you.');
     } catch (error) {
+      recaptcha.current?.clear();
+      recaptcha.current = null;
       setMessage(error.message || 'Could not send a code.');
     }
   }
@@ -145,7 +155,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
   return <aside className="detail-panel">
     <div className="detail-header"><div><p className="eyebrow">RECEIPT DETAIL</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div>
     <div className="detail-body">
-      <div className="detail-media">{images.length > 0 ? <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div> : <p className="muted">Receipt image unavailable.</p>}</div>
+      <div className="detail-media">{images.length > 0 ? <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div> : <p className="muted">{receipt.source === 'target' ? 'Target purchase-history imports do not include the original receipt image.' : 'Receipt image unavailable.'}</p>}</div>
       <form onSubmit={save} className="detail-form">
       <div className="field-grid">
         <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
