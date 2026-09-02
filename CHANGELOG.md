@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 - **Monthly notifications**: monthly recap texts are now saved as web notifications and the existing August recap has been backfilled.
 - **Notifications page**: processing alerts and monthly summaries now appear together on the Notifications page.
+- **Notification grouping**: processing failures now appear as one notification with optional receipt details.
+- **Notification page header**: removed redundant breadcrumb text from the Notifications page.
 - **End-user receipt view**: receipt details now open as a readable summary with editing behind an explicit Edit action.
 - **Receipt summary facts**: the read-only view now includes subtotal, tax, total, and item count.
 - **Receipt detail width**: narrowed the read-only detail panel so it feels lighter while preserving the side-by-side layout.
