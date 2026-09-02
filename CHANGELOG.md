@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Sort alignment**: aligned the sort label and dropdown text on the same baseline.
 - **Inbox controls**: moved search and processing history into compact header controls, with list counts below the results.
 - **Notifications**: renamed the inbox alert control so it can also contain monthly summaries in the future.
+- **Settings redesign**: reorganized notification preferences into a clearer, more compact section with a proper toggle.
 - **Button styling**: unified action-button shapes across the inbox, processing history, settings, and receipt detail views.
 - **Receipt sorting**: added newest-first and oldest-first sorting to the inbox so receipts can be reviewed chronologically.
 - **App navigation**: simplified the header so page navigation and account actions no longer dominate the inbox.
