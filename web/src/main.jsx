@@ -177,7 +177,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
   return <aside className="detail-panel">
     <div className="detail-header"><div><p className="eyebrow">RECEIPT</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><div className="detail-actions"><button className="edit-button" onClick={() => setEditing((value) => !value)}>{editing ? 'Done' : 'Edit'}</button><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
     <div className="detail-body">
-      <div className="detail-media">{images.length > 0 ? <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div> : <p className="muted">Original receipt image not available.</p>}</div>
+      <div className="detail-media">{images.length > 0 && <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div>}</div>
       {editing ? <form onSubmit={save} className="detail-form">
       <div className="field-grid">
         <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
@@ -269,6 +269,12 @@ function Inbox({ user }) {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
+  const [showFilters, setShowFilters] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -300,6 +306,11 @@ function Inbox({ user }) {
   useEffect(() => { load(); }, []);
   const filtered = [...receipts]
     .filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
+    .filter((receipt) => !categoryFilter || receipt.category === categoryFilter)
+    .filter((receipt) => !startDate || (receipt.date || '') >= startDate)
+    .filter((receipt) => !endDate || (receipt.date || '') <= endDate)
+    .filter((receipt) => minAmount === '' || Number(receipt.total) >= Number(minAmount))
+    .filter((receipt) => maxAmount === '' || Number(receipt.total) <= Number(maxAmount))
     .sort((a, b) => {
       const aDate = a.date || '';
       const bDate = b.date || '';
@@ -317,7 +328,8 @@ function Inbox({ user }) {
     {!loading && !error && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />}
     {!loading && !error && view === 'settings' && <SettingsView settings={settings} onDigestChange={async (monthlyDigestEnabled) => { const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } }); setSettings(updated); }} />}
     {!loading && !error && view === 'receipts' && <>
-      <section className="toolbar"><label className="sort-control">Sort<select aria-label="Sort receipts" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></section>
+      <section className="toolbar"><label className="sort-control">Sort<select aria-label="Sort receipts" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label><button className="toolbar-link" onClick={() => setShowFilters((visible) => !visible)}>{showFilters ? 'Hide filters' : 'Filter receipts'}</button></section>
+      {showFilters && <section className="receipt-filters"><label>Category<select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">All categories</option>{[...new Set(receipts.map((receipt) => receipt.category).filter(Boolean))].sort().map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label>From<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label><label>To<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label><label>Minimum<input inputMode="decimal" type="number" min="0" step="0.01" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="$0" /></label><label>Maximum<input inputMode="decimal" type="number" min="0" step="0.01" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Any amount" /></label><button className="clear-filters" onClick={() => { setCategoryFilter(''); setStartDate(''); setEndDate(''); setMinAmount(''); setMaxAmount(''); }}>Clear</button></section>}
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
       <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div><div className="list-footer"><span className="count">{filtered.length} receipts loaded</span>{hasMore && <button className="load-more" disabled={loadingMore} onClick={() => load({ append: true, cursor: nextCursor })}>{loadingMore ? 'Loading…' : 'Load more'}</button>}</div>
     </>}
