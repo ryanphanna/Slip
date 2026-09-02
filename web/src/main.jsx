@@ -167,7 +167,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
       const result = await call('updateReceipt', { id: receipt.id, patch: {
         merchant: draft.merchant, location: draft.location, date: draft.date,
         total: Number(draft.total), subtotal: Number(draft.subtotal), tax: Number(draft.tax),
-        category: draft.category, subCategory: draft.subCategory, items: draft.items,
+        category: draft.category, subCategory: draft.subCategory, currency: draft.currency, items: draft.items,
       } });
       setStatus('Saved.');
       onSaved(result);
@@ -183,6 +183,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
         <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
         <label>Date<input type="date" value={draft.date || ''} onChange={(e) => update('date', e.target.value)} /></label>
         <label>Total<input type="number" step="0.01" value={draft.total ?? ''} onChange={(e) => update('total', e.target.value)} /></label>
+        <label>Currency<input value={draft.currency || ''} onChange={(e) => update('currency', e.target.value.toUpperCase())} placeholder="CAD" /></label>
         <label>Category<input value={draft.category || ''} onChange={(e) => update('category', e.target.value)} /></label>
       </div>
       <p className="meta">{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p>
