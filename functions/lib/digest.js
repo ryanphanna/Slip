@@ -10,13 +10,30 @@ async function sendMonthlyDigest(from) {
   const stats = await getLastMonthStats(from);
   if (stats.count === 0) return;
 
+  const db = admin.firestore();
+  const notificationRef = db.collection('notifications').doc(`${from.replace(/\D/g, '')}_${stats.monthKey}`);
+  if ((await notificationRef.get()).exists) return;
+
   const breakdown = Object.entries(stats.categories)
     .sort((a, b) => b[1] - a[1])
     .map(([cat, amt]) => `${cat}: $${amt.toFixed(2)}`)
     .join('\n');
 
   const receiptWord = stats.count === 1 ? 'receipt' : 'receipts';
-  await sendSms(from, `${stats.month} recap: $${stats.total.toFixed(2)} across ${stats.count} ${receiptWord}\n\n${breakdown}`);
+  const message = `${stats.month} recap: $${stats.total.toFixed(2)} across ${stats.count} ${receiptWord}\n\n${breakdown}`;
+  await sendSms(from, message);
+  await notificationRef.set({
+    from,
+    type: 'monthlyDigest',
+    title: `${stats.month} recap`,
+    month: stats.month,
+    monthKey: stats.monthKey,
+    total: stats.total,
+    count: stats.count,
+    categories: stats.categories,
+    message,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
 }
 
 async function sendWeeklyBudgetCheck(from) {

@@ -233,18 +233,21 @@ function SettingsView({ settings, onDigestChange }) {
   </section>;
 }
 
-function NotificationsView({ failures, onRetry }) {
+function NotificationsView({ failures, notifications, onRetry }) {
   return <section className="notifications-page">
     <p className="eyebrow">SLIP / NOTIFICATIONS</p>
     <h2>Notifications</h2>
     <p className="page-intro">Updates and things that need your attention.</p>
-    {failures.length > 0 ? <section className="failures"><div><h3>Processing history</h3><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</section> : <div className="empty notification-empty"><h3>You're all caught up.</h3><p>Monthly summaries and other updates will appear here.</p></div>}
+    {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">MONTHLY SUMMARY</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong></div><div className="notification-breakdown">{Object.entries(notification.categories || {}).sort((a, b) => b[1] - a[1]).map(([category, amount]) => <div key={category}><span>{category}</span><strong>{formatMoney(amount)}</strong></div>)}</div></article>)}
+    {failures.length > 0 && <section className="failures"><div><h3>Processing history</h3><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</section>}
+    {notifications.length === 0 && failures.length === 0 && <div className="empty notification-empty"><h3>You're all caught up.</h3><p>Monthly summaries and other updates will appear here.</p></div>}
   </section>;
 }
 
 function Inbox({ user }) {
   const [receipts, setReceipts] = useState([]);
   const [catalogItems, setCatalogItems] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [settings, setSettings] = useState({ monthlyDigestEnabled: true });
   const [failures, setFailures] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -261,17 +264,19 @@ function Inbox({ user }) {
   async function load({ append = false, cursor = null } = {}) {
     if (append) setLoadingMore(true); else setLoading(true);
     try {
-      const [result, failureResult, itemResult, settingsResult] = await Promise.all([
+      const [result, failureResult, itemResult, settingsResult, notificationResult] = await Promise.all([
         call('listReceipts', { limit: 20, ...(cursor ? { cursor } : {}) }),
         call('listProcessingFailures', {}),
         call('listItems', {}).catch(() => ({ items: [] })),
         call('getSettings').catch(() => ({ monthlyDigestEnabled: true })),
+        call('listNotifications').catch(() => ({ notifications: [] })),
       ]);
       setReceipts((current) => append ? [...current, ...(result.receipts || [])] : (result.receipts || []));
       setNextCursor(result.nextCursor || null);
       setHasMore(result.hasMore === true);
       setCatalogItems(itemResult.items || []);
       setSettings(settingsResult);
+      setNotifications(notificationResult.notifications || []);
       setFailures(failureResult.failures || []);
       setError('');
     }
@@ -291,11 +296,11 @@ function Inbox({ user }) {
     });
 
   return <main className="app-shell">
-    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">SLIP</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{failures.length > 0 && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">SLIP</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{(failures.length > 0 || notifications.length > 0) && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length + notifications.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
     {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
-    {!loading && !error && view === 'notifications' && <NotificationsView failures={failures} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />}
+    {!loading && !error && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />}
     {!loading && !error && view === 'settings' && <SettingsView settings={settings} onDigestChange={async (monthlyDigestEnabled) => { const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } }); setSettings(updated); }} />}
     {!loading && !error && view === 'receipts' && <>
       <section className="toolbar"><label className="sort-control">Sort<select aria-label="Sort receipts" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></section>
