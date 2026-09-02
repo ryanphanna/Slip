@@ -280,7 +280,7 @@ function Inbox({ user }) {
     });
 
   return <main className="app-shell">
-    <header className="topbar"><div className="topbar-brand"><p className="eyebrow">SLIP</p><h1>{view === 'items' ? 'Items' : view === 'settings' ? 'Settings' : 'Inbox'}</h1></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="account"><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <header className="topbar"><div className="topbar-brand"><p className="eyebrow">SLIP</p></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="account"><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
     {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
