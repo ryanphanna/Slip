@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - **Receipt detail width**: tightened the panel further so the read-only view stays focused.
 - **Receipt date display**: formatted purchase dates for people instead of exposing ISO date strings.
 - **Receipt detail hierarchy**: separated the summary and totals into clearer, less cramped layouts around the item list.
+- **Slip home link**: clicking the Slip word now returns to the Receipts home view.
 - **Item name display**: identical public and receipt names no longer appear twice.
 - **Item metadata display**: blank item fields no longer create empty separators.
 - **Receipt pagination**: the inbox loads 20 receipts at a time and provides Load more for older records.
