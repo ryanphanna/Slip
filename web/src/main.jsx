@@ -234,12 +234,12 @@ function SettingsView({ settings, onDigestChange }) {
 }
 
 function NotificationsView({ failures, notifications, onRetry }) {
+  const [showFailures, setShowFailures] = useState(false);
   return <section className="notifications-page">
-    <p className="eyebrow">SLIP / NOTIFICATIONS</p>
     <h2>Notifications</h2>
     <p className="page-intro">Updates and things that need your attention.</p>
     {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">MONTHLY SUMMARY</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong></div><div className="notification-breakdown">{Object.entries(notification.categories || {}).sort((a, b) => b[1] - a[1]).map(([category, amount]) => <div key={category}><span>{category}</span><strong>{formatMoney(amount)}</strong></div>)}</div></article>)}
-    {failures.length > 0 && <section className="failures"><div><h3>Processing history</h3><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</section>}
+    {failures.length > 0 && <section className="failures"><div className="failure-summary"><span><h3>Processing history</h3><p className="muted">{failures.length} {failures.length === 1 ? 'receipt needs' : 'receipts need'} processing.</p></span><button onClick={() => setShowFailures((visible) => !visible)}>{showFailures ? 'Hide receipts' : 'Review receipts'}</button></div>{showFailures && <div className="failure-list"><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</div>}</section>}
     {notifications.length === 0 && failures.length === 0 && <div className="empty notification-empty"><h3>You're all caught up.</h3><p>Monthly summaries and other updates will appear here.</p></div>}
   </section>;
 }
