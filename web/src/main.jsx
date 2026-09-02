@@ -220,8 +220,8 @@ function SettingsView({ settings, onDigestChange }) {
   }
   return <section className="settings-page">
     <p className="eyebrow">SETTINGS</p>
-    <h2>Messages</h2>
-    <label className="setting-row"><span><strong>Monthly recap</strong><small>Get a text at the start of each month with your previous month’s spending.</small></span><input type="checkbox" checked={settings.monthlyDigestEnabled !== false} onChange={toggle} /></label>
+    <div className="settings-intro"><h2>Notifications</h2><p>Choose which updates Slip sends you.</p></div>
+    <div className="settings-section"><label className="setting-row"><span><strong>Monthly recap</strong><small>Get a text at the start of each month with your previous month’s spending.</small></span><input className="setting-toggle" type="checkbox" checked={settings.monthlyDigestEnabled !== false} onChange={toggle} /></label></div>
     {status && <p className="status">{status}</p>}
   </section>;
 }
