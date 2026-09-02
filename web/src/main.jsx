@@ -32,7 +32,6 @@ function formatMoney(value, currency = 'CAD') {
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
 }
 
-const searchableMerchants = new Set(['target']);
 
 function formatFailureDate(createdAt, numMedia) {
   const seconds = createdAt?.seconds ?? createdAt?._seconds;
@@ -127,12 +126,14 @@ function ReceiptRow({ receipt, onSelect }) {
 
 function ReceiptDetail({ receipt, onClose, onSaved }) {
   const [draft, setDraft] = useState({ ...receipt, items: receipt.items || [] });
+  const [editing, setEditing] = useState(false);
   const [images, setImages] = useState([]);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [status, setStatus] = useState('');
 
   useEffect(() => {
     setDraft({ ...receipt, items: receipt.items || [] });
+    setEditing(false);
     setStatus('');
     call('getReceiptImageUrls', { id: receipt.id }).then(({ urls }) => setImages(urls)).catch(() => setStatus('The receipt image could not be loaded.'));
   }, [receipt.id]);
@@ -153,10 +154,10 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
   }
 
   return <aside className="detail-panel">
-    <div className="detail-header"><div><p className="eyebrow">RECEIPT DETAIL</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div>
+    <div className="detail-header"><div><p className="eyebrow">RECEIPT</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><div className="detail-actions"><button className="edit-button" onClick={() => setEditing((value) => !value)}>{editing ? 'Done' : 'Edit'}</button><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
     <div className="detail-body">
       <div className="detail-media">{images.length > 0 ? <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div> : <p className="muted">{receipt.source === 'target' ? 'Target purchase-history imports do not include the original receipt image.' : 'Receipt image unavailable.'}</p>}</div>
-      <form onSubmit={save} className="detail-form">
+      {editing ? <form onSubmit={save} className="detail-form">
       <div className="field-grid">
         <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
         <label>Date<input type="date" value={draft.date || ''} onChange={(e) => update('date', e.target.value)} /></label>
@@ -168,7 +169,7 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
       <div className="items">{draft.items.map((item, index) => <div className="item-entry" key={`${item.name}-${index}`}><div className="item-row"><input value={item.name} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} /><input aria-label={`Quantity for ${item.name}`} type="number" min="1" step="1" value={item.quantity ?? 1} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, quantity: Number(e.target.value) } : current))} /><input aria-label={`Price for ${item.name}`} type="number" step="0.01" value={item.price ?? ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, price: Number(e.target.value) } : current))} /></div><div className="item-metadata"><input aria-label={`Public name for ${item.name}`} placeholder="Public name" value={item.publicName || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, publicName: e.target.value } : current))} /><input aria-label={`Item number for ${item.name}`} placeholder="TCIN / item number" value={item.itemNumber || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, itemNumber: e.target.value } : current))} /><input aria-label={`UPC for ${item.name}`} placeholder="UPC" value={item.upc || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, upc: e.target.value } : current))} /><input aria-label={`DPCI for ${item.name}`} placeholder="DPCI" value={item.dpci || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, dpci: e.target.value } : current))} /><input aria-label={`Product URL for ${item.name}`} placeholder="Product URL" value={item.productUrl || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, productUrl: e.target.value } : current))} /><label className="item-verified"><input aria-label={`Verified ${item.name}`} type="checkbox" checked={item.verified === true} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, verified: e.target.checked } : current))} /> Verified</label></div></div>)}</div>
       <div className="actions"><button type="submit">Save corrections</button><button type="button" className="secondary" onClick={() => setDraft({ ...receipt, items: receipt.items || [] })}>Reset</button></div>
       {status && <p className="status">{status}</p>}
-      </form>
+      </form> : <div className="detail-form read-only-detail"><div className="summary-grid"><div><small>Purchased</small><strong>{receipt.date || 'No date'}</strong></div><div><small>Category</small><strong>{receipt.category || 'Other'}</strong></div><div><small>Total</small><strong>{formatMoney(receipt.total, receipt.currency)}</strong></div></div><p className="meta">{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p><h3>Items</h3><div className="read-only-items">{(receipt.items || []).map((item, index) => <div className="read-only-item" key={`${item.name}-${index}`}><span><strong>{item.publicName || item.name || 'Unnamed item'}</strong>{item.publicName && <small>{item.name}</small>}</span><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price, receipt.currency)}</strong></div>)}</div></div>}
     </div>
     {zoomedImage && <div className="image-modal" role="dialog" aria-label="Expanded receipt image" onClick={() => setZoomedImage(null)}><button className="image-modal-close" aria-label="Close expanded image" onClick={() => setZoomedImage(null)}>×</button><img src={zoomedImage} alt="Expanded original receipt" onClick={(event) => event.stopPropagation()} /></div>}
   </aside>;
@@ -236,39 +237,33 @@ function Inbox({ user }) {
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function load() {
-    setLoading(true);
+  async function load({ append = false, cursor = null } = {}) {
+    if (append) setLoadingMore(true); else setLoading(true);
     try {
       const [result, failureResult, itemResult, settingsResult] = await Promise.all([
-        call('listReceipts', { limit: 100 }),
+        call('listReceipts', { limit: 20, ...(cursor ? { cursor } : {}) }),
         call('listProcessingFailures', {}),
         call('listItems', {}).catch(() => ({ items: [] })),
         call('getSettings').catch(() => ({ monthlyDigestEnabled: true })),
       ]);
-      setReceipts(result.receipts || []);
+      setReceipts((current) => append ? [...current, ...(result.receipts || [])] : (result.receipts || []));
+      setNextCursor(result.nextCursor || null);
+      setHasMore(result.hasMore === true);
       setCatalogItems(itemResult.items || []);
       setSettings(settingsResult);
       setFailures(failureResult.failures || []);
       setError('');
     }
     catch (err) { setError(err.message || 'Could not load receipts.'); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLoadingMore(false); }
   }
   useEffect(() => { load(); }, []);
-  const merchantSearch = search.trim().toLowerCase();
-  useEffect(() => {
-    if (!searchableMerchants.has(merchantSearch)) return;
-    call('listReceipts', { limit: 100, merchant: merchantSearch })
-      .then((result) => setReceipts((all) => {
-        const byId = new Map(all.map((receipt) => [receipt.id, receipt]));
-        (result.receipts || []).forEach((receipt) => byId.set(receipt.id, receipt));
-        return [...byId.values()];
-      }))
-      .catch((err) => setError(err.message || 'Could not load matching receipts.'));
-  }, [merchantSearch]);
   const filtered = [...receipts]
     .filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -290,7 +285,7 @@ function Inbox({ user }) {
       <section className="toolbar"><label className="sort-control">Sort<select aria-label="Sort receipts" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></section>
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
       {failures.length > 0 && showFailureHistory && <section className="failures"><div><h2>Processing history</h2><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />)}</section>}
-      <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div><div className="list-footer"><span className="count">{filtered.length} receipts</span></div>
+      <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div><div className="list-footer"><span className="count">{filtered.length} receipts loaded</span>{hasMore && <button className="load-more" disabled={loadingMore} onClick={() => load({ append: true, cursor: nextCursor })}>{loadingMore ? 'Loading…' : 'Load more'}</button>}</div>
     </>}
     {selected && <><div className="detail-backdrop" onClick={() => setSelected(null)} /><ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} /></>}
   </main>;

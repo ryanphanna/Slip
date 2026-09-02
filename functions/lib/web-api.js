@@ -49,7 +49,9 @@ async function listReceipts(request) {
   const db = admin.firestore();
   const options = request.data || {};
   const limit = Math.min(Math.max(Number(options.limit) || 25, 1), 100);
-  let query = receiptQuery(db, uid, phone).limit(limit + 1);
+  let query = receiptQuery(db, uid, phone);
+  if (options.cursor) query = query.startAfter(admin.firestore.Timestamp.fromMillis(Number(options.cursor)));
+  query = query.limit(limit + 1);
 
   if (options.category) query = query.where('category', '==', String(options.category));
   if (options.merchant) query = query.where('merchantKey', '==', String(options.merchant).trim().toLowerCase());
@@ -58,9 +60,11 @@ async function listReceipts(request) {
 
   const snapshot = await query.get();
   const docs = snapshot.docs.slice(0, limit);
+  const lastCreatedAt = docs.at(-1)?.get('createdAt');
   return {
     receipts: docs.map(serializeDoc),
     hasMore: snapshot.docs.length > limit,
+    nextCursor: lastCreatedAt?.toMillis?.() || null,
     accountUid: uid,
   };
 }
