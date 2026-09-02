@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Button styling**: unified action-button shapes across the inbox, processing history, settings, and receipt detail views.
 - **Receipt sorting**: added newest-first and oldest-first sorting to the inbox so receipts can be reviewed chronologically.
 - **App navigation**: simplified the header so page navigation and account actions no longer dominate the inbox.
 - **Receipt detail layout**: widened the detail panel and constrained its fields so imported receipts no longer clip horizontally.
