@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 - **Receipt summary facts**: the read-only view now includes subtotal, tax, total, and item count.
 - **Receipt detail width**: narrowed the read-only detail panel so it feels lighter while preserving the side-by-side layout.
 - **Receipt item spacing**: removed the divider after every read-only item so the detail view feels less like a data table.
+- **Receipt detail dividers**: removed the remaining summary and totals rules so the read-only view relies on spacing and hierarchy.
+- **Receipt detail summary**: moved the purchase type into the labeled summary and removed redundant section headings.
+- **Receipt detail width**: tightened the panel further so the read-only view stays focused.
+- **Receipt date display**: formatted purchase dates for people instead of exposing ISO date strings.
 - **Item name display**: identical public and receipt names no longer appear twice.
 - **Item metadata display**: blank item fields no longer create empty separators.
 - **Receipt pagination**: the inbox loads 20 receipts at a time and provides Load more for older records.
