@@ -234,6 +234,7 @@ function Inbox({ user }) {
   const [view, setView] = useState('receipts');
   const [showFailureHistory, setShowFailureHistory] = useState(false);
   const [search, setSearch] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -267,7 +268,16 @@ function Inbox({ user }) {
       }))
       .catch((err) => setError(err.message || 'Could not load matching receipts.'));
   }, [merchantSearch]);
-  const filtered = receipts.filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = [...receipts]
+    .filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => {
+      const aDate = a.date || '';
+      const bDate = b.date || '';
+      if (!aDate && bDate) return 1;
+      if (aDate && !bDate) return -1;
+      const comparison = aDate.localeCompare(bDate);
+      return sortOrder === 'oldest' ? comparison : -comparison;
+    });
 
   return <main className="app-shell">
     <header className="topbar"><div className="topbar-brand"><p className="eyebrow">SLIP</p><h1>{view === 'items' ? 'Items' : view === 'settings' ? 'Settings' : 'Inbox'}</h1></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="account"><button className="secondary" onClick={() => signOut(auth)}>Sign out</button></div></header>
@@ -276,7 +286,7 @@ function Inbox({ user }) {
     {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
     {!loading && !error && view === 'settings' && <SettingsView settings={settings} onDigestChange={async (monthlyDigestEnabled) => { const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } }); setSettings(updated); }} />}
     {!loading && !error && view === 'receipts' && <>
-      <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><span className="count">{filtered.length} receipts</span></section>
+      <section className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search merchants, categories, or items" /><label className="sort-control">Sort<select aria-label="Sort receipts" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label><span className="count">{filtered.length} receipts</span></section>
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
       {failures.length > 0 && <><div className="failure-access"><span>{failures.length} receipt{failures.length === 1 ? '' : 's'} need processing history</span><button className="secondary" onClick={() => setShowFailureHistory((visible) => !visible)}>{showFailureHistory ? 'Hide processing history' : 'View processing history'}</button></div>{showFailureHistory && <section className="failures"><div><h2>Processing history</h2><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p></div>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />)}</section>}</>}
       <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div>
