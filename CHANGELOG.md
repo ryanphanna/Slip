@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Receipt editing polish**: buttons and dropdowns now match the rest of the app's rounded, cream input style instead of browser defaults; the item name/quantity/price row got a visible header so it's clear which box is which.
+- **Item catalog fields decluttered**: public name, TCIN, UPC, DPCI, and product URL are now tucked behind a "Catalog details" toggle per item instead of always showing, since AI usually fills them in and they rarely need manual review.
+- **Item catalog field sizing bug**: a broken grid layout was squeezing the public name and product URL boxes down to a sliver (unreadable single-character width) while less important fields took the space; fixed.
+- **Category editing**: receipt category is now a dropdown of your existing categories (with an Other option for a new one) instead of freeform text, matching how category filtering already worked.
 - **Monthly notifications**: monthly recap texts are now saved as web notifications and the existing August recap has been backfilled.
 - **Notifications page**: processing alerts and monthly summaries now appear together on the Notifications page.
 - **Notification grouping**: processing failures now appear as one notification with optional receipt details.

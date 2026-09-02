@@ -145,19 +145,31 @@ function ReceiptRow({ receipt, onSelect }) {
   </button>;
 }
 
-function ReceiptDetail({ receipt, onClose, onSaved }) {
+function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
   const [draft, setDraft] = useState({ ...receipt, items: receipt.items || [] });
   const [editing, setEditing] = useState(false);
   const [images, setImages] = useState([]);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [status, setStatus] = useState('');
+  const [otherCategory, setOtherCategory] = useState(receipt.category ? !categories.includes(receipt.category) : false);
+  const [expandedItems, setExpandedItems] = useState(() => new Set());
 
   useEffect(() => {
     setDraft({ ...receipt, items: receipt.items || [] });
     setEditing(false);
     setStatus('');
+    setOtherCategory(receipt.category ? !categories.includes(receipt.category) : false);
+    setExpandedItems(new Set());
     call('getReceiptImageUrls', { id: receipt.id }).then(({ urls }) => setImages(urls)).catch(() => setStatus('The receipt image could not be loaded.'));
   }, [receipt.id]);
+
+  function toggleItemCatalog(index) {
+    setExpandedItems((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  }
 
   const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   async function save(event) {
@@ -184,11 +196,14 @@ function ReceiptDetail({ receipt, onClose, onSaved }) {
         <label>Date<input type="date" value={draft.date || ''} onChange={(e) => update('date', e.target.value)} /></label>
         <label>Total<input type="number" step="0.01" value={draft.total ?? ''} onChange={(e) => update('total', e.target.value)} /></label>
         <label>Currency<select value={draft.currency || 'CAD'} onChange={(e) => update('currency', e.target.value)}>{draft.currency && !['CAD', 'USD', 'EUR', 'GBP', 'AUD', 'JPY'].includes(draft.currency) && <option value={draft.currency}>{draft.currency}</option>}<option value="CAD">CAD — Canadian dollar</option><option value="USD">USD — US dollar</option><option value="EUR">EUR — Euro</option><option value="GBP">GBP — Pound sterling</option><option value="AUD">AUD — Australian dollar</option><option value="JPY">JPY — Japanese yen</option></select></label>
-        <label>Category<input value={draft.category || ''} onChange={(e) => update('category', e.target.value)} /></label>
+        <label>Category<select value={otherCategory ? '__other__' : (draft.category || '')} onChange={(e) => { if (e.target.value === '__other__') { setOtherCategory(true); update('category', ''); } else { setOtherCategory(false); update('category', e.target.value); } }}><option value="">Select category</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}<option value="__other__">Other…</option></select>{otherCategory && <input placeholder="New category" value={draft.category || ''} onChange={(e) => update('category', e.target.value)} />}</label>
       </div>
       <p className="meta">{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p>
       <h3>Items</h3>
-      <div className="items">{draft.items.map((item, index) => <div className="item-entry" key={`${receipt.id}-${index}`}><div className="item-row"><input value={item.name} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} /><input aria-label={`Quantity for ${item.name}`} type="number" min="1" step="1" value={item.quantity ?? 1} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, quantity: Number(e.target.value) } : current))} /><input aria-label={`Price for ${item.name}`} type="number" step="0.01" value={item.price ?? ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, price: Number(e.target.value) } : current))} /></div><div className="item-metadata"><input aria-label={`Public name for ${item.name}`} placeholder="Public name" value={item.publicName || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, publicName: e.target.value } : current))} /><input aria-label={`Item number for ${item.name}`} placeholder="TCIN / item number" value={item.itemNumber || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, itemNumber: e.target.value } : current))} /><input aria-label={`UPC for ${item.name}`} placeholder="UPC" value={item.upc || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, upc: e.target.value } : current))} /><input aria-label={`DPCI for ${item.name}`} placeholder="DPCI" value={item.dpci || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, dpci: e.target.value } : current))} /><input aria-label={`Product URL for ${item.name}`} placeholder="Product URL" value={item.productUrl || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, productUrl: e.target.value } : current))} /></div></div>)}</div>
+      <div className="items">
+        <div className="item-row item-row-header"><span>Item</span><span>Qty</span><span>Price</span></div>
+        {draft.items.map((item, index) => { const expanded = expandedItems.has(index); return <div className="item-entry" key={`${receipt.id}-${index}`}><div className="item-row"><input value={item.name} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} /><input aria-label={`Quantity for ${item.name}`} type="number" min="1" step="1" value={item.quantity ?? 1} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, quantity: Number(e.target.value) } : current))} /><input aria-label={`Price for ${item.name}`} type="number" step="0.01" value={item.price ?? ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, price: Number(e.target.value) } : current))} /></div><button type="button" className="item-catalog-toggle" onClick={() => toggleItemCatalog(index)}>{expanded ? 'Hide catalog details' : 'Catalog details'}</button>{expanded && <div className="item-metadata"><input aria-label={`Public name for ${item.name}`} placeholder="Public name" value={item.publicName || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, publicName: e.target.value } : current))} /><input aria-label={`Item number for ${item.name}`} placeholder="TCIN / item number" value={item.itemNumber || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, itemNumber: e.target.value } : current))} /><input aria-label={`UPC for ${item.name}`} placeholder="UPC" value={item.upc || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, upc: e.target.value } : current))} /><input aria-label={`DPCI for ${item.name}`} placeholder="DPCI" value={item.dpci || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, dpci: e.target.value } : current))} /><input aria-label={`Product URL for ${item.name}`} placeholder="Product URL" value={item.productUrl || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, productUrl: e.target.value } : current))} /></div>}</div>; })}
+      </div>
       <div className="actions"><button type="submit">Save corrections</button><button type="button" className="secondary" onClick={() => setDraft({ ...receipt, items: receipt.items || [] })}>Reset</button></div>
       {status && <p className="status">{status}</p>}
       </form> : <div className="detail-form read-only-detail"><div className="summary-grid"><div><small>Purchased</small><strong>{formatPurchaseDate(receipt.date)}</strong></div><div><small>Category</small><strong>{receipt.category || 'Other'}</strong></div><div><small>Items</small><strong>{(receipt.items || []).length}</strong></div><div><small>Type</small><strong>{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</strong></div></div><div className="read-only-items">{(receipt.items || []).map((item, index) => <div className="read-only-item" key={`${item.name}-${index}`}><span><strong>{item.publicName || item.name || 'Unnamed item'}</strong>{item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() && <small>{item.name}</small>}</span><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price, receipt.currency)}</strong></div>)}</div><div className="receipt-totals"><div><span>Subtotal</span><strong>{formatMoney(receipt.subtotal, receipt.currency)}</strong></div><div><span>Tax</span><strong>{formatMoney(receipt.tax, receipt.currency)}</strong></div><div className="receipt-total"><span>Total</span><strong>{formatMoney(receipt.total, receipt.currency)}</strong></div></div></div>}
@@ -334,7 +349,7 @@ function Inbox({ user }) {
       {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
       <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div><div className="list-footer"><span className="count">{filtered.length} receipts loaded</span>{hasMore && <button className="load-more" disabled={loadingMore} onClick={() => load({ append: true, cursor: nextCursor })}>{loadingMore ? 'Loading…' : 'Load more'}</button>}</div>
     </>}
-    {selected && <><div className="detail-backdrop" onClick={() => setSelected(null)} /><ReceiptDetail receipt={selected} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} /></>}
+    {selected && <><div className="detail-backdrop" onClick={() => setSelected(null)} /><ReceiptDetail receipt={selected} categories={[...new Set(receipts.map((receipt) => receipt.category).filter(Boolean))].sort()} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} /></>}
   </main>;
 }
 
