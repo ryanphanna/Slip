@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file.
 - **Processing notification dates**: grouped processing failures now show when the affected receipts were submitted.
 - **Receipt filters**: the inbox can now be narrowed by category, date range, and amount.
 - **Receipt editing focus**: item names can now be edited continuously without losing focus after the first character.
-- **Receipt currency editing**: receipt corrections now include the currency used for the total.
+- **Receipt currency editing**: receipt corrections now choose the currency from a dropdown.
+- **Verification workflow**: removed the duplicate item-verification checkbox from receipt editing; verification now lives in Items.
 - **End-user receipt view**: receipt details now open as a readable summary with editing behind an explicit Edit action.
 - **Receipt summary facts**: the read-only view now includes subtotal, tax, total, and item count.
 - **Receipt detail width**: narrowed the read-only detail panel so it feels lighter while preserving the side-by-side layout.
