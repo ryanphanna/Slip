@@ -6,9 +6,10 @@ const admin = require('firebase-admin');
 
 // Polyfill firebase-admin v14 top-level service getters for compatibility
 if (!admin.firestore) {
-  const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+  const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
   admin.firestore = getFirestore;
   admin.firestore.FieldValue = FieldValue;
+  admin.firestore.Timestamp = Timestamp;
 }
 if (!admin.storage) {
   const { getStorage } = require('firebase-admin/storage');
