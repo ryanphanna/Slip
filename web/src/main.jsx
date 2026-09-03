@@ -234,11 +234,11 @@ function ItemDetail({ item, onClose }) {
       <div><small>Date</small><strong>{item.date || 'No date'}</strong></div>
       <div><small>Status</small><strong>{item.verified ? 'Verified' : 'Needs review'}</strong></div>
     </div>
-    {(item.itemNumber || item.upc || item.dpci || item.productUrl) && <div className="item-metadata">
+    {(item.itemNumber || item.upc || item.dpci || item.productUrl) && <div className="summary-grid">
       {item.itemNumber && <div><small>TCIN / item number</small><strong>{item.itemNumber}</strong></div>}
       {item.upc && <div><small>UPC</small><strong>{item.upc}</strong></div>}
       {item.dpci && <div><small>DPCI</small><strong>{item.dpci}</strong></div>}
-      {item.productUrl && <div><small>Product URL</small><strong><a href={item.productUrl} target="_blank" rel="noreferrer">{item.productUrl}</a></strong></div>}
+      {item.productUrl && <div><small>Product page</small><strong><a href={item.productUrl} target="_blank" rel="noreferrer">View product ↗</a></strong></div>}
     </div>}
   </aside></>;
 }
@@ -374,11 +374,7 @@ function Inbox({ user }) {
     .filter((receipt) => minAmount === '' || Number(receipt.total) >= Number(minAmount))
     .filter((receipt) => maxAmount === '' || Number(receipt.total) <= Number(maxAmount))
     .sort((a, b) => {
-      const aDate = a.date || '';
-      const bDate = b.date || '';
-      if (!aDate && bDate) return 1;
-      if (aDate && !bDate) return -1;
-      const comparison = aDate.localeCompare(bDate);
+      const comparison = (a.createdAtMillis || 0) - (b.createdAtMillis || 0);
       return sortOrder === 'oldest' ? comparison : -comparison;
     });
 
