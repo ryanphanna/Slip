@@ -374,7 +374,11 @@ function Inbox({ user }) {
     .filter((receipt) => minAmount === '' || Number(receipt.total) >= Number(minAmount))
     .filter((receipt) => maxAmount === '' || Number(receipt.total) <= Number(maxAmount))
     .sort((a, b) => {
-      const comparison = (a.createdAtMillis || 0) - (b.createdAtMillis || 0);
+      const aDate = a.date || '';
+      const bDate = b.date || '';
+      if (!aDate && bDate) return 1;
+      if (aDate && !bDate) return -1;
+      const comparison = aDate.localeCompare(bDate);
       return sortOrder === 'oldest' ? comparison : -comparison;
     });
 
