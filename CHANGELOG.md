@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Small UI cleanups**: loading message no longer says "receipts" on every page; sort/filter controls right-justified above the receipt list; sort options shortened to "Newest"/"Oldest".
 - **"Newest first" sort fix**: receipts were sorted by purchase date, so a receipt with a missing/unparsed date got shoved to the bottom regardless of how recently it was logged. Now sorts by when it was actually added, matching the label.
 - **Item detail popup layout**: the catalog fields (TCIN/UPC/DPCI/product URL) were forced into a 5-column grid built for the edit form, breaking the layout; switched to the same simple grid used for price/quantity/etc, and the product link now reads "View product" instead of dumping the raw URL.
 - **Real page URLs**: Receipts/Items/Notifications/Settings now have actual URLs (`/`, `/items`, `/notifications`, `/settings`) with back/forward and refresh support, instead of always resetting to Receipts.
