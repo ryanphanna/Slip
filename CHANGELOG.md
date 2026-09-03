@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Item detail popup**: clicking an item in the Items list now opens a detail card (price, quantity, category, merchant, date, and catalog fields like TCIN/UPC/DPCI/product URL when present) instead of doing nothing.
+- **Settings page decluttered**: dropped a redundant "SETTINGS" eyebrow and "Notifications" sub-header — with only one settings group, that was three lines saying the same thing once was needed.
 - **Items search moved to header**: was a permanently-visible input in the page body while Receipts search is a toggle in the header; now both work the same way.
 - **Notifications page centering**: the page had its own narrower max-width but no auto margins, so it hugged the left edge of the app shell instead of sitting centered.
 - **Phone sign-in reliability**: the invisible reCAPTCHA was being attached to the "Text me a code" button itself instead of its own container; a button can't legally hold the iframe reCAPTCHA renders, so verification silently broke. Restored to a dedicated container.

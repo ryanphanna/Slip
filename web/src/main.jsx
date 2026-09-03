@@ -216,8 +216,30 @@ function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
   </aside>;
 }
 
+function ItemDetail({ item, onClose }) {
+  return <><div className="detail-backdrop" onClick={onClose} /><aside className="detail-panel item-detail-panel">
+    <div className="detail-header"><div><p className="eyebrow">ITEM</p><h2>{item.publicName || item.name || 'Unnamed item'}</h2></div><div className="detail-actions"><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
+    {item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() && <p className="muted">{item.name}</p>}
+    <div className="summary-grid">
+      <div><small>Price</small><strong>{formatMoney(item.price)}</strong></div>
+      <div><small>Quantity</small><strong>×{item.quantity || 1}</strong></div>
+      <div><small>Category</small><strong>{item.category || 'Other'}</strong></div>
+      <div><small>Merchant</small><strong>{item.merchant || 'Unknown merchant'}</strong></div>
+      <div><small>Date</small><strong>{item.date || 'No date'}</strong></div>
+      <div><small>Status</small><strong>{item.verified ? 'Verified' : 'Needs review'}</strong></div>
+    </div>
+    {(item.itemNumber || item.upc || item.dpci || item.productUrl) && <div className="item-metadata">
+      {item.itemNumber && <div><small>TCIN / item number</small><strong>{item.itemNumber}</strong></div>}
+      {item.upc && <div><small>UPC</small><strong>{item.upc}</strong></div>}
+      {item.dpci && <div><small>DPCI</small><strong>{item.dpci}</strong></div>}
+      {item.productUrl && <div><small>Product URL</small><strong><a href={item.productUrl} target="_blank" rel="noreferrer">{item.productUrl}</a></strong></div>}
+    </div>}
+  </aside></>;
+}
+
 function ItemsView({ receipts, catalogItems, onReceiptUpdated, search }) {
   const [mode, setMode] = useState('verified');
+  const [selectedItem, setSelectedItem] = useState(null);
   const items = useMemo(() => (catalogItems.length > 0 ? catalogItems : receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
     ...item,
     id: `${receipt.id}-${index}`,
@@ -243,7 +265,8 @@ function ItemsView({ receipts, catalogItems, onReceiptUpdated, search }) {
 
   return <section className="items-page">
     <div className="item-tabs"><button className={mode === 'verified' ? 'active' : 'secondary'} onClick={() => setMode('verified')}>Verified</button><button className={mode === 'review' ? 'active' : 'secondary'} onClick={() => setMode('review')}>Needs review</button></div>
-    {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <><div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id}><div><strong>{item.publicName || item.name || 'Unnamed item'}</strong><small>{[item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() ? item.name : '', item.merchant, item.date, item.category].filter(Boolean).join(' · ')}</small></div><span className="item-action"><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={() => verifyItem(item)}>Approve</button>}</span></div>)}</div><div className="list-footer"><span className="count">{filtered.length} items</span></div></>}
+    {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <><div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id} onClick={() => setSelectedItem(item)}><div><strong>{item.publicName || item.name || 'Unnamed item'}</strong><small>{[item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() ? item.name : '', item.merchant, item.date, item.category].filter(Boolean).join(' · ')}</small></div><span className="item-action"><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={(e) => { e.stopPropagation(); verifyItem(item); }}>Approve</button>}</span></div>)}</div><div className="list-footer"><span className="count">{filtered.length} items</span></div></>}
+    {selectedItem && <ItemDetail item={selectedItem} onClose={() => setSelectedItem(null)} />}
   </section>;
 }
 
@@ -259,8 +282,7 @@ function SettingsView({ settings, onDigestChange }) {
     }
   }
   return <section className="settings-page">
-    <p className="eyebrow">SETTINGS</p>
-    <div className="settings-intro"><h2>Notifications</h2><p>Choose which updates Slip sends you.</p></div>
+    <div className="settings-intro"><h2>Settings</h2><p>Choose which updates Slip sends you.</p></div>
     <div className="settings-section"><label className="setting-row"><span><strong>Monthly recap</strong><small>Get a text at the start of each month with your previous month’s spending.</small></span><input className="setting-toggle" type="checkbox" checked={settings.monthlyDigestEnabled !== false} onChange={toggle} /></label></div>
     {status && <p className="status">{status}</p>}
   </section>;
