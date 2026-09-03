@@ -99,7 +99,10 @@ function Login() {
     setMessage('Sending code…');
     try {
       const verifier = createRecaptcha();
-      setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, verifier));
+      const result = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
+      verifier.clear();
+      recaptcha.current = null;
+      setConfirmation(result);
       setMessage('Enter the six-digit code we texted you.');
     } catch (error) {
       recaptcha.current?.clear();
