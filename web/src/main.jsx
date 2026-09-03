@@ -216,8 +216,7 @@ function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
   </aside>;
 }
 
-function ItemsView({ receipts, catalogItems, onReceiptUpdated }) {
-  const [search, setSearch] = useState('');
+function ItemsView({ receipts, catalogItems, onReceiptUpdated, search }) {
   const [mode, setMode] = useState('verified');
   const items = useMemo(() => (catalogItems.length > 0 ? catalogItems : receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
     ...item,
@@ -243,7 +242,7 @@ function ItemsView({ receipts, catalogItems, onReceiptUpdated }) {
   }
 
   return <section className="items-page">
-    <div className="items-controls"><div className="item-tabs"><button className={mode === 'verified' ? 'active' : 'secondary'} onClick={() => setMode('verified')}>Verified</button><button className={mode === 'review' ? 'active' : 'secondary'} onClick={() => setMode('review')}>Needs review</button></div><div className="toolbar"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search items or merchants" /></div></div>
+    <div className="item-tabs"><button className={mode === 'verified' ? 'active' : 'secondary'} onClick={() => setMode('verified')}>Verified</button><button className={mode === 'review' ? 'active' : 'secondary'} onClick={() => setMode('review')}>Needs review</button></div>
     {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <><div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id}><div><strong>{item.publicName || item.name || 'Unnamed item'}</strong><small>{[item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() ? item.name : '', item.merchant, item.date, item.category].filter(Boolean).join(' · ')}</small></div><span className="item-action"><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={() => verifyItem(item)}>Approve</button>}</span></div>)}</div><div className="list-footer"><span className="count">{filtered.length} items</span></div></>}
   </section>;
 }
@@ -288,6 +287,8 @@ function Inbox({ user }) {
   const [view, setView] = useState('receipts');
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
+  const [showItemSearch, setShowItemSearch] = useState(false);
+  const [itemSearch, setItemSearch] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
   const [showFilters, setShowFilters] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -341,10 +342,10 @@ function Inbox({ user }) {
     });
 
   return <main className="app-shell">
-    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">SLIP</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{(failures.length > 0 || notifications.length > 0) && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length + notifications.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">SLIP</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{view === 'items' && <>{showItemSearch && <input className="header-search" autoFocus value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search items or merchants" />}<button aria-expanded={showItemSearch} onClick={() => setShowItemSearch((visible) => !visible)}>Search</button></>}{(failures.length > 0 || notifications.length > 0) && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length + notifications.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading your receipts…</p>}
     {!loading && error && <p className="error">{error}</p>}
-    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
+    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} search={itemSearch} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
     {!loading && !error && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />}
     {!loading && !error && view === 'settings' && <SettingsView settings={settings} onDigestChange={async (monthlyDigestEnabled) => { const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } }); setSettings(updated); }} />}
     {!loading && !error && view === 'receipts' && <>
