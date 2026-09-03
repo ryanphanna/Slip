@@ -77,7 +77,7 @@ function Login() {
   const recaptcha = useRef(null);
 
   function createRecaptcha() {
-    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'recaptcha', { size: 'invisible' });
+    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'send-code-button', { size: 'invisible' });
     return recaptcha.current;
   }
 
@@ -99,7 +99,6 @@ function Login() {
     setMessage('Sending code…');
     try {
       const verifier = createRecaptcha();
-      await verifier.render();
       setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, verifier));
       setMessage('Enter the six-digit code we texted you.');
     } catch (error) {
@@ -125,7 +124,7 @@ function Login() {
     <p className="muted">Sign in with the phone number you use to text receipts to Slip.</p>
     {!confirmation ? <form onSubmit={sendCode}>
       <label>Phone number<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 416 555 1234" required /></label>
-      <button type="submit">Text me a code</button>
+      <button id="send-code-button" type="submit">Text me a code</button>
     </form> : <form onSubmit={verifyCode}>
       <label>Verification code<input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required /></label>
       <button type="submit">Sign in</button>
