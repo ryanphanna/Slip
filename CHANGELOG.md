@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Receipt year misread**: found two receipts where a clearly-printed 2026 got parsed as 2024 (6 misread as 4). Corrected both and tightened the Gemini date prompt to catch this — see `KNOWN_ISSUES.md`.
 - **Small UI cleanups**: loading message no longer says "receipts" on every page; sort/filter controls right-justified above the receipt list; sort options shortened to "Newest"/"Oldest".
 - **Item detail popup layout**: the catalog fields (TCIN/UPC/DPCI/product URL) were forced into a 5-column grid built for the edit form, breaking the layout; switched to the same simple grid used for price/quantity/etc, and the product link now reads "View product" instead of dumping the raw URL.
 - **Real page URLs**: Receipts/Items/Notifications/Settings now have actual URLs (`/`, `/items`, `/notifications`, `/settings`) with back/forward and refresh support, instead of always resetting to Receipts.
