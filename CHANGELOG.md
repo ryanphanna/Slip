@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Notifications page centering**: the page had its own narrower max-width but no auto margins, so it hugged the left edge of the app shell instead of sitting centered.
 - **Phone sign-in reliability**: the invisible reCAPTCHA was being attached to the "Text me a code" button itself instead of its own container; a button can't legally hold the iframe reCAPTCHA renders, so verification silently broke. Restored to a dedicated container.
 - **Receipt editing polish**: buttons and dropdowns now match the rest of the app's rounded, cream input style instead of browser defaults; the item name/quantity/price row got a visible header so it's clear which box is which.
 - **Item catalog fields decluttered**: public name, TCIN, UPC, DPCI, and product URL are now tucked behind a "Catalog details" toggle per item instead of always showing, since AI usually fills them in and they rarely need manual review.
