@@ -20,6 +20,12 @@ const auth = app ? getAuth(app) : null;
 const functions = app ? getFunctions(app) : null;
 const call = (name, data) => httpsCallable(functions, name)(data).then((result) => result.data);
 
+const VIEW_PATHS = { receipts: '/', items: '/items', notifications: '/notifications', settings: '/settings' };
+function viewFromPath(pathname) {
+  const match = Object.entries(VIEW_PATHS).find(([, path]) => path === pathname);
+  return match ? match[0] : 'receipts';
+}
+
 function normalizePhone(value) {
   const digits = String(value || '').replace(/[^\d]/g, '');
   if (digits.length === 10) return `+1${digits}`;
@@ -306,7 +312,20 @@ function Inbox({ user }) {
   const [settings, setSettings] = useState({ monthlyDigestEnabled: true });
   const [failures, setFailures] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [view, setView] = useState('receipts');
+  const [view, setViewState] = useState(() => viewFromPath(window.location.pathname));
+
+  function setView(next) {
+    setViewState(next);
+    const path = VIEW_PATHS[next] || '/';
+    if (window.location.pathname !== path) window.history.pushState({ view: next }, '', path);
+  }
+
+  useEffect(() => {
+    const onPopState = () => setViewState(viewFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const [showSearch, setShowSearch] = useState(false);
   const [search, setSearch] = useState('');
   const [showItemSearch, setShowItemSearch] = useState(false);
