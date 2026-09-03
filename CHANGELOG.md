@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **"Load more" receipts crash**: the firebase-admin v14 compatibility polyfill covered `FieldValue` but missed `Timestamp`, so paginating past the first page of receipts threw a 500. Added the missing polyfill entry.
 - **Item detail popup**: clicking an item in the Items list now opens a detail card (price, quantity, category, merchant, date, and catalog fields like TCIN/UPC/DPCI/product URL when present) instead of doing nothing.
 - **Settings page decluttered**: dropped a redundant "SETTINGS" eyebrow and "Notifications" sub-header — with only one settings group, that was three lines saying the same thing once was needed.
 - **Items search moved to header**: was a permanently-visible input in the page body while Receipts search is a toggle in the header; now both work the same way.
