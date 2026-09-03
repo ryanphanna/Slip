@@ -77,7 +77,7 @@ function Login() {
   const recaptcha = useRef(null);
 
   function createRecaptcha() {
-    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'send-code-button', { size: 'invisible' });
+    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'recaptcha', { size: 'invisible' });
     return recaptcha.current;
   }
 

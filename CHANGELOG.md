@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- **Phone sign-in reliability**: removes the invisible reCAPTCHA after the SMS request succeeds so it cannot block the verification-code form.
+- **Phone sign-in reliability**: the invisible reCAPTCHA was being attached to the "Text me a code" button itself instead of its own container; a button can't legally hold the iframe reCAPTCHA renders, so verification silently broke. Restored to a dedicated container.
 - **Receipt editing polish**: buttons and dropdowns now match the rest of the app's rounded, cream input style instead of browser defaults; the item name/quantity/price row got a visible header so it's clear which box is which.
 - **Item catalog fields decluttered**: public name, TCIN, UPC, DPCI, and product URL are now tucked behind a "Catalog details" toggle per item instead of always showing, since AI usually fills them in and they rarely need manual review.
 - **Item catalog field sizing bug**: a broken grid layout was squeezing the public name and product URL boxes down to a sliver (unreadable single-character width) while less important fields took the space; fixed.
