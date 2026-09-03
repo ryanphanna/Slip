@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Items search moved to header**: was a permanently-visible input in the page body while Receipts search is a toggle in the header; now both work the same way.
 - **Notifications page centering**: the page had its own narrower max-width but no auto margins, so it hugged the left edge of the app shell instead of sitting centered.
 - **Phone sign-in reliability**: the invisible reCAPTCHA was being attached to the "Text me a code" button itself instead of its own container; a button can't legally hold the iframe reCAPTCHA renders, so verification silently broke. Restored to a dedicated container.
 - **Receipt editing polish**: buttons and dropdowns now match the rest of the app's rounded, cream input style instead of browser defaults; the item name/quantity/price row got a visible header so it's clear which box is which.
