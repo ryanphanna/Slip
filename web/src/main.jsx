@@ -98,7 +98,9 @@ function Login() {
     }
     setMessage('Sending code…');
     try {
-      setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, createRecaptcha()));
+      const verifier = createRecaptcha();
+      await verifier.render();
+      setConfirmation(await signInWithPhoneNumber(auth, normalizedPhone, verifier));
       setMessage('Enter the six-digit code we texted you.');
     } catch (error) {
       recaptcha.current?.clear();
