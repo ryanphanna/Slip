@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Phone sign-in reliability**: explicitly prepares the local reCAPTCHA verifier before requesting a code, preventing invalid app credentials after a fresh localhost load.
 - **Receipt editing polish**: buttons and dropdowns now match the rest of the app's rounded, cream input style instead of browser defaults; the item name/quantity/price row got a visible header so it's clear which box is which.
 - **Item catalog fields decluttered**: public name, TCIN, UPC, DPCI, and product URL are now tucked behind a "Catalog details" toggle per item instead of always showing, since AI usually fills them in and they rarely need manual review.
 - **Item catalog field sizing bug**: a broken grid layout was squeezing the public name and product URL boxes down to a sliver (unreadable single-character width) while less important fields took the space; fixed.
