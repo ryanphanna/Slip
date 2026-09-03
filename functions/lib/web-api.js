@@ -62,7 +62,7 @@ async function listReceipts(request) {
   const docs = snapshot.docs.slice(0, limit);
   const lastCreatedAt = docs.at(-1)?.get('createdAt');
   return {
-    receipts: docs.map((doc) => ({ ...serializeDoc(doc), createdAtMillis: doc.get('createdAt')?.toMillis?.() || null })),
+    receipts: docs.map(serializeDoc),
     hasMore: snapshot.docs.length > limit,
     nextCursor: lastCreatedAt?.toMillis?.() || null,
     accountUid: uid,
