@@ -10,7 +10,17 @@ jest.mock('firebase-functions/logger', () => ({
   error: jest.fn(),
 }));
 
-const { buildRequestUrls, parseForwardedValues, validateTwilioSignature } = require('../lib/twilio');
+const mockMessagesCreate = jest.fn();
+jest.mock('twilio', () => {
+  const actual = jest.requireActual('twilio');
+  // Keep the real signature helpers (pure crypto, no network) but stub the
+  // client factory so sendSms doesn't hit the real Twilio API in tests.
+  const mockClientFactory = jest.fn(() => ({ messages: { create: mockMessagesCreate } }));
+  return Object.assign(mockClientFactory, actual);
+});
+
+const twilioLib = require('twilio');
+const { buildRequestUrls, parseForwardedValues, validateTwilioSignature, sendSms, fetchMedia } = require('../lib/twilio');
 
 
 describe('twilio url generation helpers', () => {
@@ -168,6 +178,118 @@ describe('twilio url generation helpers', () => {
       };
       expect(validateTwilioSignature(req)).toBe(false);
     });
+
+    it('accepts a signature computed against one of the candidate URLs', () => {
+      process.env.WEBHOOK_URL = 'https://example.com/sms';
+      const body = { From: '+15551234567', Body: 'hi' };
+      const signature = twilioLib.getExpectedTwilioSignature('supersecrettoken', 'https://example.com/sms', body);
+      const req = {
+        originalUrl: '/sms',
+        headers: { host: 'example.com', 'x-twilio-signature': signature },
+        protocol: 'https',
+        get: () => 'example.com',
+        body,
+      };
+      expect(validateTwilioSignature(req)).toBe(true);
+    });
+
+    it('rejects a signature that matches none of the candidate URLs', () => {
+      process.env.WEBHOOK_URL = 'https://example.com/sms';
+      const req = {
+        originalUrl: '/sms',
+        headers: { host: 'example.com', 'x-twilio-signature': 'not-a-real-signature==' },
+        protocol: 'https',
+        get: () => 'example.com',
+        body: { From: '+15551234567', Body: 'hi' },
+      };
+      expect(validateTwilioSignature(req)).toBe(false);
+    });
+  });
+});
+
+describe('sendSms', () => {
+  beforeEach(() => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC123';
+    process.env.TWILIO_AUTH_TOKEN = 'token';
+    process.env.TWILIO_PHONE_NUMBER = '+15550001111';
+    mockMessagesCreate.mockClear();
+    mockMessagesCreate.mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    delete process.env.TWILIO_PHONE_NUMBER;
+  });
+
+  it('sends from the configured Twilio number to the given recipient', async () => {
+    await sendSms('+15559998888', 'hello there');
+    expect(mockMessagesCreate).toHaveBeenCalledWith({
+      body: 'hello there',
+      from: '+15550001111',
+      to: '+15559998888',
+    });
+  });
+});
+
+describe('fetchMedia (SSRF protections)', () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC123';
+    process.env.TWILIO_AUTH_TOKEN = 'token';
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    global.fetch = originalFetch;
+  });
+
+  it('rejects a media URL on a host outside the Twilio allowlist', async () => {
+    await expect(fetchMedia('https://evil.example.com/steal')).rejects.toThrow('Blocked media URL host');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-HTTPS media URL even on an allowed host', async () => {
+    await expect(fetchMedia('http://api.twilio.com/media/1')).rejects.toThrow('non-HTTPS protocol');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('fetches an allowed Twilio host with Basic auth and returns the response', async () => {
+    global.fetch.mockResolvedValue({ ok: true, status: 200 });
+    const res = await fetchMedia('https://api.twilio.com/media/1');
+    expect(res.ok).toBe(true);
+    const [, options] = global.fetch.mock.calls[0];
+    expect(options.headers.Authorization).toMatch(/^Basic /);
+  });
+
+  it('does not send credentials to a non-Twilio CDN host reached via redirect', async () => {
+    global.fetch
+      .mockResolvedValueOnce({ status: 302, headers: { get: () => 'https://media.twiliocdn.com/file' } })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    await fetchMedia('https://api.twilio.com/media/1');
+    const [, secondOptions] = global.fetch.mock.calls[1];
+    expect(secondOptions.headers.Authorization).toBeUndefined();
+  });
+
+  it('follows a redirect to an allowed CDN host but blocks a redirect off HTTPS', async () => {
+    global.fetch.mockResolvedValueOnce({
+      status: 302,
+      headers: { get: () => 'http://media.twiliocdn.com/file' },
+    });
+    await expect(fetchMedia('https://api.twilio.com/media/1')).rejects.toThrow('non-HTTPS media redirect');
+  });
+
+  it('gives up after too many redirects', async () => {
+    global.fetch.mockResolvedValue({ status: 302, headers: { get: () => 'https://media.twiliocdn.com/file' } });
+    await expect(fetchMedia('https://api.twilio.com/media/1')).rejects.toThrow('Too many redirects');
+  });
+
+  it('throws when the final response is not ok', async () => {
+    global.fetch.mockResolvedValue({ ok: false, status: 500 });
+    await expect(fetchMedia('https://api.twilio.com/media/1')).rejects.toThrow('Failed to fetch Twilio media: 500');
   });
 });
 
