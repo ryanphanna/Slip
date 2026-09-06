@@ -12,9 +12,9 @@ Gemini correctly captures the post-discount net price for each item, but also ca
 
 **Impact:** Line item prices are accurate. The item list contains a spurious `Coupon $35 off $120  −$35.00` entry that makes the items sum to less than the subtotal. Total spend tracking is not affected.
 
-**Workaround:** None currently. Manually delete the coupon line item if precise per-item breakdown matters.
+**Workaround:** None currently. Manually delete the coupon line item if precise per-item breakdown matters on an affected receipt.
 
-**Fix:** Update the Gemini prompt to not add a coupon summary as a line item when per-item discounts are already reflected in individual prices. Requires careful prompt engineering to distinguish inline per-item discounts from standalone coupons applied at checkout.
+**Fix (2026-06-27):** Added a "Discounts" rule to the Gemini prompt (`functions/lib/gemini.js`) telling it not to add a bottom-of-receipt discount summary as a line item when per-item prices already reflect the discount. Verified 2026-09-05: both known bad receipts predate this fix (2025-08-28), and all 6 IKEA receipts parsed since have clean item lists with no recurrence.
 
 ---
 
