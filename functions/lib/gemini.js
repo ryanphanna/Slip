@@ -6,12 +6,11 @@ const FLASH_MODEL = 'gemini-flash-latest';
 const PRO_MODEL = 'gemini-pro-latest';
 
 function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Gemini call timed out after ${ms}ms`)), ms)
-    ),
-  ]);
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Gemini call timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 // Authoritative prompt used by production and all test scripts.
