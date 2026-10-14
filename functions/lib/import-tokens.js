@@ -7,6 +7,13 @@ const SCOPE = 'receipts:write';
 const LAST_USED_THROTTLE_MS = 60 * 1000;
 const MAX_ACTIVE_TOKENS = 10;
 
+// Tokens are TOKEN_PREFIX + 32 random bytes in base64url (43 chars). Anything
+// else cannot be one of ours, so it can be rejected without any I/O.
+const TOKEN_SHAPE = /^slip_pat_[A-Za-z0-9_-]{43}$/;
+function isWellFormedToken(token) {
+  return typeof token === 'string' && TOKEN_SHAPE.test(token);
+}
+
 function hashToken(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
@@ -67,7 +74,7 @@ async function revokeToken(from, id) {
 // Resolves a raw bearer token to its account. Returns null for anything
 // unknown or revoked; never reveals which.
 async function authenticateToken(rawToken) {
-  if (typeof rawToken !== 'string' || !rawToken.startsWith(TOKEN_PREFIX) || rawToken.length > 200) return null;
+  if (!isWellFormedToken(rawToken)) return null;
   const hash = hashToken(rawToken);
   const ref = admin.firestore().collection('import_tokens').doc(hash);
   const doc = await ref.get();
@@ -90,4 +97,4 @@ async function authenticateToken(rawToken) {
   return { tokenId: publicId(hash), from: doc.get('from'), uid: doc.get('uid'), scope: SCOPE };
 }
 
-module.exports = { TOKEN_PREFIX, SCOPE, MAX_ACTIVE_TOKENS, hashToken, createToken, listTokens, revokeToken, authenticateToken };
+module.exports = { isWellFormedToken, TOKEN_PREFIX, SCOPE, MAX_ACTIVE_TOKENS, hashToken, createToken, listTokens, revokeToken, authenticateToken };

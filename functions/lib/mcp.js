@@ -1,4 +1,4 @@
-const { authenticateToken } = require('./import-tokens');
+const { authenticateToken, isWellFormedToken } = require('./import-tokens');
 const { importReceipt } = require('./import-receipt');
 const { INPUT_SCHEMA } = require('./import-schema');
 
@@ -15,27 +15,38 @@ const rpcResult = (id, result) => ({ jsonrpc: '2.0', id, result });
 const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
 const toolText = (text, isError = false) => ({ content: [{ type: 'text', text }], isError });
 
+const MAX_AUTH_HEADER_LENGTH = 300;
+
 function bearer(headers) {
   const value = headers?.authorization || headers?.Authorization || '';
+  if (typeof value !== 'string' || value.length > MAX_AUTH_HEADER_LENGTH) return null;
   const match = /^Bearer\s+(\S+)$/i.exec(value);
   return match ? match[1] : null;
 }
 
+// One response for every kind of bad credential (missing, malformed, unknown,
+// revoked, no longer allowed), so callers learn nothing about which it was.
+const UNAUTHORIZED = () => ({
+  status: 401,
+  headers: { 'WWW-Authenticate': 'Bearer realm="slip"' },
+  body: rpcError(null, -32001, 'Invalid or revoked token'),
+});
+
 // Stateless MCP over HTTP (JSON responses). Returns { status, body, headers? }.
 async function handleMcp({ method, headers, body, rawLength }) {
   if (method !== 'POST') return { status: 405, headers: { Allow: 'POST' }, body: rpcError(null, -32000, 'Use POST') };
-  if ((rawLength ?? JSON.stringify(body || '').length) > MAX_BODY_BYTES) {
+  // Everything up to the token lookup is free of I/O, so junk requests are
+  // turned away before they can occupy the single instance.
+  const size = rawLength > 0 ? rawLength : JSON.stringify(body || '').length;
+  if (size > MAX_BODY_BYTES) {
     return { status: 413, body: rpcError(null, -32600, 'Request too large') };
   }
 
-  const identity = await authenticateToken(bearer(headers));
-  if (!identity) {
-    return {
-      status: 401,
-      headers: { 'WWW-Authenticate': 'Bearer realm="slip"' },
-      body: rpcError(null, -32001, 'Invalid or revoked token'),
-    };
-  }
+  const token = bearer(headers);
+  if (!isWellFormedToken(token)) return UNAUTHORIZED();
+
+  const identity = await authenticateToken(token);
+  if (!identity) return UNAUTHORIZED();
 
   if (!body || Array.isArray(body) || typeof body !== 'object' || body.jsonrpc !== '2.0' || typeof body.method !== 'string') {
     return { status: 400, body: rpcError(body?.id, -32600, 'Invalid JSON-RPC request') };
