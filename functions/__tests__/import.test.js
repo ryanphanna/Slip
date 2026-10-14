@@ -268,6 +268,41 @@ describe('import', () => {
     expect(receipts()).toHaveLength(1);
   });
 
+  it('an identical receipt under a new key within the window is dropped as a duplicate', async () => {
+    const { token } = await mint(PHONE_A);
+    const first = (await call(token, valid())).body.result.structuredContent;
+    const again = (await call(token, valid({ idempotencyKey: 'key-0000099' }))).body.result.structuredContent;
+    expect(again).toMatchObject({ duplicate: true, receiptId: first.receiptId });
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('the same receipt outside the window is saved, flagged and warned about', async () => {
+    const { token } = await mint(PHONE_A);
+    const first = (await call(token, valid())).body.result.structuredContent;
+    // Age the first receipt past the duplicate window.
+    fake.store.receipts.get(first.receiptId).createdAt = { toDate: () => new Date(Date.now() - 3 * 3600 * 1000), toMillis: () => Date.now() - 3 * 3600 * 1000 };
+    const second = (await call(token, valid({ idempotencyKey: 'key-0000099' }))).body.result.structuredContent;
+    expect(second.duplicate).toBe(false);
+    expect(second.receiptId).not.toBe(first.receiptId);
+    expect(second.warnings).toContain('possible duplicate of an earlier receipt');
+    const saved = fake.store.receipts.get(second.receiptId);
+    expect(saved).toMatchObject({ possibleDuplicate: true, possibleDuplicateOf: first.receiptId });
+    expect(saved.importSource.warnings).toContain('possible duplicate of an earlier receipt');
+    expect(receipts()).toHaveLength(2);
+    // Idempotency is unchanged: retrying the second key returns the second receipt, no third.
+    const retry = (await call(token, valid({ idempotencyKey: 'key-0000099' }))).body.result.structuredContent;
+    expect(retry).toMatchObject({ deduplicated: true, receiptId: second.receiptId });
+    expect(receipts()).toHaveLength(2);
+  });
+
+  it('a different total or date is unaffected and not flagged', async () => {
+    const { token } = await mint(PHONE_A);
+    await call(token, valid());
+    const other = (await call(token, valid({ idempotencyKey: 'key-0000098', total: 99, subtotal: undefined, tax: undefined }))).body.result.structuredContent;
+    expect(fake.store.receipts.get(other.receiptId).possibleDuplicate).toBeUndefined();
+    expect(other.warnings).not.toContain('possible duplicate of an earlier receipt');
+  });
+
   it('stores refunds as negative and normalizes the merchant', async () => {
     const { token } = await mint(PHONE_A);
     await call(token, valid({ merchant: 'wal-mart', type: 'refund', total: 10, subtotal: undefined, tax: undefined, items: undefined }));

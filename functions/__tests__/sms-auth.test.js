@@ -40,6 +40,7 @@ jest.mock('../lib/validate', () => ({
 jest.mock('../lib/store', () => ({
   saveReceipt: jest.fn(),
   findDuplicate: jest.fn(),
+  findPossibleDuplicate: jest.fn(),
   isMessageProcessed: jest.fn(),
   checkRateLimit: jest.fn(),
 }));

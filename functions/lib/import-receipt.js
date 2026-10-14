@@ -2,10 +2,11 @@ const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const config = require('./config');
 const { validateReceipt } = require('./validate');
-const { saveReceipt, findDuplicate, checkRateLimit } = require('./store');
+const { saveReceipt, findDuplicate, findPossibleDuplicate, checkRateLimit } = require('./store');
 const { validateImport, SCHEMA_VERSION } = require('./import-schema');
 const { formatMoney, currencyOf } = require('./money');
 
+const POSSIBLE_DUPLICATE_WARNING = 'possible duplicate of an earlier receipt';
 const CLAIM_STALE_MS = 2 * 60 * 1000;
 
 const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -83,7 +84,11 @@ async function importReceipt(identity, args) {
       await claimRef.set({ receiptId: duplicateId, duplicate: true }, { merge: true });
       return { receiptId: duplicateId, duplicate: true, deduplicated: false, warnings, message: `Duplicate: ${receipt.merchant} was already logged.` };
     }
+    // Same merchant/total/date outside the rapid-resend window: save, but flag it.
+    const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
+    if (possibleDuplicateOf) warnings.push(POSSIBLE_DUPLICATE_WARNING);
     const receiptId = await saveReceipt(receipt, from, null, [], {
+      ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
       importSource: {
         client: args.source.client.trim(),
         ...(args.source.model ? { model: args.source.model.trim() } : {}),

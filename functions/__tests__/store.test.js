@@ -4,7 +4,7 @@ let fake;
 jest.mock('firebase-admin', () => ({ firestore: jest.fn() }));
 
 const admin = require('firebase-admin');
-const { saveReceipt, saveProcessingFailure, findDuplicate, isMessageProcessed, checkRateLimit } = require('../lib/store');
+const { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit } = require('../lib/store');
 
 beforeEach(() => {
   fake = createFakeFirestore();
@@ -82,18 +82,58 @@ describe('findDuplicate', () => {
     expect(await findDuplicate({ merchant: 'Metro', total: 12.5 }, '+2')).toBeNull();
   });
 
-  it('catches a same-day-old-receipt re-upload by matching date instead of the time window', async () => {
+  const seedOld = (id, extra = {}) => {
     const map = fake.store.receipts || (fake.store.receipts = new Map());
-    map.set('old-1', {
+    map.set(id, {
       merchant: 'Metro', merchantKey: 'metro', total: 12.5, date: '2025-01-01', from: '+1',
-      createdAt: { toDate: () => new Date('2020-01-01'), toMillis: () => 0 },
+      createdAt: { toDate: () => new Date('2020-01-01'), toMillis: () => 0 }, ...extra,
     });
-    const found = await findDuplicate({ merchant: 'Metro', total: 12.5, date: '2025-01-01' }, '+1');
-    expect(found).toBe('old-1');
+  };
+
+  it('no longer drops a same merchant/total/date receipt saved outside the window (legit repeats)', async () => {
+    seedOld('old-1');
+    expect(await findDuplicate({ merchant: 'Metro', total: 12.5, date: '2025-01-01' }, '+1')).toBeNull();
+  });
+
+  it('treats the same messageSid as a duplicate regardless of age or content', async () => {
+    seedOld('old-1', { messageSid: 'SM-same' });
+    expect(await findDuplicate({ merchant: 'Other', total: 1 }, '+1', { messageSid: 'SM-same' })).toBe('old-1');
+    expect(await findDuplicate({ merchant: 'Other', total: 1 }, '+2', { messageSid: 'SM-same' })).toBeNull();
+    expect(await findDuplicate({ merchant: 'Other', total: 1 }, '+1', { messageSid: 'SM-other' })).toBeNull();
   });
 
   it('returns null when nothing matches', async () => {
     expect(await findDuplicate({ merchant: 'Costco', total: 99 }, '+1')).toBeNull();
+  });
+});
+
+describe('findPossibleDuplicate', () => {
+  const seedOld = (id, extra = {}) => {
+    const map = fake.store.receipts || (fake.store.receipts = new Map());
+    map.set(id, {
+      merchant: 'Metro', merchantKey: 'metro', total: 12.5, date: '2025-01-01', from: '+1',
+      createdAt: { toDate: () => new Date('2020-01-01'), toMillis: () => 0 }, ...extra,
+    });
+  };
+
+  it('finds an earlier receipt with the same merchant, total and date', async () => {
+    seedOld('old-1');
+    expect(await findPossibleDuplicate({ merchant: 'METRO', total: 12.5, date: '2025-01-01' }, '+1')).toBe('old-1');
+  });
+
+  it('ignores a different date, total, merchant or sender', async () => {
+    seedOld('old-1');
+    expect(await findPossibleDuplicate({ merchant: 'Metro', total: 12.5, date: '2025-01-02' }, '+1')).toBeNull();
+    expect(await findPossibleDuplicate({ merchant: 'Metro', total: 13, date: '2025-01-01' }, '+1')).toBeNull();
+    expect(await findPossibleDuplicate({ merchant: 'Costco', total: 12.5, date: '2025-01-01' }, '+1')).toBeNull();
+    expect(await findPossibleDuplicate({ merchant: 'Metro', total: 12.5, date: '2025-01-01' }, '+2')).toBeNull();
+  });
+
+  it('needs merchant, total and date to say anything', async () => {
+    seedOld('old-1');
+    expect(await findPossibleDuplicate({ merchant: 'Metro', total: 12.5 }, '+1')).toBeNull();
+    expect(await findPossibleDuplicate({ merchant: null, total: 12.5, date: '2025-01-01' }, '+1')).toBeNull();
+    expect(await findPossibleDuplicate({ merchant: 'Metro', total: null, date: '2025-01-01' }, '+1')).toBeNull();
   });
 });
 

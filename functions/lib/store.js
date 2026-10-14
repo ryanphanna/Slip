@@ -57,36 +57,52 @@ async function checkRateLimit(from) {
 
 
 
-async function findDuplicate(receipt, from) {
-  if (!receipt.merchant || receipt.total == null) return null;
-
+// A hard duplicate: the same message/import being processed again, or the same
+// merchant + total submitted within DUPLICATE_WINDOW_MS (rapid re-sends). These
+// are dropped. Returns the existing receipt id, or null.
+async function findDuplicate(receipt, from, { messageSid } = {}) {
   const db = admin.firestore();
+
+  if (messageSid) {
+    const sidSnap = await db.collection('receipts')
+      .where('from', '==', from)
+      .where('messageSid', '==', messageSid)
+      .limit(1)
+      .get();
+    if (!sidSnap.empty) return sidSnap.docs[0].id;
+  }
+
+  if (!receipt.merchant || receipt.total == null) return null;
   const merchantKey = receipt.merchant.trim().toLowerCase();
 
-  // 1. Same merchant + total submitted within the time window (catches rapid re-sends)
-  const tenMinutesAgo = new Date(Date.now() - config.DUPLICATE_WINDOW_MS);
+  const windowStart = new Date(Date.now() - config.DUPLICATE_WINDOW_MS);
   const recentSnap = await db.collection('receipts')
     .where('from', '==', from)
     .where('merchantKey', '==', merchantKey)
     .where('total', '==', receipt.total)
-    .where('createdAt', '>=', tenMinutesAgo)
+    .where('createdAt', '>=', windowStart)
     .limit(1)
     .get();
   if (!recentSnap.empty) return recentSnap.docs[0].id;
 
-  // 2. Same merchant + total + receipt date (catches re-uploads of old receipts days later)
-  if (receipt.date) {
-    const dateSnap = await db.collection('receipts')
-      .where('from', '==', from)
-      .where('merchantKey', '==', merchantKey)
-      .where('total', '==', receipt.total)
-      .where('date', '==', receipt.date)
-      .limit(1)
-      .get();
-    if (!dateSnap.empty) return dateSnap.docs[0].id;
-  }
-
   return null;
+}
+
+// A possible duplicate: same merchant + total + receipt date, but saved outside
+// the rapid-resend window. These are real repeats often enough (two identical
+// coffees) that they are saved and flagged rather than dropped. Returns the
+// earlier receipt id, or null.
+async function findPossibleDuplicate(receipt, from) {
+  if (!receipt.merchant || receipt.total == null || !receipt.date) return null;
+
+  const snap = await admin.firestore().collection('receipts')
+    .where('from', '==', from)
+    .where('merchantKey', '==', receipt.merchant.trim().toLowerCase())
+    .where('total', '==', receipt.total)
+    .where('date', '==', receipt.date)
+    .limit(1)
+    .get();
+  return snap.empty ? null : snap.docs[0].id;
 }
 
 async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {}) {
@@ -132,4 +148,4 @@ async function saveProcessingFailure({ from, messageSid, error, imagePaths = [],
   return doc.id;
 }
 
-module.exports = { saveReceipt, saveProcessingFailure, findDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };
+module.exports = { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };

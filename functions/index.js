@@ -23,7 +23,7 @@ if (!admin.storage) {
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt } = require('./lib/validate');
-const { saveReceipt, saveProcessingFailure, findDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
+const { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
 const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
 const { saveImages, saveFailedImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
@@ -385,7 +385,7 @@ exports.sms = onRequest(
                 return [];
               })
             : Promise.resolve([]),
-          findDuplicate(receipt, from)
+          findDuplicate(receipt, from, { messageSid })
         ]);
 
         const imagePaths = imagePathsResult;
@@ -396,7 +396,10 @@ exports.sms = onRequest(
           return;
         }
 
-        await saveReceipt(receipt, from, messageSid, imagePaths);
+        // Same merchant/total/date but outside the rapid-resend window: save it and flag it.
+        const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
+        await saveReceipt(receipt, from, messageSid, imagePaths,
+          possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {});
 
         const merchant = receipt.merchant || 'Unknown';
         const receiptCurrency = currencyOf(receipt);
@@ -407,6 +410,10 @@ exports.sms = onRequest(
         const itemSuffix = itemCount === 1 ? '1 item' : `${itemCount} items`;
 
         let message = `${prefix}: ${merchant} — ${total} (${categoryDisplay}, ${itemSuffix})`;
+
+        if (possibleDuplicateOf) {
+          message += '\nPossible duplicate of an earlier receipt.';
+        }
 
         if (raw.confidence != null && raw.confidence < 0.7) {
           message = `⚠️ ${message}`;

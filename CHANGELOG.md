@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Repeat purchases are no longer thrown away as duplicates**: two identical $4.50 coffees on the same day used to be dropped as "Duplicate". Now only a resend within 10 minutes (or the same message) is dropped; a same merchant, total and date receipt later on is saved, marked as a possible duplicate, and the reply says so. Applies to text messages and AI imports. (CIV-203)
 - **Web dependency security fix**: pinned the web app's gRPC library to a patched version, clearing 4 high-severity audit findings; the built app is byte-identical. (CIV-202)
 - **AI-import endpoint shrugs off junk requests**: requests with a missing, malformed or wrong-looking token are now turned away before any database or sign-in lookup, so a flood of junk can no longer queue behind (and delay) real imports. Every bad credential gets the same "invalid token" reply, and a missing content length no longer skips the request-size cap. (CIV-201)
 - **Merchant names no longer rewritten by a hidden word**: a receipt from "Metrolinx" was renamed to "Metro" (and "Targeted…" to "Target") because the known-store list matched anywhere inside a name. Names now match only as whole words, so "METRO #123", "Metro Inc" and "Walmart Supercenter" still map correctly. (CIV-199)

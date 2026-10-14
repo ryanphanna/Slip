@@ -47,6 +47,7 @@ const GOOD = {
   items: [{ name: 'Milk', price: 20.8, quantity: 1 }], currency: 'CAD', type: 'purchase', confidence: 0.95,
 };
 
+const parseReceiptText = () => parseReceiptFromText.mockResolvedValue(GOOD);
 const receipts = () => [...(fake.store.receipts || new Map()).entries()];
 const failures = () => [...(fake.store.processing_failures || new Map()).entries()];
 const seed = (collection, id, data) => {
@@ -199,13 +200,38 @@ describe('happy path: pasted text', () => {
     expect(lastSms()).toContain('Budget: $23.50/$100.00 spent');
   });
 
-  it('does not save a duplicate (same merchant, total and date) and says so', async () => {
-    seed('receipts', 'orig', { from: FROM, merchant: 'Costco', merchantKey: 'costco', total: 23.5, date: '2026-10-01', createdAt: makeTimestamp(new Date(Date.now() - 86400000)) });
-    parseReceiptFromText.mockResolvedValue(GOOD);
-    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+  it('drops an immediate resend (same merchant and total within the window) and says so', async () => {
+    seed('receipts', 'orig', { from: FROM, merchant: 'Costco', merchantKey: 'costco', total: 23.5, date: '2026-10-01', createdAt: makeTimestamp(new Date(Date.now() - 60 * 1000)) });
+    parseReceiptText();
+    await sms(makeReq({ MessageSid: 'SMresend', Body: 'Costco 23.50' }), makeRes());
     await waitFor(() => sendSms.mock.calls.length > 0);
     expect(lastSms()).toBe('Duplicate: Costco — $23.50 was already logged.');
     expect(receipts()).toHaveLength(1);
+  });
+
+  it('saves a same merchant/total/date receipt from earlier in the day and flags it', async () => {
+    seed('receipts', 'orig', { from: FROM, merchant: 'Costco', merchantKey: 'costco', total: 23.5, date: '2026-10-01', createdAt: makeTimestamp(new Date(Date.now() - 3 * 60 * 60 * 1000)) });
+    parseReceiptText();
+    await sms(makeReq({ MessageSid: 'SMlater', Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    expect(receipts()).toHaveLength(2);
+    const saved = receipts().find(([id]) => id !== 'orig')[1];
+    expect(saved).toMatchObject({ merchant: 'Costco', total: 23.5, messageSid: 'SMlater', possibleDuplicate: true, possibleDuplicateOf: 'orig' });
+    expect(lastSms()).toContain('Saved: Costco — $23.50 (Grocery, 1 item)\nPossible duplicate of an earlier receipt.');
+    expect(fake.store.receipts.get('orig').possibleDuplicate).toBeUndefined();
+  });
+
+  it('does not flag a receipt with a different total or date, or no match at all', async () => {
+    seed('receipts', 'orig', { from: FROM, merchant: 'Costco', merchantKey: 'costco', total: 23.5, date: '2026-10-01', createdAt: makeTimestamp(new Date(Date.now() - 3 * 60 * 60 * 1000)) });
+    parseReceiptFromText.mockResolvedValueOnce({ ...GOOD, total: 30 });
+    await sms(makeReq({ MessageSid: 'SMa', Body: 'Costco 30' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length === 1);
+    parseReceiptFromText.mockResolvedValueOnce({ ...GOOD, date: '2026-10-02' });
+    await sms(makeReq({ MessageSid: 'SMb', Body: 'Costco 23.50 oct 2' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length === 2);
+    expect(receipts()).toHaveLength(3);
+    for (const [id, doc] of receipts()) if (id !== 'orig') expect(doc.possibleDuplicate).toBeUndefined();
+    expect(sendSms.mock.calls.every(([, msg]) => !/Possible duplicate/.test(msg))).toBe(true);
   });
 
   it('replies that text which is not a receipt was not saved', async () => {
