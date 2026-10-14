@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const { validateReceipt, normalizeEditPatch, normalizeItemPatch } = require('./validate');
-const { parseReceiptFromBase64 } = require('./receipt');
+const { parseReceiptFromBase64, parseReceiptFromText } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
 const { isAllowed } = require('./allowlist');
@@ -134,8 +134,10 @@ async function listProcessingFailures(request) {
     .get();
   const failures = snapshot.docs.map(serializeDoc)
     .filter((failure) => VISIBLE_FAILURE_STATUSES.has(failure.status || '')
-      && Array.isArray(failure.imagePaths)
-      && failure.imagePaths.length > 0);
+      && ((Array.isArray(failure.imagePaths) && failure.imagePaths.length > 0)
+        || (typeof failure.sourceText === 'string' && failure.sourceText.trim().length > 0)))
+    // The pasted text stays server-side; the list only says a text retry is possible.
+    .map(({ sourceText, ...rest }) => (sourceText ? { ...rest, hasSourceText: true } : rest));
   failures.sort((a, b) => {
     const aTime = a.createdAt?.toMillis?.() || 0;
     const bTime = b.createdAt?.toMillis?.() || 0;
@@ -191,7 +193,8 @@ async function claimRetry(db, failureRef, phone) {
       throw retryError('failed-precondition', 'A retry for this receipt is already in progress');
     }
     const paths = failure.get('imagePaths') || [];
-    if (paths.length === 0) throw new Error('This failure has no stored image to retry');
+    const sourceText = typeof failure.get('sourceText') === 'string' ? failure.get('sourceText').trim() : '';
+    if (paths.length === 0 && !sourceText) throw new Error('This failure has no stored image or text to retry');
 
     const limit = await tx.get(limitRef);
     const windowStart = limit.exists ? limit.get('windowStart') || 0 : 0;
@@ -215,6 +218,7 @@ async function claimRetry(db, failureRef, phone) {
     }, { merge: true });
     return {
       paths,
+      sourceText,
       token,
       messageSid: failure.get('messageSid') || null,
       previousStatus,
@@ -230,7 +234,7 @@ async function retryProcessing(request) {
   if (!id) throw retryError('invalid-argument', 'Failure id is required');
   const db = admin.firestore();
   const failureRef = db.collection('processing_failures').doc(id);
-  const { paths, token, messageSid, previousStatus, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
+  const { paths, sourceText, token, messageSid, previousStatus, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
 
   // Only the claim's owner may release it, and only while it is still held;
   // a superseded or finished claim is never overwritten. `refund` returns the
@@ -253,14 +257,23 @@ async function retryProcessing(request) {
 
   let receipt;
   try {
-    const bucket = admin.storage().bucket();
-    const images = await Promise.all(paths.map(async (path) => {
-      const file = bucket.file(path);
-      const [buffer] = await file.download();
-      const [metadata] = await file.getMetadata();
-      return { base64: buffer.toString('base64'), mimeType: metadata.contentType || 'image/jpeg' };
-    }));
-    const raw = await parseReceiptFromBase64(images);
+    let raw;
+    if (paths.length > 0) {
+      const bucket = admin.storage().bucket();
+      const images = await Promise.all(paths.map(async (path) => {
+        const file = bucket.file(path);
+        const [buffer] = await file.download();
+        const [metadata] = await file.getMetadata();
+        return { base64: buffer.toString('base64'), mimeType: metadata.contentType || 'image/jpeg' };
+      }));
+      raw = await parseReceiptFromBase64(images);
+    } else {
+      // Text-only failure: re-parse the pasted text through the same text path SMS uses.
+      raw = await parseReceiptFromText(sourceText);
+      const extractedNothing = raw.merchant == null && raw.total == null
+        && (!Array.isArray(raw.items) || raw.items.length === 0);
+      if (extractedNothing) throw retryError('failed-precondition', "That text didn't look like a receipt");
+    }
     receipt = validateReceipt(raw);
     if (raw.confidence != null) receipt.confidence = raw.confidence;
   } catch (error) {

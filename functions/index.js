@@ -467,6 +467,7 @@ exports.sms = onRequest(
             error: err && err.message ? err.message : String(err),
             imagePaths: failureImagePaths,
             numMedia,
+            sourceText: numMedia === 0 ? (req.body.Body || '').trim() : undefined,
           });
         } catch (failureErr) {
           logger.error('Failed to save processing failure record', { messageSid, error: failureErr.message });

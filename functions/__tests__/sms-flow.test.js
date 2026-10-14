@@ -269,7 +269,7 @@ describe('error paths in background processing', () => {
     await waitFor(() => sendSms.mock.calls.length > 0);
     expect(lastSms()).toMatch(/Couldn't read that receipt/);
     expect(failures()).toHaveLength(1);
-    expect(failures()[0][1]).toMatchObject({ from: FROM, messageSid: 'SM1', status: 'failed', error: 'gemini exploded' });
+    expect(failures()[0][1]).toMatchObject({ from: FROM, messageSid: 'SM1', status: 'failed', error: 'gemini exploded', sourceText: 'Costco 23.50' });
     expect(receipts()).toHaveLength(1);
   });
 
@@ -288,6 +288,7 @@ describe('error paths in background processing', () => {
     await waitFor(() => failures().length > 0 && sendSms.mock.calls.length > 0);
     expect(saveFailedImages).toHaveBeenCalled();
     expect(failures()[0][1]).toMatchObject({ imagePaths: ['receipts-failed/SM1/0.jpg'], numMedia: 1 });
+    expect(failures()[0][1].sourceText).toBeUndefined();
     expect(receipts()).toHaveLength(0);
   });
 
@@ -299,6 +300,16 @@ describe('error paths in background processing', () => {
     await waitFor(() => sendSms.mock.calls.length > 0);
     expect(receipts()[0][1]).toMatchObject({ merchant: 'Costco', imagePaths: [] });
     expect(lastSms()).toContain('Saved: Costco');
+  });
+});
+
+describe('text failures keep the pasted text', () => {
+  it('stores the trimmed body text, capped to the SMS text limit', async () => {
+    const { saveProcessingFailure } = require('../lib/store');
+    await saveProcessingFailure({ from: FROM, messageSid: 'SMcap', error: 'x', sourceText: '  ' + 'a'.repeat(config.MAX_BODY_TEXT_LENGTH + 500) });
+    expect(fake.store.processing_failures.get('SMcap').sourceText).toHaveLength(config.MAX_BODY_TEXT_LENGTH);
+    await saveProcessingFailure({ from: FROM, messageSid: 'SMblank', error: 'x', sourceText: '   ' });
+    expect(fake.store.processing_failures.get('SMblank')).not.toHaveProperty('sourceText');
   });
 });
 

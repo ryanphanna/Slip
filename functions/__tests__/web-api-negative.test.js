@@ -1,7 +1,7 @@
 const { createFakeFirestore, makeTimestamp } = require('../test-helpers/fake-firestore');
 
 jest.mock('firebase-admin', () => ({ firestore: jest.fn(), storage: jest.fn() }));
-jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn() }));
+jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn() }));
 
 process.env.ALLOWED_PHONES = '+14165551234,+14165559999';
 

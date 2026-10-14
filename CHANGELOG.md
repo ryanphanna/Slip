@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Pasted-text receipts can now be retried**: when a text-message receipt failed to parse, only the error was kept, so the text was lost and couldn't be retried. The text is now saved with the failure (up to the 8,000-character message limit), shows in Processing history, and Retry re-parses it.
 - **Item edits are validated**: editing an item (verify, rename, category, catalog fields) used to store whatever it was sent, such as "yes" for verified or any text as a category. Wrong types, unknown categories, empty names, over-long text and non-web product links are now rejected with a clear message instead of being saved.
 - **Monthly recap category bar**: the recap card now shows a colored bar of where the month went (top 4 categories plus Other) with amounts beneath, instead of a plain list.
 - **Totals no longer mix currencies**: a US$45 receipt used to be added into a CAD total (TOTAL, SUMMARY, budgets, monthly recap, weekly budget check, and the assistant's spending answers). Totals and budgets are now CAD only, other currencies are listed on their own line ("Also spent: US$45.00 (2 receipts)") and never converted, and LAST and save confirmations show the receipt's own currency. Receipts with no currency still count as CAD. (CIV-186)

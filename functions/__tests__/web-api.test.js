@@ -4,10 +4,10 @@ let fake;
 let storageFiles;
 
 jest.mock('firebase-admin', () => ({ firestore: jest.fn(), storage: jest.fn() }));
-jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn() }));
+jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn() }));
 
 const admin = require('firebase-admin');
-const { parseReceiptFromBase64 } = require('../lib/receipt');
+const { parseReceiptFromBase64, parseReceiptFromText } = require('../lib/receipt');
 const {
   cleanPatch, requireAuth, EDITABLE_FIELDS, VISIBLE_FAILURE_STATUSES,
   listReceipts, getReceipt, updateReceipt, listProcessingFailures, listNotifications,
@@ -36,6 +36,7 @@ beforeEach(() => {
   admin.firestore.Timestamp = fake.db.Timestamp;
   admin.storage.mockReturnValue({ bucket: fakeBucket });
   parseReceiptFromBase64.mockReset();
+  parseReceiptFromText.mockReset();
 });
 
 function seed(collection, id, data) {
@@ -384,6 +385,69 @@ describe('retryProcessing', () => {
       });
       await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toBeTruthy();
       expect(fake.store.retry_limits.get('14165551234').count).toBe(1);
+    });
+
+    describe('text-only failures', () => {
+      const seedTextFailure = (id = 'f1', extra = {}) => seed('processing_failures', id, { from: PHONE, imagePaths: [], numMedia: 0, status: 'failed', sourceText: 'Costco milk 20.80 total 23.50', ...extra });
+
+      it('re-parses the stored text (no image needed) and recovers the receipt', async () => {
+        seedTextFailure('f1', { messageSid: 'SM9' });
+        parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 23.5, category: 'Grocery', items: [{ name: 'Milk', price: 20.8 }], confidence: 0.9 });
+        const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        expect(parseReceiptFromText).toHaveBeenCalledWith('Costco milk 20.80 total 23.50');
+        expect(parseReceiptFromBase64).not.toHaveBeenCalled();
+        expect(result.merchant).toBe('Costco');
+        expect(fake.store.receipts.get(result.id)).toMatchObject({ from: PHONE, merchant: 'Costco', merchantKey: 'costco', imagePaths: [], messageSid: 'SM9', recoveredFromFailure: 'f1' });
+        expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'recovered', recoveredReceiptId: result.id });
+      });
+
+      it('a second retry of the same text failure is rejected (no duplicate, no second Gemini call)', async () => {
+        seedTextFailure();
+        parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 23.5, items: [] });
+        await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+        expect(parseReceiptFromText).toHaveBeenCalledTimes(1);
+        expect(receiptCount()).toBe(1);
+      });
+
+      it('a parse failure releases the claim and refunds the slot, leaving the text intact', async () => {
+        seedTextFailure();
+        parseReceiptFromText.mockRejectedValueOnce(new Error('gemini down'));
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toThrow('gemini down');
+        expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'failed', sourceText: 'Costco milk 20.80 total 23.50' });
+        expect(fake.store.retry_limits.get('14165551234').count).toBe(0);
+      });
+
+      it('text that still is not a receipt is rejected without saving anything', async () => {
+        seedTextFailure();
+        parseReceiptFromText.mockResolvedValue({ merchant: null, total: null, items: [] });
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+        expect(receiptCount()).toBe(0);
+        expect(fake.store.processing_failures.get('f1').status).toBe('failed');
+      });
+
+      it('a failure with neither images nor text still cannot be retried', async () => {
+        seed('processing_failures', 'f1', { from: PHONE, imagePaths: [], sourceText: '   ' });
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toThrow('no stored image or text');
+        expect(parseReceiptFromText).not.toHaveBeenCalled();
+      });
+
+      it('image failures still use the image path even if text is present', async () => {
+        seedFailure('f1', { sourceText: 'ignored' });
+        parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 5, items: [] });
+        await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        expect(parseReceiptFromBase64).toHaveBeenCalledTimes(1);
+        expect(parseReceiptFromText).not.toHaveBeenCalled();
+      });
+
+      it('is listed as retryable without leaking the pasted text', async () => {
+        seedTextFailure('t1', { createdAt: { toMillis: () => 2 } });
+        seed('processing_failures', 'empty', { from: PHONE, imagePaths: [], status: 'failed', createdAt: { toMillis: () => 3 } });
+        const { failures } = await listProcessingFailures(AUTH);
+        expect(failures.map((f) => f.id)).toEqual(['t1']);
+        expect(failures[0].hasSourceText).toBe(true);
+        expect(failures[0].sourceText).toBeUndefined();
+      });
     });
 
     it('resets the rate-limit window after an hour', async () => {
