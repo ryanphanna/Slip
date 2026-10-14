@@ -13,11 +13,16 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 - **Allowlisting**: Only approved phone numbers can submit receipts.
 - **Quick Confirmation**: Sends back a short receipt summary after each successful save.
 - **Detailed History**: Stores itemized receipts with merchant, date, totals, tax, categories, and line items.
+- **AI Assistant Import**: A token-authenticated MCP endpoint (`functions/lib/mcp.js`, `import-*.js`) lets a linked AI assistant save receipts without Gemini.
+- **Budgets**: Set per-category monthly budgets and get weekly SMS budget checks.
+- **Digests**: Monthly spending recap texts.
+- **Notifications**: Recaps are also saved as in-app notifications in the web inbox.
+- **Items**: Browse and correct individual line items across receipts in the web app.
 - **Private by Design**: Built for personal use with server-side storage, locked-down client access, and allowlisted intake.
 
 ## Web interface
 
-The React receipt inbox lives in `web/` and is hosted by Firebase Hosting. Copy `web/.env.example` to `web/.env.local`, fill in the Firebase web app configuration, then run:
+The React receipt inbox lives in `web/` and is hosted by Firebase Hosting. Setup: copy `web/.env.example` to `web/.env.local` and fill in the Firebase web app configuration (every variable is listed in that file), then run:
 
 ```sh
 cd web

@@ -12,3 +12,4 @@ web/dist/
 serviceAccountKey.json
 functions/serviceAccountKey.json
 TODO.md
+coverage/
