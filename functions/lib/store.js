@@ -103,7 +103,7 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {
   return doc.id;
 }
 
-async function saveProcessingFailure({ from, messageSid, error, imagePaths = [], numMedia = 0 }) {
+async function saveProcessingFailure({ from, messageSid, error, imagePaths = [], numMedia = 0, sourceText }) {
   const db = admin.firestore();
   const data = {
     from,
@@ -112,6 +112,8 @@ async function saveProcessingFailure({ from, messageSid, error, imagePaths = [],
     error: error || 'Unknown receipt processing error',
     imagePaths,
     numMedia,
+    // Pasted receipt text (text-only messages), capped, so the failure can be retried.
+    ...(typeof sourceText === 'string' && sourceText.trim() ? { sourceText: sourceText.slice(0, config.MAX_BODY_TEXT_LENGTH) } : {}),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
