@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Budget command checks the category**: `BUDGET <category> <amount>` used to accept any word and quietly create a budget that never matched any receipt. It now recognizes the real categories (any capitalization, plurals like "Groceries", or just "Takeout"), and for anything else replies with the valid category names without saving.
+- **Text-message hang on a database error**: if the duplicate-message lookup failed, the request hung until it timed out and Twilio retried. It now carries on and logs the error once.
 - **Pasted-text receipts can now be retried**: when a text-message receipt failed to parse, only the error was kept, so the text was lost and couldn't be retried. The text is now saved with the failure (up to the 8,000-character message limit), shows in Processing history, and Retry re-parses it.
 - **Item edits are validated**: editing an item (verify, rename, category, catalog fields) used to store whatever it was sent, such as "yes" for verified or any text as a category. Wrong types, unknown categories, empty names, over-long text and non-web product links are now rejected with a clear message instead of being saved.
 - **Monthly recap category bar**: the recap card now shows a colored bar of where the month went (top 4 categories plus Other) with amounts beneath, instead of a plain list.

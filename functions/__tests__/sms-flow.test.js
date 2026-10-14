@@ -313,6 +313,89 @@ describe('text failures keep the pasted text', () => {
   });
 });
 
+describe('idempotency check failure', () => {
+  const logger = require('firebase-functions/logger');
+
+  it('fails open: a Firestore error on the MessageSid lookup does not hang or drop the receipt', async () => {
+    const realCollection = fake.db.collection;
+    fake.db.collection = (name) => {
+      const col = realCollection(name);
+      if (name !== 'receipts') return col;
+      return Object.assign(Object.create(col), {
+        where: (field, op, value) => {
+          if (field === 'messageSid') return { limit: () => ({ get: async () => { throw new Error('firestore unavailable'); } }) };
+          return col.where(field, op, value);
+        },
+      });
+    };
+    parseReceiptFromText.mockResolvedValue(GOOD);
+    const res = makeRes();
+    await sms(makeReq({ Body: 'Costco 23.50' }), res);
+    expect(res.send).toHaveBeenCalledWith('<Response/>');
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    expect(receipts()).toHaveLength(1);
+    const logged = logger.error.mock.calls.filter(([msg]) => /isMessageProcessed failed/.test(msg));
+    expect(logged).toHaveLength(1);
+    expect(logged[0][1]).toMatchObject({ messageSid: 'SM1', error: 'firestore unavailable' });
+  });
+
+  it('a duplicate delivery is still stopped by the receipt duplicate check when the lookup fails', async () => {
+    seed('receipts', 'orig', { from: FROM, merchant: 'Costco', merchantKey: 'costco', total: 23.5, date: '2026-10-01', messageSid: 'SM1', createdAt: makeTimestamp(new Date(Date.now() - 1000)) });
+    const realCollection = fake.db.collection;
+    fake.db.collection = (name) => {
+      const col = realCollection(name);
+      if (name !== 'receipts') return col;
+      return Object.assign(Object.create(col), {
+        where: (field, op, value) => (field === 'messageSid'
+          ? { limit: () => ({ get: async () => { throw new Error('boom'); } }) }
+          : col.where(field, op, value)),
+      });
+    };
+    parseReceiptFromText.mockResolvedValue(GOOD);
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    expect(lastSms()).toMatch(/^Duplicate: Costco/);
+    expect(receipts()).toHaveLength(1);
+  });
+});
+
+describe('BUDGET category handling', () => {
+  const budgets = () => [...(fake.store.budgets || new Map()).values()];
+
+  it.each([
+    ['BUDGET grocery 500', 'Grocery'],
+    ['BUDGET Groceries 500', 'Grocery'],
+    ['budget GROCERY 500', 'Grocery'],
+    ['BUDGET takeout 80', 'Takeout/Dining'],
+    ['BUDGET Takeout/Dining 80', 'Takeout/Dining'],
+  ])('%s saves the canonical category %s', async (body, category) => {
+    await sms(makeReq({ Body: body }), makeRes());
+    expect(budgets()).toHaveLength(1);
+    expect(budgets()[0].category).toBe(category);
+    expect(lastSms()).toMatch(new RegExp(`^Budget set: ${category.replace('/', '\\/')} limit is now \\$`));
+  });
+
+  it('an unknown category is not saved and the valid names are listed', async () => {
+    await sms(makeReq({ Body: 'BUDGET Crypto 100' }), makeRes());
+    expect(budgets()).toHaveLength(0);
+    expect(lastSms()).toContain('I don\'t know the category "Crypto"');
+    expect(lastSms()).toContain('Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other');
+  });
+
+  it('a multi-word unknown category is echoed back and not saved', async () => {
+    await sms(makeReq({ Body: 'BUDGET Coffee and snacks 20' }), makeRes());
+    expect(budgets()).toHaveLength(0);
+    expect(lastSms()).toContain('"Coffee and snacks"');
+  });
+
+  it('a budget set through an alias matches spending in that category', async () => {
+    await sms(makeReq({ Body: 'BUDGET groceries 100' }), makeRes());
+    seed('receipts', 'r1', { from: FROM, category: 'Grocery', total: 40, createdAt: makeTimestamp(new Date()) });
+    await sms(makeReq({ MessageSid: 'SMb', Body: 'BUDGET' }), makeRes());
+    expect(lastSms()).toContain('Grocery: $40.00 / $100.00 (40%)');
+  });
+});
+
 describe('text commands', () => {
   it('LAST replies with the most recent receipt, and says so when there are none', async () => {
     await sms(makeReq({ Body: 'LAST' }), makeRes());

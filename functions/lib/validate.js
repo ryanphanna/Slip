@@ -1,6 +1,6 @@
 const config = require('./config');
 
-const VALID_CATEGORIES = ['Takeout/Dining', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Home', 'Other'];
+const { VALID_CATEGORIES } = require('./categories');
 const VALID_TYPES = ['purchase', 'refund'];
 
 function normalizeMerchant(name) {

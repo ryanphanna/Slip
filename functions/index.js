@@ -28,6 +28,7 @@ const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCa
 const { saveImages, saveFailedImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport, getBudgetStatus } = require('./lib/budget');
+const { resolveCategory, VALID_CATEGORIES } = require('./lib/categories');
 const { formatMoney, alsoSpentLine, currencyOf, DEFAULT_CURRENCY } = require('./lib/money');
 const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
@@ -134,7 +135,15 @@ exports.sms = onRequest(
       return;
     }
 
-    if (await isMessageProcessed(messageSid)) {
+    // Fail open like the rate limit: a Firestore hiccup must not hang the request.
+    // Duplicates are still caught later by the saved-receipt duplicate check.
+    let alreadyProcessed = false;
+    try {
+      alreadyProcessed = await isMessageProcessed(messageSid);
+    } catch (err) {
+      logger.error('isMessageProcessed failed, continuing without idempotency check', { messageSid, error: err.message });
+    }
+    if (alreadyProcessed) {
       logger.info('Message already processed (idempotency)', { messageSid });
       res.set('Content-Type', 'text/xml');
       res.send('<Response/>');
@@ -259,9 +268,14 @@ exports.sms = onRequest(
           const limit = parseFloat(limitStr);
 
           if (parts.length >= 3 && !isNaN(limit) && limit >= 0) {
-            const category = parts.slice(1, -1).join(' ');
-            await setBudget(from, category, limit);
-            await sendSms(from, `Budget set: ${category} limit is now $${limit.toFixed(2)}.`);
+            const typedCategory = parts.slice(1, -1).join(' ');
+            const category = resolveCategory(typedCategory);
+            if (!category) {
+              await sendSms(from, `${oops()} I don't know the category "${typedCategory}". Use one of: ${VALID_CATEGORIES.join(', ')}.`);
+            } else {
+              await setBudget(from, category, limit);
+              await sendSms(from, `Budget set: ${category} limit is now $${limit.toFixed(2)}.`);
+            }
           } else {
             await sendSms(from, `${oops()} That didn't look right. Try: BUDGET <category> <limit> (e.g., BUDGET Grocery 500)`);
           }
