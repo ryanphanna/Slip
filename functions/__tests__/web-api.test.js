@@ -174,6 +174,160 @@ describe('retryProcessing', () => {
 
     const receipt = await fake.db.collection('receipts').doc(result.id).get();
     expect(receipt.data().recoveredFromFailure).toBe('f1');
+    expect(receipt.data().merchantKey).toBe('costco');
+  });
+
+  describe('repeat and concurrent retries', () => {
+    const PHONE = '+14165551234';
+    const seedFailure = (id = 'f1', extra = {}) => {
+      storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
+      seed('processing_failures', id, { from: PHONE, imagePaths: ['path/a.jpg'], ...extra });
+    };
+    const receiptCount = () => (fake.store.receipts ? fake.store.receipts.size : 0);
+
+    it('rejects an already-recovered failure without calling Gemini or adding a receipt', async () => {
+      seedFailure('f1', { status: 'recovered', recoveredReceiptId: 'r1' });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+      expect(parseReceiptFromBase64).not.toHaveBeenCalled();
+      expect(receiptCount()).toBe(0);
+    });
+
+    it('a second sequential retry after success is rejected and adds nothing', async () => {
+      seedFailure();
+      parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 12.5, items: [] });
+      await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+      expect(parseReceiptFromBase64).toHaveBeenCalledTimes(1);
+      expect(receiptCount()).toBe(1);
+    });
+
+    it('simultaneous retries make one Gemini call and one receipt', async () => {
+      seedFailure();
+      parseReceiptFromBase64.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 10));
+        return { merchant: 'Costco', total: 12.5, items: [] };
+      });
+      const results = await Promise.allSettled([
+        retryProcessing({ ...AUTH, data: { id: 'f1' } }),
+        retryProcessing({ ...AUTH, data: { id: 'f1' } }),
+        retryProcessing({ ...AUTH, data: { id: 'f1' } }),
+      ]);
+      expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((r) => r.status === 'rejected').every((r) => r.reason.code === 'failed-precondition')).toBe(true);
+      expect(parseReceiptFromBase64).toHaveBeenCalledTimes(1);
+      expect(receiptCount()).toBe(1);
+    });
+
+    it('a failed parse releases the claim so the user can retry again', async () => {
+      seedFailure('f1', { status: 'failed' });
+      parseReceiptFromBase64.mockRejectedValueOnce(new Error('gemini down'));
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toThrow('gemini down');
+      expect(fake.store.processing_failures.get('f1').status).toBe('failed');
+      expect(receiptCount()).toBe(0);
+      parseReceiptFromBase64.mockResolvedValueOnce({ merchant: 'Costco', total: 5, items: [] });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).resolves.toMatchObject({ merchant: 'Costco' });
+    });
+
+    it('rejects a fresh in-progress claim but takes over a stale one', async () => {
+      const stamp = (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
+      seedFailure('f1', { status: 'retrying', retryToken: 'other', retryStartedAt: stamp(Date.now()) });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+      fake.store.processing_failures.get('f1').retryStartedAt = stamp(Date.now() - 10 * 60 * 1000);
+      parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 5, items: [] });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).resolves.toMatchObject({ merchant: 'Costco' });
+    });
+
+    it('rate-limits retries per account and keeps accounts separate', async () => {
+      const config = require('../lib/config');
+      parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 5, items: [] });
+      for (let i = 0; i < config.RETRY_RATE_LIMIT_PER_HOUR; i++) {
+        seedFailure(`f${i}`);
+        await retryProcessing({ ...AUTH, data: { id: `f${i}` } });
+      }
+      seedFailure('over');
+      await expect(retryProcessing({ ...AUTH, data: { id: 'over' } })).rejects.toMatchObject({ code: 'resource-exhausted' });
+      expect(parseReceiptFromBase64).toHaveBeenCalledTimes(config.RETRY_RATE_LIMIT_PER_HOUR);
+
+      const OTHER = { auth: { uid: 'user-2', token: { phone_number: '+14165559999' } } };
+      seed('processing_failures', 'other-1', { from: '+14165559999', imagePaths: ['path/a.jpg'] });
+      await expect(retryProcessing({ ...OTHER, data: { id: 'other-1' } })).resolves.toMatchObject({ merchant: 'Costco' });
+    });
+
+    it('retrying failures stay visible in the failures list', async () => {
+      expect(VISIBLE_FAILURE_STATUSES.has('retrying')).toBe(true);
+      seed('processing_failures', 'f1', { from: PHONE, status: 'retrying', imagePaths: ['p'], createdAt: { toMillis: () => 1 } });
+      const { failures } = await listProcessingFailures(AUTH);
+      expect(failures.map((f) => f.id)).toEqual(['f1']);
+    });
+
+    it('a stale takeover remembers the original status, not "retrying"', async () => {
+      const stamp = (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
+      seedFailure('f1', { status: 'retrying', previousStatus: 'pending', retryToken: 'dead', retryStartedAt: stamp(Date.now() - 10 * 60 * 1000) });
+      parseReceiptFromBase64.mockRejectedValueOnce(new Error('gemini down'));
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toThrow('gemini down');
+      expect(fake.store.processing_failures.get('f1').status).toBe('pending');
+
+      // Claim without a stored previousStatus falls back to 'failed'.
+      seedFailure('f2', { status: 'retrying', retryToken: 'dead', retryStartedAt: stamp(Date.now() - 10 * 60 * 1000) });
+      parseReceiptFromBase64.mockRejectedValueOnce(new Error('gemini down'));
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f2' } })).rejects.toThrow('gemini down');
+      expect(fake.store.processing_failures.get('f2').status).toBe('failed');
+    });
+
+    it('a superseded retry cannot overwrite the newer claim or finished state when it fails', async () => {
+      seedFailure('f1', { status: 'failed' });
+      let release;
+      parseReceiptFromBase64.mockImplementationOnce(() => new Promise((_, reject) => { release = () => reject(new Error('late failure')); }));
+      const first = retryProcessing({ ...AUTH, data: { id: 'f1' } });
+      await new Promise((r) => setTimeout(r, 5));
+      // Another retry took over (token changed) and recovered the receipt.
+      fake.store.processing_failures.set('f1', { ...fake.store.processing_failures.get('f1'), status: 'recovered', retryToken: null, recoveredReceiptId: 'rX' });
+      release();
+      await expect(first).rejects.toThrow('late failure');
+      expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'recovered', recoveredReceiptId: 'rX' });
+    });
+
+    it('also does not release when the final write fails after another token took the claim', async () => {
+      seedFailure('f1', { status: 'failed' });
+      parseReceiptFromBase64.mockImplementationOnce(async () => {
+        fake.store.processing_failures.set('f1', { ...fake.store.processing_failures.get('f1'), status: 'retrying', retryToken: 'someone-else' });
+        return { merchant: 'Costco', total: 5, items: [] };
+      });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+      expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'retrying', retryToken: 'someone-else' });
+      expect(receiptCount()).toBe(0);
+    });
+
+    it('refunds the rate-limit slot when the retry fails before parsing succeeds', async () => {
+      const config = require('../lib/config');
+      for (let i = 0; i < config.RETRY_RATE_LIMIT_PER_HOUR * 2; i++) {
+        seedFailure('f1', { status: 'failed' });
+        parseReceiptFromBase64.mockRejectedValueOnce(new Error('gemini down'));
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toThrow('gemini down');
+      }
+      expect(fake.store.retry_limits.get('14165551234').count).toBe(0);
+      parseReceiptFromBase64.mockResolvedValueOnce({ merchant: 'Costco', total: 5, items: [] });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).resolves.toMatchObject({ merchant: 'Costco' });
+      expect(fake.store.retry_limits.get('14165551234').count).toBe(1);
+    });
+
+    it('keeps the slot used when parsing succeeded but the final write failed', async () => {
+      seedFailure('f1', { status: 'failed' });
+      parseReceiptFromBase64.mockImplementationOnce(async () => {
+        fake.store.processing_failures.get('f1').retryToken = 'other';
+        return { merchant: 'Costco', total: 5, items: [] };
+      });
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toBeTruthy();
+      expect(fake.store.retry_limits.get('14165551234').count).toBe(1);
+    });
+
+    it('resets the rate-limit window after an hour', async () => {
+      const config = require('../lib/config');
+      parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 5, items: [] });
+      seed('retry_limits', '14165551234', { from: PHONE, windowStart: Date.now() - config.RETRY_RATE_LIMIT_WINDOW_MS - 1000, count: 999 });
+      seedFailure();
+      await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).resolves.toMatchObject({ merchant: 'Costco' });
+    });
   });
 });
 

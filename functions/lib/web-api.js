@@ -2,7 +2,8 @@ const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const { validateReceipt } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
-const { getSettings, updateSettings } = require('./settings');
+const { getSettings, updateSettings, settingsId } = require('./settings');
+const config = require('./config');
 const importTokens = require('./import-tokens');
 
 const EDITABLE_FIELDS = new Set([
@@ -10,7 +11,7 @@ const EDITABLE_FIELDS = new Set([
   'subCategory', 'currency', 'type', 'isSubscription', 'loyaltyPointsEarned',
   'loyaltyPointsBalance', 'items',
 ]);
-const VISIBLE_FAILURE_STATUSES = new Set(['failed', 'pending', '', 'resolved', 'duplicate']);
+const VISIBLE_FAILURE_STATUSES = new Set(['failed', 'pending', '', 'resolved', 'duplicate', 'retrying']);
 
 function requireAuth(request) {
   if (!request.auth?.uid || !request.auth.token?.phone_number) {
@@ -158,40 +159,135 @@ async function getProcessingFailureImageUrls(request) {
   return { urls };
 }
 
+const RETRY_CLAIM_STALE_MS = 3 * 60 * 1000;
+
+function retryError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+// Atomically claims a failure for retry: rejects already-recovered or
+// in-flight failures and enforces the per-account hourly retry limit, so
+// repeated or concurrent calls cannot trigger extra Gemini calls.
+async function claimRetry(db, failureRef, phone) {
+  const limitRef = db.collection('retry_limits').doc(settingsId(phone));
+  return db.runTransaction(async (tx) => {
+    const failure = await tx.get(failureRef);
+    if (!failure.exists || failure.get('from') !== phone) throw retryError('not-found', 'Processing failure not found');
+    const status = failure.get('status');
+    if (status === 'recovered') throw retryError('failed-precondition', 'This receipt was already recovered');
+    const startedAt = failure.get('retryStartedAt')?.toMillis?.() || 0;
+    if (status === 'retrying' && Date.now() - startedAt < RETRY_CLAIM_STALE_MS) {
+      throw retryError('failed-precondition', 'A retry for this receipt is already in progress');
+    }
+    const paths = failure.get('imagePaths') || [];
+    if (paths.length === 0) throw new Error('This failure has no stored image to retry');
+
+    const limit = await tx.get(limitRef);
+    const windowStart = limit.exists ? limit.get('windowStart') || 0 : 0;
+    const inWindow = Date.now() - windowStart < config.RETRY_RATE_LIMIT_WINDOW_MS;
+    const count = inWindow && limit.exists ? limit.get('count') || 0 : 0;
+    if (count >= config.RETRY_RATE_LIMIT_PER_HOUR) {
+      throw retryError('resource-exhausted', 'Too many retries. Try again later.');
+    }
+    const claimWindowStart = inWindow && limit.exists ? windowStart : Date.now();
+    tx.set(limitRef, { from: phone, windowStart: claimWindowStart, count: count + 1 });
+
+    const previousStatus = status === 'retrying' ? (failure.get('previousStatus') ?? 'failed') : (status ?? 'failed');
+    const token = crypto.randomUUID();
+    tx.set(failureRef, {
+      status: 'retrying',
+      // A stale takeover keeps the original pre-retry status, never 'retrying'.
+      previousStatus,
+      retryToken: token,
+      retryWindowStart: claimWindowStart,
+      retryStartedAt: admin.firestore.Timestamp.fromMillis(Date.now()),
+    }, { merge: true });
+    return {
+      paths,
+      token,
+      messageSid: failure.get('messageSid') || null,
+      previousStatus,
+      limitRef,
+      windowStart: claimWindowStart,
+    };
+  });
+}
+
 async function retryProcessing(request) {
   const { phone } = requireAuth(request);
   const id = String(request.data?.id || '');
-  const failureRef = admin.firestore().collection('processing_failures').doc(id);
-  const failure = await failureRef.get();
-  if (!failure.exists || failure.get('from') !== phone) {
-    const error = new Error('Processing failure not found');
-    error.code = 'not-found';
+  if (!id) throw retryError('invalid-argument', 'Failure id is required');
+  const db = admin.firestore();
+  const failureRef = db.collection('processing_failures').doc(id);
+  const { paths, token, messageSid, previousStatus, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
+
+  // Only the claim's owner may release it, and only while it is still held;
+  // a superseded or finished claim is never overwritten. `refund` returns the
+  // rate-limit slot when no Gemini result was obtained.
+  const release = ({ refund }) => db.runTransaction(async (tx) => {
+    const current = await tx.get(failureRef);
+    if (current.get('status') !== 'retrying' || current.get('retryToken') !== token) return;
+    if (refund) {
+      const limit = await tx.get(limitRef);
+      if (limit.exists && limit.get('windowStart') === windowStart && (limit.get('count') || 0) > 0) {
+        tx.set(limitRef, { count: limit.get('count') - 1 }, { merge: true });
+      }
+    }
+    tx.set(failureRef, {
+      status: previousStatus,
+      retryToken: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  }).catch(() => {});
+
+  let receipt;
+  try {
+    const bucket = admin.storage().bucket();
+    const images = await Promise.all(paths.map(async (path) => {
+      const file = bucket.file(path);
+      const [buffer] = await file.download();
+      const [metadata] = await file.getMetadata();
+      return { base64: buffer.toString('base64'), mimeType: metadata.contentType || 'image/jpeg' };
+    }));
+    const raw = await parseReceiptFromBase64(images);
+    receipt = validateReceipt(raw);
+    if (raw.confidence != null) receipt.confidence = raw.confidence;
+  } catch (error) {
+    await release({ refund: true });
     throw error;
   }
-  const paths = failure.get('imagePaths') || [];
-  if (paths.length === 0) throw new Error('This failure has no stored image to retry');
 
-  const bucket = admin.storage().bucket();
-  const images = await Promise.all(paths.map(async (path) => {
-    const file = bucket.file(path);
-    const [buffer] = await file.download();
-    const [metadata] = await file.getMetadata();
-    return { base64: buffer.toString('base64'), mimeType: metadata.contentType || 'image/jpeg' };
-  }));
-  const raw = await parseReceiptFromBase64(images);
-  const receipt = validateReceipt(raw);
-  if (raw.confidence != null) receipt.confidence = raw.confidence;
-  const ref = await admin.firestore().collection('receipts').add({
-    ...receipt,
-    from: phone,
-    ownerUid: request.auth.uid,
-    messageSid: failure.get('messageSid') || null,
-    imagePaths: paths,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    recoveredFromFailure: id,
-  });
-  await failureRef.set({ status: 'recovered', recoveredReceiptId: ref.id, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  return { id: ref.id, ...receipt };
+  const receiptRef = db.collection('receipts').doc();
+  try {
+    await db.runTransaction(async (tx) => {
+      const current = await tx.get(failureRef);
+      if (current.get('status') !== 'retrying' || current.get('retryToken') !== token) {
+        throw retryError('failed-precondition', 'This retry was superseded');
+      }
+      tx.set(receiptRef, {
+        ...receipt,
+        merchantKey: receipt.merchant ? receipt.merchant.trim().toLowerCase() : null,
+        from: phone,
+        ownerUid: request.auth.uid,
+        messageSid,
+        imagePaths: paths,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        recoveredFromFailure: id,
+      });
+      tx.set(failureRef, {
+        status: 'recovered',
+        recoveredReceiptId: receiptRef.id,
+        retryToken: null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+  } catch (error) {
+    if (error.code !== 'failed-precondition') await release({ refund: false });
+    throw error;
+  }
+  return { id: receiptRef.id, ...receipt };
 }
 
 function canonicalItemId(phone, merchant, item) {
