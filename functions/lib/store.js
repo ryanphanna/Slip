@@ -89,7 +89,7 @@ async function findDuplicate(receipt, from) {
   return null;
 }
 
-async function saveReceipt(receipt, from, messageSid, imagePaths = []) {
+async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {}) {
   const db = admin.firestore();
   const doc = await db.collection('receipts').add({
     ...receipt,
@@ -97,6 +97,7 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = []) {
     from,
     messageSid: messageSid || null,
     imagePaths,
+    ...extra,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   return doc.id;

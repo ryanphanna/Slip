@@ -27,6 +27,7 @@ const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
 const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
 const webApi = require('./lib/web-api');
+const { handleMcp } = require('./lib/mcp');
 const config = require('./lib/config');
 
 const oops = () => config.ERROR_OPENERS[Math.floor(Math.random() * config.ERROR_OPENERS.length)];
@@ -532,3 +533,21 @@ exports.listItems = callable(webApi.listItems);
 exports.updateItem = callable(webApi.updateItem);
 exports.getSettings = callable(webApi.getUserSettings);
 exports.updateSettings = callable(webApi.updateUserSettings);
+exports.createImportToken = callable(webApi.createImportToken);
+exports.listImportTokens = callable(webApi.listImportTokens);
+exports.revokeImportToken = callable(webApi.revokeImportToken);
+
+// Remote MCP endpoint for user-owned AI assistants. Write-only create_receipt;
+// no Gemini secret is bound, so this path cannot make Gemini calls.
+exports.mcp = onRequest({ memory: '256MiB', maxInstances: 5 }, async (req, res) => {
+  try {
+    const rawLength = Number(req.headers['content-length']) || (req.rawBody ? req.rawBody.length : 0);
+    const result = await handleMcp({ method: req.method, headers: req.headers, body: req.body, rawLength });
+    for (const [key, value] of Object.entries(result.headers || {})) res.set(key, value);
+    if (result.body === null) return res.status(result.status).end();
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    logger.error('MCP handler failed', { error: error.message });
+    return res.status(500).json({ jsonrpc: '2.0', id: null, error: { code: -32603, message: 'Internal error' } });
+  }
+});

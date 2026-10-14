@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Import receipts through your own AI assistant**: you can now create a revocable, write-only token in Settings and let an assistant like Claude or ChatGPT read a receipt photo and save it to your account, with no Gemini call on Slip's side. Retries never double-save, bad data is rejected instead of guessed at, and imports show up as normal, editable receipts. (Refs #40)
+- **Monthly recap test**: the test hardcoded "last month = August" and started failing once the calendar moved on; it now pins the clock.
 - **Gemini call timer leak**: every receipt-parsing call to Gemini left its 90-second timeout timer running even after the call finished, instead of clearing it. Found while adding test coverage for the Flash/Pro fallback logic.
 - **Receipt year misread**: found two receipts where a clearly-printed 2026 got parsed as 2024 (6 misread as 4). Corrected both and tightened the Gemini date prompt to catch this — see `KNOWN_ISSUES.md`.
 - **Small UI cleanups**: loading message no longer says "receipts" on every page; sort/filter controls right-justified above the receipt list; sort options shortened to "Newest"/"Oldest".

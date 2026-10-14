@@ -38,6 +38,7 @@ describe('receipt queries', () => {
   });
 
   it('uses the receipt purchase date for the monthly recap', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-15T12:00:00'));
     mockGet.mockResolvedValue({
       docs: [
         { data: () => ({ date: '2026-08-12', total: 12, category: 'Grocery' }) },
@@ -52,5 +53,6 @@ describe('receipt queries', () => {
       monthKey: '2026-08',
     });
     expect(mockWhere).toHaveBeenCalledWith('from', '==', '+14165551234');
+    jest.useRealTimers();
   });
 });

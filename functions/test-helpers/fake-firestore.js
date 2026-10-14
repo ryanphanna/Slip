@@ -93,6 +93,11 @@ class FakeCollection {
         const existing = opts.merge && map.has(id) ? map.get(id) : {};
         map.set(id, resolveSentinels({ ...existing, ...data }));
       },
+      create: async (data) => {
+        if (map.has(id)) { const e = new Error('ALREADY_EXISTS'); e.code = 6; throw e; }
+        map.set(id, resolveSentinels(data));
+      },
+      delete: async () => { map.delete(id); },
     };
   }
   async add(data) {

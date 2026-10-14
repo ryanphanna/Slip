@@ -3,6 +3,7 @@ const crypto = require('node:crypto');
 const { validateReceipt } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
 const { getSettings, updateSettings } = require('./settings');
+const importTokens = require('./import-tokens');
 
 const EDITABLE_FIELDS = new Set([
   'merchant', 'location', 'date', 'total', 'subtotal', 'tax', 'category',
@@ -317,7 +318,25 @@ async function updateUserSettings(request) {
   return updateSettings(phone, request.data?.patch);
 }
 
+async function createImportToken(request) {
+  const { uid, phone } = requireAuth(request);
+  return importTokens.createToken({ from: phone, uid, label: request.data?.label });
+}
+
+async function listImportTokens(request) {
+  const { phone } = requireAuth(request);
+  return { tokens: await importTokens.listTokens(phone) };
+}
+
+async function revokeImportToken(request) {
+  const { phone } = requireAuth(request);
+  return importTokens.revokeToken(phone, request.data?.id);
+}
+
 module.exports = {
+  createImportToken,
+  listImportTokens,
+  revokeImportToken,
   EDITABLE_FIELDS,
   VISIBLE_FAILURE_STATUSES,
   requireAuth,

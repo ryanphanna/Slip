@@ -97,4 +97,4 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES };
