@@ -1,4 +1,4 @@
-const { VALID_CATEGORIES, VALID_TYPES } = require('./validate');
+const { VALID_CATEGORIES, VALID_TYPES, isRealDate } = require('./validate');
 
 const SCHEMA_VERSION = 1;
 const MAX_AMOUNT = 100000;
@@ -49,12 +49,6 @@ const INPUT_SCHEMA = {
   additionalProperties: false,
   properties: TOP_PROPERTIES,
 };
-
-function isRealDate(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const d = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
-}
 
 function amountError(value, path, errors) {
   if (typeof value !== 'number' || !Number.isFinite(value)) {

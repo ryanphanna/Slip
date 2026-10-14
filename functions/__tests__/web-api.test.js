@@ -91,6 +91,37 @@ describe('listReceipts', () => {
   });
 });
 
+describe('updateReceipt validation and merchantKey', () => {
+  const PHONE = '+14165551234';
+  const base = { from: PHONE, merchant: 'Costco', merchantKey: 'costco', total: 50, subtotal: 45, tax: 5, date: '2026-03-14', currency: 'CAD', category: 'Grocery', items: [] };
+  const run = (patch, id = 'r1') => updateReceipt({ ...AUTH, data: { id, patch } });
+
+  it('recomputes merchantKey when the merchant changes (and fills a missing one)', async () => {
+    seed('receipts', 'r1', base);
+    await run({ merchant: 'IKEA' });
+    expect(fake.store.receipts.get('r1')).toMatchObject({ merchant: 'IKEA', merchantKey: 'ikea' });
+    seed('receipts', 'r2', { ...base, merchantKey: undefined });
+    await run({ category: 'Home' }, 'r2');
+    expect(fake.store.receipts.get('r2').merchantKey).toBe('costco');
+  });
+
+  it.each([
+    [{ date: '2026-13-45' }],
+    [{ currency: 'cad' }],
+    [{ total: '1,234.50' }],
+  ])('rejects %j and leaves the stored receipt untouched', async (patch) => {
+    seed('receipts', 'r1', base);
+    await expect(run(patch)).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(fake.store.receipts.get('r1')).toMatchObject({ date: '2026-03-14', currency: 'CAD', total: 50 });
+  });
+
+  it('empty subtotal/tax clear to null rather than 0', async () => {
+    seed('receipts', 'r1', base);
+    await run({ subtotal: null, tax: '' });
+    expect(fake.store.receipts.get('r1')).toMatchObject({ subtotal: null, tax: null });
+  });
+});
+
 describe('getReceipt / updateReceipt', () => {
   it('throws not-found for a receipt owned by a different phone number', async () => {
     seed('receipts', 'r1', { from: '+19999999999', merchant: 'Costco' });
