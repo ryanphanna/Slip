@@ -516,7 +516,7 @@ function callable(handler) {
     try {
       return await handler(request);
     } catch (error) {
-      const code = ['unauthenticated', 'not-found', 'invalid-argument', 'permission-denied'].includes(error.code)
+      const code = ['unauthenticated', 'not-found', 'invalid-argument', 'permission-denied', 'failed-precondition', 'resource-exhausted'].includes(error.code)
         ? error.code
         : 'internal';
       throw new HttpsError(code, error.message || 'Request failed');

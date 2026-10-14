@@ -128,6 +128,17 @@ function createFakeFirestore() {
   const db = {
     collection: (name) => new FakeCollection(store, name),
   };
+  // Transactions run one at a time (like Firestore's contention retry would
+  // effectively serialize them); writes apply immediately.
+  let txChain = Promise.resolve();
+  db.runTransaction = (fn) => {
+    const run = txChain.then(() => fn({
+      get: (ref) => ref.get(),
+      set: (ref, data, opts) => ref.set(data, opts),
+    }));
+    txChain = run.catch(() => {});
+    return run;
+  };
   db.FieldValue = { serverTimestamp: () => SERVER_TIMESTAMP_SENTINEL };
   db.Timestamp = { fromMillis: (ms) => makeTimestamp(new Date(ms)) };
   return { db, store };

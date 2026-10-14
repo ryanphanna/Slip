@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Retrying a failed receipt could add duplicates**: clicking Retry on an already-recovered receipt (or double-clicking) saved another copy of it and made another paid Gemini call each time. Recovered receipts are now rejected, simultaneous retries make only one call, the receipt and its "recovered" status are saved together, and retries are capped at 10 per hour per account. Recovered receipts also now get a merchant key, so duplicate detection sees them. (CIV-181)
 - **Import receipts through your own AI assistant**: you can now create a revocable, write-only token in Settings and let an assistant like Claude or ChatGPT read a receipt photo and save it to your account, with no Gemini call on Slip's side. Retries never double-save (even simultaneous ones, and a crashed import can be retried after 2 minutes), bad data is rejected instead of guessed at, tokens stop working if the account's phone changes, imports are capped at 10/hour per token, and imports show up as normal, editable receipts. (Refs #40)
 - **Monthly recap test**: the test hardcoded "last month = August" and started failing once the calendar moved on; it now pins the clock.
 - **Gemini call timer leak**: every receipt-parsing call to Gemini left its 90-second timeout timer running even after the call finished, instead of clearing it. Found while adding test coverage for the Flash/Pro fallback logic.

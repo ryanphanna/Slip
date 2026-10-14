@@ -15,6 +15,8 @@ module.exports = {
   RATE_LIMIT_PER_HOUR: 25,
   RATE_LIMIT_PER_DAY: 100,
   RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,    // 1 hour
+  RETRY_RATE_LIMIT_PER_HOUR: 10,           // processing-failure retries (each costs a Gemini call), per account
+  RETRY_RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,
   IMPORT_TOKEN_RATE_LIMIT_PER_HOUR: 10,    // AI-assistant imports, per token
 
 
