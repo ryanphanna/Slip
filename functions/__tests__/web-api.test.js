@@ -451,6 +451,62 @@ describe('listItems / updateItem', () => {
   });
 });
 
+describe('updateItem validation', () => {
+  const PHONE = '+14165551234';
+  const run = (patch) => updateItem({ ...AUTH, data: { id: 'a', patch } });
+  beforeEach(() => seed('items', 'a', { from: PHONE, name: 'Milk', category: 'Grocery', verified: false, publicName: 'Milk' }));
+
+  it.each([
+    ['verified as a string', { verified: 'yes' }],
+    ['verified as a number', { verified: 1 }],
+    ['category not in the allowed list', { category: 'Crypto' }],
+    ['category as a number', { category: 5 }],
+    ['name as a number', { name: 5 }],
+    ['name that is only spaces', { name: '   ' }],
+    ['name that is too long', { name: 'x'.repeat(201) }],
+    ['publicName as an object', { publicName: { a: 1 } }],
+    ['itemNumber as a number', { itemNumber: 12345 }],
+    ['upc too long', { upc: '1'.repeat(33) }],
+    ['productUrl that is not http(s)', { productUrl: 'javascript:alert(1)' }],
+    ['productUrl too long', { productUrl: 'https://x.test/' + 'a'.repeat(500) }],
+    ['patch as an array', ['verified']],
+    ['patch as a string', 'verified'],
+  ])('rejects %s and stores nothing', async (_n, patch) => {
+    await expect(run(patch)).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(fake.store.items.get('a')).toEqual({ from: PHONE, name: 'Milk', category: 'Grocery', verified: false, publicName: 'Milk' });
+  });
+
+  it('accepts valid values and normalizes them', async () => {
+    const result = await run({
+      verified: true, category: 'Home', name: '  Lamp ', publicName: 'Floor lamp', itemNumber: ' 123.456.78 ',
+      upc: '0123', dpci: '1-2-3', productUrl: ' https://example.test/lamp ',
+    });
+    expect(result).toMatchObject({ verified: true, category: 'Home', name: 'Lamp', itemNumber: '123.456.78', productUrl: 'https://example.test/lamp' });
+    expect(fake.store.items.get('a')).toMatchObject({ verified: true, category: 'Home', name: 'Lamp' });
+  });
+
+  it('allows clearing optional text fields with an empty string', async () => {
+    await run({ publicName: '', productUrl: '' });
+    expect(fake.store.items.get('a')).toMatchObject({ publicName: '', productUrl: '' });
+  });
+
+  it('still drops unknown and protected fields without error', async () => {
+    await run({ verified: true, from: '+19999999999', price: 'free', id: 'zzz' });
+    expect(fake.store.items.get('a')).toMatchObject({ from: PHONE, verified: true });
+    expect(fake.store.items.get('a').price).toBeUndefined();
+  });
+
+  it('an empty or missing patch only touches updatedAt', async () => {
+    await expect(run({})).resolves.toMatchObject({ name: 'Milk' });
+    await expect(updateItem({ ...AUTH, data: { id: 'a' } })).resolves.toMatchObject({ name: 'Milk' });
+  });
+
+  it('reports another account\'s item as not-found before validating the patch', async () => {
+    seed('items', 'theirs', { from: '+19999999999', name: 'x' });
+    await expect(updateItem({ ...AUTH, data: { id: 'theirs', patch: { verified: 'bad' } } })).rejects.toMatchObject({ code: 'not-found' });
+  });
+});
+
 describe('user settings', () => {
   it('returns defaults when no settings doc exists, and persists updates', async () => {
     const defaults = await getUserSettings(AUTH);

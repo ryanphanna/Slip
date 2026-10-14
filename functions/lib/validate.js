@@ -154,10 +154,40 @@ function normalizeEditPatch(patch) {
   return out;
 }
 
+const ITEM_STRING_LIMITS = { name: 200, publicName: 200, itemNumber: 64, upc: 32, dpci: 32, productUrl: 500 };
+
+// Validates an item edit. Only the editable fields are kept; wrong types are
+// rejected with 'invalid-argument' instead of being stored.
+function normalizeItemPatch(patch) {
+  if (patch === undefined || patch === null) return {};
+  if (typeof patch !== 'object' || Array.isArray(patch)) throw editError('patch must be an object');
+  const allowed = [...Object.keys(ITEM_STRING_LIMITS), 'category', 'verified'];
+  const out = {};
+  for (const key of allowed) {
+    if (!(key in patch)) continue;
+    const value = patch[key];
+    if (key === 'verified') {
+      if (typeof value !== 'boolean') throw editError('verified must be true or false');
+      out.verified = value;
+    } else if (key === 'category') {
+      if (!VALID_CATEGORIES.includes(value)) throw editError(`category must be one of: ${VALID_CATEGORIES.join(', ')}`);
+      out.category = value;
+    } else {
+      if (typeof value !== 'string') throw editError(`${key} must be text`);
+      const trimmed = value.trim();
+      if (trimmed.length > ITEM_STRING_LIMITS[key]) throw editError(`${key} must be at most ${ITEM_STRING_LIMITS[key]} characters`);
+      if (key === 'name' && !trimmed) throw editError('name cannot be empty');
+      if (key === 'productUrl' && trimmed && !/^https?:\/\/\S+$/i.test(trimmed)) throw editError('productUrl must start with http:// or https://');
+      out[key] = trimmed;
+    }
+  }
+  return out;
+}
+
 function toNumber(val) {
   const n = parseFloat(val);
   // Allow negative numbers so refunds can have negative totals/items
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, normalizeEditPatch };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, normalizeEditPatch, normalizeItemPatch };
