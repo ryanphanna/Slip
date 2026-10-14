@@ -511,8 +511,8 @@ exports.weeklyBudgetCheck = onSchedule(
 
 // Browser API. Firestore and Storage remain server-only; every operation is
 // scoped to the verified phone number in the Firebase Auth token.
-function callable(handler) {
-  return onCall(async (request) => {
+function callable(handler, options) {
+  const wrapped = async (request) => {
     try {
       return await handler(request);
     } catch (error) {
@@ -521,7 +521,8 @@ function callable(handler) {
         : 'internal';
       throw new HttpsError(code, error.message || 'Request failed');
     }
-  });
+  };
+  return options ? onCall(options, wrapped) : onCall(wrapped);
 }
 
 exports.listReceipts = callable(webApi.listReceipts);
@@ -531,7 +532,8 @@ exports.getReceiptImageUrls = callable(webApi.getReceiptImageUrls);
 exports.listProcessingFailures = callable(webApi.listProcessingFailures);
 exports.listNotifications = callable(webApi.listNotifications);
 exports.getProcessingFailureImageUrls = callable(webApi.getProcessingFailureImageUrls);
-exports.retryProcessing = callable(webApi.retryProcessing);
+// Gemini parsing can take up to GEMINI_TIMEOUT_MS per attempt; keep well above the default.
+exports.retryProcessing = callable(webApi.retryProcessing, { timeoutSeconds: config.FUNCTION_TIMEOUT_SECONDS });
 exports.importTargetReceipts = callable(webApi.importTargetReceipts);
 exports.listItems = callable(webApi.listItems);
 exports.updateItem = callable(webApi.updateItem);
