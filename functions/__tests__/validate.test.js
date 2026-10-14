@@ -1,4 +1,4 @@
-const { validateReceipt, extractIkeaItemNumber } = require('../lib/validate');
+const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate } = require('../lib/validate');
 
 describe('validateReceipt', () => {
   it('preserves clear IKEA article numbers from OCR item names', () => {
@@ -170,5 +170,56 @@ describe('validateReceipt', () => {
 
     expect(result.total).toBe(29.72);
     expect(result.items[0].price).toBe(4.29);
+  });
+});
+
+describe('SMS-path coercion is unchanged', () => {
+  it('still silently nulls a bad date and truncates comma amounts', () => {
+    const r = validateReceipt({ merchant: 'X', date: '2026-13-45', total: '1,234.50', currency: 'cad' });
+    expect(r.date).toBe('2026-13-45'); // lenient regex-only check, as before
+    expect(r.total).toBe(1);
+    expect(r.currency).toBe('CAD');
+  });
+});
+
+describe('normalizeEditPatch (strict edit path)', () => {
+  it.each([
+    ['impossible month/day', { date: '2026-13-45' }],
+    ['non-existent day', { date: '2026-02-31' }],
+    ['wrong format', { date: '03/14/2026' }],
+    ['lowercase currency', { currency: 'cad' }],
+    ['long currency', { currency: 'CADD' }],
+    ['comma amount', { total: '1,234.50' }],
+    ['text amount', { total: 'abc' }],
+    ['empty total', { total: '' }],
+    ['null total', { total: null }],
+    ['bad subtotal', { subtotal: '$5' }],
+    ['bad tax', { tax: '1,5' }],
+    ['bad type', { type: 'gift' }],
+    ['non-array items', { items: 'x' }],
+    ['bad item price', { items: [{ name: 'a', price: '1,5' }] }],
+    ['fractional quantity', { items: [{ name: 'a', price: 1, quantity: 1.5 }] }],
+    ['zero quantity', { items: [{ name: 'a', price: 1, quantity: 0 }] }],
+  ])('rejects %s', (_n, patch) => {
+    expect(() => normalizeEditPatch(patch)).toThrow(expect.objectContaining({ code: 'invalid-argument' }));
+  });
+
+  it('accepts and normalizes good values', () => {
+    const out = normalizeEditPatch({
+      date: '2026-03-14', currency: 'USD', total: '1234.50', subtotal: '', tax: null,
+      items: [{ name: 'a', price: '2.5', quantity: '2' }],
+    });
+    expect(out).toMatchObject({ date: '2026-03-14', currency: 'USD', total: 1234.5, subtotal: null, tax: null });
+    expect(out.items[0]).toMatchObject({ price: 2.5, quantity: 2 });
+  });
+
+  it('only checks fields present in the patch', () => {
+    expect(normalizeEditPatch({ merchant: 'Costco' })).toEqual({ merchant: 'Costco' });
+  });
+
+  it('isRealDate rejects impossible dates', () => {
+    expect(isRealDate('2026-02-28')).toBe(true);
+    expect(isRealDate('2026-02-30')).toBe(false);
+    expect(isRealDate('2026-13-45')).toBe(false);
   });
 });

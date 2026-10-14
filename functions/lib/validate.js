@@ -87,8 +87,71 @@ function extractIkeaItemNumber(name) {
   return match ? match[1].replace(/[.\s]/g, '') : null;
 }
 
+// Strict calendar check (rejects 2026-13-45 and 2026-02-31).
+function isRealDate(val) {
+  if (typeof val !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(val)) return false;
+  const d = new Date(`${val}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === val;
+}
+
 function isValidDate(val) {
   return typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val);
+}
+
+function editError(message) {
+  const error = new Error(message);
+  error.code = 'invalid-argument';
+  return error;
+}
+
+// Strict number for edits: real numbers or plain numeric strings only. Never
+// parseFloat-truncates ("1,234.50" would otherwise become 1). Empty -> null.
+function strictAmount(val, label, { allowNull = true } = {}) {
+  if (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) {
+    if (!allowNull) throw editError(`${label} is required`);
+    return null;
+  }
+  const n = typeof val === 'number' ? val : (/^-?\d+(\.\d+)?$/.test(String(val).trim()) ? Number(String(val).trim()) : NaN);
+  if (!Number.isFinite(n)) throw editError(`${label} must be a number like 1234.50`);
+  return n;
+}
+
+// Validates only the fields present in an edit patch. Invalid values are
+// rejected with an 'invalid-argument' error instead of being coerced to null
+// (the SMS/Gemini path keeps validateReceipt's lenient coercion).
+function normalizeEditPatch(patch) {
+  const out = { ...patch };
+  if ('date' in out && out.date !== null && out.date !== '' && !isRealDate(out.date)) {
+    throw editError('Date must be a real date like 2026-03-14');
+  }
+  if ('date' in out && (out.date === '' || out.date === null)) out.date = null;
+  if ('currency' in out && !(typeof out.currency === 'string' && /^[A-Z]{3}$/.test(out.currency))) {
+    throw editError('Currency must be a 3-letter code like CAD');
+  }
+  if ('type' in out && !VALID_TYPES.includes(out.type)) throw editError('Type must be purchase or refund');
+  if ('total' in out) out.total = strictAmount(out.total, 'Total', { allowNull: false });
+  if ('subtotal' in out) out.subtotal = strictAmount(out.subtotal, 'Subtotal');
+  if ('tax' in out) out.tax = strictAmount(out.tax, 'Tax');
+  if ('items' in out) {
+    if (!Array.isArray(out.items)) throw editError('Items must be a list');
+    out.items = out.items.map((item, i) => {
+      if (!item || typeof item !== 'object') throw editError(`Item ${i + 1} is invalid`);
+      const next = { ...item, price: strictAmount(item.price, `Item ${i + 1} price`) };
+      for (const key of ['unitPrice', 'lineTotal']) {
+        if (item[key] != null && item[key] !== '') next[key] = strictAmount(item[key], `Item ${i + 1} ${key}`);
+        else delete next[key];
+      }
+      if (item.quantity !== undefined && item.quantity !== null && item.quantity !== '') {
+        const q = strictAmount(item.quantity, `Item ${i + 1} quantity`);
+        if (!Number.isInteger(q) || q < 1) throw editError(`Item ${i + 1} quantity must be a whole number of 1 or more`);
+        next.quantity = q;
+      } else {
+        delete next.quantity;
+      }
+      return next;
+    });
+  }
+  return out;
 }
 
 function toNumber(val) {
@@ -97,4 +160,4 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, normalizeEditPatch };

@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const { validateReceipt } = require('./validate');
+const { validateReceipt, normalizeEditPatch } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
@@ -96,8 +96,10 @@ async function updateReceipt(request) {
     throw error;
   }
 
-  const patch = cleanPatch(request.data?.patch);
+  const patch = normalizeEditPatch(cleanPatch(request.data?.patch));
   const next = validateReceipt({ ...snapshot.data(), ...patch });
+  // Recompute on every edit so the search/duplicate key always follows the merchant.
+  next.merchantKey = next.merchant ? next.merchant.trim().toLowerCase() : null;
   await ref.set({ ...next, editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   return { id, ...next };
 }

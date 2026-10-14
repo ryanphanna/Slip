@@ -26,6 +26,13 @@ function viewFromPath(pathname) {
   return match ? match[0] : 'receipts';
 }
 
+// Empty field -> null (not 0); unparseable text is sent as-is so the server rejects it.
+function amountOrNull(value) {
+  if (value === '' || value == null) return null;
+  const n = Number(value);
+  return Number.isNaN(n) ? value : n;
+}
+
 function normalizePhone(value) {
   const digits = String(value || '').replace(/[^\d]/g, '');
   if (digits.length === 10) return `+1${digits}`;
@@ -188,7 +195,7 @@ function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
     try {
       const result = await call('updateReceipt', { id: receipt.id, patch: {
         merchant: draft.merchant, location: draft.location, date: draft.date,
-        total: Number(draft.total), subtotal: Number(draft.subtotal), tax: Number(draft.tax),
+        total: amountOrNull(draft.total), subtotal: amountOrNull(draft.subtotal), tax: amountOrNull(draft.tax),
         category: draft.category, subCategory: draft.subCategory, currency: draft.currency, items: draft.items,
       } });
       setStatus('Saved.');
