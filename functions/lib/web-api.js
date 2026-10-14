@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const { validateReceipt, normalizeEditPatch } = require('./validate');
+const { validateReceipt, normalizeEditPatch, normalizeItemPatch } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
@@ -400,15 +400,7 @@ async function updateItem(request) {
     error.code = 'not-found';
     throw error;
   }
-  const patch = request.data?.patch || {};
-  const allowed = ['publicName', 'name', 'itemNumber', 'upc', 'dpci', 'productUrl', 'category', 'verified'];
-  const clean = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
-  if (typeof clean.publicName === 'string') clean.publicName = clean.publicName.trim();
-  if (typeof clean.name === 'string') clean.name = clean.name.trim();
-  if (typeof clean.itemNumber === 'string') clean.itemNumber = clean.itemNumber.trim();
-  if (typeof clean.upc === 'string') clean.upc = clean.upc.trim();
-  if (typeof clean.dpci === 'string') clean.dpci = clean.dpci.trim();
-  if (typeof clean.productUrl === 'string') clean.productUrl = clean.productUrl.trim();
+  const clean = normalizeItemPatch(request.data?.patch);
   await ref.set({ ...clean, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   return { id, ...snapshot.data(), ...clean };
 }
