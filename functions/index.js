@@ -27,7 +27,8 @@ const { saveReceipt, saveProcessingFailure, findDuplicate, isMessageProcessed, c
 const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
 const { saveImages, saveFailedImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
-const { setBudget, getBudget, getBudgetReport } = require('./lib/budget');
+const { setBudget, getBudget, getBudgetReport, getBudgetStatus } = require('./lib/budget');
+const { formatMoney, alsoSpentLine, currencyOf, DEFAULT_CURRENCY } = require('./lib/money');
 const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
 const webApi = require('./lib/web-api');
@@ -188,7 +189,8 @@ exports.sms = onRequest(
           const stats = await getSpendingStats(from, startDate);
           const receiptWord = stats.count === 1 ? 'receipt' : 'receipts';
           const hint = bodyText === 'TOTAL' ? '\n\nSend TOTAL MONTH or TOTAL YEAR for other ranges.' : '';
-          let message = `${label}: $${stats.total.toFixed(2)} (${stats.count} ${receiptWord})${hint}`;
+          const alsoSpent = alsoSpentLine(stats.byCurrency);
+          let message = `${label}: $${stats.total.toFixed(2)} (${stats.count} ${receiptWord})${alsoSpent ? `\n${alsoSpent}` : ''}${hint}`;
 
           try {
             const report = await getBudgetReport(from);
@@ -214,7 +216,8 @@ exports.sms = onRequest(
             .sort((a, b) => b[1] - a[1])
             .map(([cat, amt]) => `${cat}: $${amt.toFixed(2)}`)
             .join('\n');
-          await sendSms(from, `${stats.month} Summary:\n${breakdown}\n\nTotal: $${stats.total.toFixed(2)}`);
+          const alsoSpent = alsoSpentLine(stats.byCurrency);
+          await sendSms(from, `${stats.month} Summary:\n${breakdown}\n\nTotal: $${stats.total.toFixed(2)}${alsoSpent ? `\n\n${alsoSpent}` : ''}`);
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
           return;
@@ -226,7 +229,7 @@ exports.sms = onRequest(
             await sendSms(from, 'No receipts found.');
           } else {
             const date = last.date || 'unknown date';
-            await sendSms(from, `Last: ${last.merchant} — $${(last.total || 0).toFixed(2)} on ${date} (${last.category})`);
+            await sendSms(from, `Last: ${last.merchant} — ${formatMoney(last.total || 0, currencyOf(last))} on ${date} (${last.category})`);
           }
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
@@ -234,7 +237,7 @@ exports.sms = onRequest(
         }
 
         if (bodyText === 'BUDGET') {
-          const report = await getBudgetReport(from);
+          const { report, otherSpend } = await getBudgetStatus(from);
           const activeBudgets = report.filter(r => r.limit > 0);
           if (activeBudgets.length === 0) {
             await sendSms(from, 'No active budgets. Set one via: BUDGET <category> <limit>');
@@ -242,7 +245,8 @@ exports.sms = onRequest(
             const lines = activeBudgets
               .map(r => `${r.category}: $${r.spent.toFixed(2)} / $${r.limit.toFixed(2)} (${r.percentage}%)`)
               .join('\n');
-            await sendSms(from, `Monthly Budgets:\n${lines}`);
+            const alsoSpent = alsoSpentLine(otherSpend, { note: 'not counted in budgets' });
+            await sendSms(from, `Monthly Budgets:\n${lines}${alsoSpent ? `\n\n${alsoSpent}` : ''}`);
           }
           res.set('Content-Type', 'text/xml');
           res.send('<Response/>');
@@ -374,14 +378,15 @@ exports.sms = onRequest(
         storedImagePaths = imagePaths;
         if (duplicateId) {
           logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
-          await sendSms(from, `Duplicate: ${receipt.merchant} — $${Math.abs(receipt.total).toFixed(2)} was already logged.`);
+          await sendSms(from, `Duplicate: ${receipt.merchant} — ${formatMoney(Math.abs(receipt.total), currencyOf(receipt))} was already logged.`);
           return;
         }
 
         await saveReceipt(receipt, from, messageSid, imagePaths);
 
         const merchant = receipt.merchant || 'Unknown';
-        const total = receipt.total != null ? `$${Math.abs(receipt.total).toFixed(2)}` : '?';
+        const receiptCurrency = currencyOf(receipt);
+        const total = receipt.total != null ? formatMoney(Math.abs(receipt.total), receiptCurrency) : '?';
         const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
         const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
         const itemCount = Array.isArray(receipt.items) ? receipt.items.length : 0;
@@ -399,7 +404,8 @@ exports.sms = onRequest(
           logger.warn('Receipt saved with no date', { messageSid, merchant });
         }
 
-        if (receipt.category) {
+        // Budgets are CAD limits, so a non-CAD receipt gets no budget status.
+        if (receipt.category && receiptCurrency === DEFAULT_CURRENCY) {
           try {
             const budget = await getBudget(from, receipt.category);
             if (budget && budget.limit > 0) {

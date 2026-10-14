@@ -3,12 +3,13 @@ const { aggregateSpendingByCategory, getLastMonthStats } = require('./query');
 const { getAllBudgets } = require('./budget');
 const { getSettings } = require('./settings');
 const { sendSms } = require('./twilio');
+const { alsoSpentLine } = require('./money');
 
 async function sendMonthlyDigest(from) {
   const settings = await getSettings(from);
   if (settings.monthlyDigestEnabled === false) return;
   const stats = await getLastMonthStats(from);
-  if (stats.count === 0) return;
+  if (stats.count === 0 && !stats.byCurrency) return;
 
   const db = admin.firestore();
   const notificationRef = db.collection('notifications').doc(`${from.replace(/\D/g, '')}_${stats.monthKey}`);
@@ -20,7 +21,8 @@ async function sendMonthlyDigest(from) {
     .join('\n');
 
   const receiptWord = stats.count === 1 ? 'receipt' : 'receipts';
-  const message = `${stats.month} recap: $${stats.total.toFixed(2)} across ${stats.count} ${receiptWord}\n\n${breakdown}`;
+  const alsoSpent = alsoSpentLine(stats.byCurrency);
+  const message = `${stats.month} recap: $${stats.total.toFixed(2)} across ${stats.count} ${receiptWord}${breakdown ? `\n\n${breakdown}` : ''}${alsoSpent ? `\n\n${alsoSpent}` : ''}`;
   await sendSms(from, message);
   await notificationRef.set({
     from,
@@ -31,6 +33,7 @@ async function sendMonthlyDigest(from) {
     total: stats.total,
     count: stats.count,
     categories: stats.categories,
+    ...(stats.byCurrency ? { byCurrency: stats.byCurrency } : {}),
     message,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -50,7 +53,7 @@ async function sendWeeklyBudgetCheck(from) {
     .get();
 
   const docs = snapshot.docs.map(doc => doc.data());
-  const { categories: spentMap } = aggregateSpendingByCategory(docs);
+  const { categories: spentMap, byCurrency } = aggregateSpendingByCategory(docs);
 
   const lines = budgets
     .map(b => {
@@ -64,7 +67,8 @@ async function sendWeeklyBudgetCheck(from) {
     .map(r => r.line);
 
   const monthName = now.toLocaleString('en-CA', { month: 'long' });
-  await sendSms(from, `${monthName} budgets:\n\n${lines.join('\n')}`);
+  const alsoSpent = alsoSpentLine(byCurrency, { note: 'not counted in budgets' });
+  await sendSms(from, `${monthName} budgets:\n\n${lines.join('\n')}${alsoSpent ? `\n\n${alsoSpent}` : ''}`);
 }
 
 module.exports = { sendMonthlyDigest, sendWeeklyBudgetCheck };

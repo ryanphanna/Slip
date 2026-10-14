@@ -4,6 +4,7 @@ const config = require('./config');
 const { validateReceipt } = require('./validate');
 const { saveReceipt, findDuplicate, checkRateLimit } = require('./store');
 const { validateImport, SCHEMA_VERSION } = require('./import-schema');
+const { formatMoney, currencyOf } = require('./money');
 
 const CLAIM_STALE_MS = 2 * 60 * 1000;
 
@@ -92,7 +93,7 @@ async function importReceipt(identity, args) {
       },
     });
     await claimRef.set({ receiptId, duplicate: false }, { merge: true });
-    return { receiptId, duplicate: false, deduplicated: false, warnings, message: `Saved ${receipt.merchant}${receipt.total != null ? ` — $${Math.abs(receipt.total).toFixed(2)}` : ''}.` };
+    return { receiptId, duplicate: false, deduplicated: false, warnings, message: `Saved ${receipt.merchant}${receipt.total != null ? ` — ${formatMoney(Math.abs(receipt.total), currencyOf(receipt))}` : ''}.` };
   } catch (err) {
     // Release the claim so the caller can retry the same key.
     await claimRef.delete().catch(() => {});

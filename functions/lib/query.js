@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { DEFAULT_CURRENCY, currencyOf } = require('./money');
 
 function findLatestReceiptForSender(snapshotDocs, from) {
   for (const doc of snapshotDocs) {
@@ -7,7 +8,7 @@ function findLatestReceiptForSender(snapshotDocs, from) {
   return null;
 }
 
-function aggregateSpendingByCategory(docs) {
+function aggregateOneCurrency(docs) {
   let total = 0;
   const categories = {};
 
@@ -47,6 +48,33 @@ function aggregateSpendingByCategory(docs) {
   };
 }
 
+// Totals are CAD (missing currency = CAD). Other currencies are never added in;
+// they appear only under `byCurrency` as { total, categories, count } (key
+// omitted when there are none).
+function aggregateSpendingByCategory(docs) {
+  const primary = [];
+  const others = {};
+  for (const d of docs) {
+    const code = currencyOf(d);
+    if (code === DEFAULT_CURRENCY) primary.push(d);
+    else (others[code] = others[code] || []).push(d);
+  }
+  const result = aggregateOneCurrency(primary);
+  const codes = Object.keys(others);
+  if (codes.length > 0) {
+    result.byCurrency = {};
+    for (const code of codes) {
+      result.byCurrency[code] = { ...aggregateOneCurrency(others[code]), count: others[code].length };
+    }
+  }
+  return result;
+}
+
+// Receipt count for the CAD headline, so "$X across N receipts" matches X.
+function countPrimary(docs) {
+  return docs.filter((d) => currencyOf(d) === DEFAULT_CURRENCY).length;
+}
+
 async function getMonthlyStats(from) {
   const db = admin.firestore();
   const now = new Date();
@@ -58,9 +86,9 @@ async function getMonthlyStats(from) {
     .get();
 
   const docs = snapshot.docs.map(doc => doc.data());
-  const { total, categories } = aggregateSpendingByCategory(docs);
+  const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
 
-  return { total, categories, count: docs.length, month: now.toLocaleString('default', { month: 'long' }) };
+  return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}), month: now.toLocaleString('default', { month: 'long' }) };
 }
 
 async function getSpendingStats(from, startDate) {
@@ -69,8 +97,8 @@ async function getSpendingStats(from, startDate) {
   if (startDate) query = query.where('createdAt', '>=', startDate);
   const snapshot = await query.get();
   const docs = snapshot.docs.map(doc => doc.data());
-  const { total, categories } = aggregateSpendingByCategory(docs);
-  return { total, categories, count: docs.length };
+  const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
+  return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}) };
 }
 
 async function getLastReceipt(from) {
@@ -94,10 +122,10 @@ async function getLastMonthStats(from) {
   const startDate = formatDate(startOfLastMonth);
   const endDate = formatDate(startOfThisMonth);
   const docs = snapshot.docs.map(doc => doc.data()).filter((doc) => doc.date >= startDate && doc.date < endDate);
-  const { total, categories } = aggregateSpendingByCategory(docs);
+  const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
   const monthName = startOfLastMonth.toLocaleString('en-CA', { month: 'long' });
 
-  return { total, categories, count: docs.length, month: monthName, monthKey: formatDate(startOfLastMonth).slice(0, 7) };
+  return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}), month: monthName, monthKey: formatDate(startOfLastMonth).slice(0, 7) };
 }
 
 function formatDate(date) {

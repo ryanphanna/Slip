@@ -233,3 +233,34 @@ describe('executeTool dispatch', () => {
     await expect(executeTool('notARealTool', {})).rejects.toThrow('Unknown tool: notARealTool');
   });
 });
+
+describe('spending tools with mixed currencies', () => {
+  const docs = [
+    { merchant: 'Costco', total: 100, category: 'Grocery', createdAt: { toDate: () => new Date() } },
+    { merchant: 'Costco', total: 60, category: 'Grocery', currency: 'USD', createdAt: { toDate: () => new Date() } },
+    { merchant: 'Target', total: 999, category: 'Shopping', currency: 'USD', createdAt: { toDate: () => new Date() } },
+  ];
+  beforeEach(() => { mockGet.mockResolvedValue({ docs: docs.map((d) => ({ data: () => d })) }); });
+
+  it('getSpendingTotal reports CAD and other currencies separately', async () => {
+    const r = await executeTool('getSpendingTotal', {});
+    expect(r).toMatchObject({ total: 100, receiptCount: 1, currency: 'CAD' });
+    expect(r.byCurrency).toEqual({ USD: { total: 1059, receiptCount: 2 } });
+  });
+
+  it('getTopMerchants ranks CAD only', async () => {
+    const r = await executeTool('getTopMerchants', {});
+    expect(r).toEqual([{ merchant: 'Costco', total: 100, visits: 1 }]);
+  });
+
+  it('getSpendingByCategory and monthly summary keep currencies apart', async () => {
+    const byCat = await executeTool('getSpendingByCategory', {});
+    expect(byCat.total).toBe(100);
+    expect(byCat.byCurrency.USD.total).toBe(1059);
+    const monthly = await executeTool('getMonthlySummary', {});
+    expect(monthly.total).toBe(100);
+    expect(monthly.topMerchants).toEqual([{ merchant: 'Costco', amount: 100 }]);
+    expect(monthly.byCurrency.USD.total).toBe(1059);
+  });
+});
+

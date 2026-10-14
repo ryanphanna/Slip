@@ -37,7 +37,9 @@ async function getAllBudgets(from) {
   return snapshot.docs.map(doc => doc.data());
 }
 
-async function getBudgetReport(from) {
+// Budgets are CAD limits: only CAD spend counts toward them. Spend in other
+// currencies is returned separately as `otherSpend` ({ USD: { total, count } }).
+async function getBudgetStatus(from) {
   const db = admin.firestore();
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -56,7 +58,7 @@ async function getBudgetReport(from) {
     .get();
 
   const docs = snapshot.docs.map(doc => doc.data());
-  const { categories: spentMap } = aggregateSpendingByCategory(docs);
+  const { categories: spentMap, byCurrency } = aggregateSpendingByCategory(docs);
 
   // Combine into status report
   const report = [];
@@ -88,7 +90,11 @@ async function getBudgetReport(from) {
     }
   }
 
-  return report;
+  return { report, otherSpend: byCurrency || {} };
 }
 
-module.exports = { setBudget, getBudget, getAllBudgets, getBudgetReport };
+async function getBudgetReport(from) {
+  return (await getBudgetStatus(from)).report;
+}
+
+module.exports = { setBudget, getBudget, getAllBudgets, getBudgetReport, getBudgetStatus };

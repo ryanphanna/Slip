@@ -4,7 +4,7 @@ let fake;
 jest.mock('firebase-admin', () => ({ firestore: jest.fn() }));
 
 const admin = require('firebase-admin');
-const { setBudget, getBudget, getAllBudgets, getBudgetReport } = require('../lib/budget');
+const { setBudget, getBudget, getAllBudgets, getBudgetReport, getBudgetStatus } = require('../lib/budget');
 
 beforeEach(() => {
   fake = createFakeFirestore();
@@ -84,5 +84,17 @@ describe('getBudgetReport', () => {
     seedReceipt('old', { from: '+1', total: 999, category: 'Grocery', createdAt: fake.db.Timestamp.fromMillis(lastMonth.getTime()) });
     const report = await getBudgetReport('+1');
     expect(report[0].spent).toBe(0);
+  });
+});
+
+describe('budgets with mixed currencies', () => {
+  it('only CAD spend counts toward a CAD budget; other currencies are reported separately', async () => {
+    await setBudget('+1', 'Grocery', 200);
+    seedReceipt('r1', { from: '+1', category: 'Grocery', total: 50 });
+    seedReceipt('r2', { from: '+1', category: 'Grocery', total: 999, currency: 'USD' });
+    const { report, otherSpend } = await getBudgetStatus('+1');
+    expect(report).toEqual([{ category: 'Grocery', limit: 200, spent: 50, remaining: 150, percentage: 25 }]);
+    expect(otherSpend).toEqual({ USD: expect.objectContaining({ total: 999, count: 1 }) });
+    expect(await getBudgetReport('+1')).toEqual(report);
   });
 });

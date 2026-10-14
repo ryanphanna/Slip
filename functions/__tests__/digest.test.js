@@ -100,3 +100,35 @@ describe('sendWeeklyBudgetCheck', () => {
     expect(sendSms.mock.calls[0][1]).toContain('(0%)');
   });
 });
+
+describe('digests with mixed currencies', () => {
+  it('monthly recap keeps CAD headline and lists other currencies separately', async () => {
+    seedReceipt('r1', { date: lastMonthDateString('01'), total: 40, category: 'Grocery' });
+    seedReceipt('r2', { date: lastMonthDateString('02'), total: 45, category: 'Shopping', currency: 'USD' });
+    await sendMonthlyDigest(FROM);
+    const message = sendSms.mock.calls[0][1];
+    expect(message).toContain('$40.00 across 1 receipt');
+    expect(message).not.toContain('$85.00');
+    expect(message).toContain('Also spent: US$45.00 (1 receipt)');
+    const notification = [...fake.store.notifications.values()][0];
+    expect(notification.total).toBe(40);
+    expect(notification.byCurrency.USD.total).toBe(45);
+  });
+
+  it('still sends a recap for a month with only non-CAD receipts', async () => {
+    seedReceipt('r1', { date: lastMonthDateString(), total: 45, category: 'Shopping', currency: 'USD' });
+    await sendMonthlyDigest(FROM);
+    expect(sendSms.mock.calls[0][1]).toContain('$0.00 across 0 receipts');
+    expect(sendSms.mock.calls[0][1]).toContain('Also spent: US$45.00 (1 receipt)');
+  });
+
+  it('weekly budget check ignores non-CAD spend but mentions it', async () => {
+    await setBudget(FROM, 'Grocery', 100);
+    seedReceipt('r1', { total: 20, category: 'Grocery' });
+    seedReceipt('r2', { total: 500, category: 'Grocery', currency: 'USD' });
+    await sendWeeklyBudgetCheck(FROM);
+    const message = sendSms.mock.calls[0][1];
+    expect(message).toContain('Grocery: $20.00 / $100.00 (20%)');
+    expect(message).toContain('Also spent: US$500.00 (not counted in budgets)');
+  });
+});

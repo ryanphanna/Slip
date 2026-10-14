@@ -62,15 +62,16 @@ jest.mock('../lib/budget', () => ({
   setBudget: jest.fn(),
   getBudget: jest.fn(),
   getBudgetReport: jest.fn(),
+  getBudgetStatus: jest.fn(),
 }));
 
 const { sms } = require('../index');
 const { validateTwilioSignature, sendSms } = require('../lib/twilio');
 const { isMessageProcessed, checkRateLimit } = require('../lib/store');
 const { isAllowed } = require('../lib/allowlist');
-const { getLastReceipt, getSpendingStats } = require('../lib/query');
+const { getLastReceipt, getSpendingStats, getMonthlyStats } = require('../lib/query');
 const { parseReceiptFromText } = require('../lib/receipt');
-const { setBudget, getBudget, getBudgetReport } = require('../lib/budget');
+const { setBudget, getBudget, getBudgetReport, getBudgetStatus } = require('../lib/budget');
 
 function makeResponse() {
   return {
@@ -278,13 +279,54 @@ describe('sms webhook authentication', () => {
     });
   });
 
+  describe('multi-currency replies', () => {
+    const send = async (body) => {
+      isAllowed.mockReturnValue(true);
+      validateTwilioSignature.mockReturnValue(true);
+      const res = makeResponse();
+      await sms({ method: 'POST', body: { From: '+14165551234', MessageSid: 'SM9', NumMedia: '0', Body: body }, headers: {} }, res);
+      return sendSms.mock.calls.at(-1)[1];
+    };
+
+    it('TOTAL shows CAD headline and a separate "Also spent" line', async () => {
+      getSpendingStats.mockResolvedValue({ total: 120.5, count: 4, byCurrency: { USD: { total: 45, count: 2 }, EUR: { total: 30, count: 1 } } });
+      getBudgetReport.mockResolvedValue([{ limit: 100 }]);
+      const msg = await send('TOTAL MONTH');
+      expect(msg).toContain('$120.50 (4 receipts)\nAlso spent: EUR 30.00 (1 receipt), US$45.00 (2 receipts)');
+    });
+
+    it('SUMMARY lists CAD categories, then the other currencies', async () => {
+      getMonthlyStats.mockResolvedValue({ month: 'October', total: 80, categories: { Grocery: 80 }, count: 2, byCurrency: { USD: { total: 45, count: 2 } } });
+      const msg = await send('SUMMARY');
+      expect(msg).toBe('October Summary:\nGrocery: $80.00\n\nTotal: $80.00\n\nAlso spent: US$45.00 (2 receipts)');
+    });
+
+    it('SUMMARY is unchanged when everything is CAD', async () => {
+      getMonthlyStats.mockResolvedValue({ month: 'October', total: 80, categories: { Grocery: 80 }, count: 2 });
+      expect(await send('SUMMARY')).toBe('October Summary:\nGrocery: $80.00\n\nTotal: $80.00');
+    });
+
+    it('LAST formats the receipt in its own currency', async () => {
+      getLastReceipt.mockResolvedValue({ merchant: 'Target', total: 45, currency: 'USD', date: '2026-10-01', category: 'Shopping' });
+      expect(await send('LAST')).toBe('Last: Target — US$45.00 on 2026-10-01 (Shopping)');
+      getLastReceipt.mockResolvedValue({ merchant: 'Costco', total: 12.5, date: '2026-10-01', category: 'Grocery' });
+      expect(await send('LAST')).toBe('Last: Costco — $12.50 on 2026-10-01 (Grocery)');
+    });
+
+    it('BUDGET notes non-CAD spend is not counted', async () => {
+      getBudgetStatus.mockResolvedValue({ report: [{ category: 'Grocery', limit: 500, spent: 120.5, percentage: 24 }], otherSpend: { USD: { total: 45, count: 2 } } });
+      expect(await send('BUDGET')).toBe('Monthly Budgets:\nGrocery: $120.50 / $500.00 (24%)\n\nAlso spent: US$45.00 (not counted in budgets)');
+    });
+  });
+
   describe('budget commands', () => {
     it('handles BUDGET query command', async () => {
       isAllowed.mockReturnValue(true);
       validateTwilioSignature.mockReturnValue(true);
-      getBudgetReport.mockResolvedValue([
-        { category: 'Grocery', limit: 500, spent: 120.5, percentage: 24 },
-      ]);
+      getBudgetStatus.mockResolvedValue({
+        report: [{ category: 'Grocery', limit: 500, spent: 120.5, percentage: 24 }],
+        otherSpend: {},
+      });
 
       const req = {
         method: 'POST',

@@ -89,3 +89,33 @@ describe('aggregateSpendingByCategory', () => {
     expect(result).toEqual({ total: 30, categories: { Shopping: 30 } });
   });
 });
+
+describe('aggregateSpendingByCategory across currencies', () => {
+  const docs = [
+    { total: 10, category: 'Grocery' },
+    { total: 20, category: 'Grocery', currency: 'CAD' },
+    { total: 45, category: 'Shopping', currency: 'USD' },
+    { total: 30, category: 'Home', currency: 'EUR', items: [{ price: 20, category: 'Home' }] },
+  ];
+
+  it('never sums across currencies: CAD headline plus per-currency groups', () => {
+    const r = aggregateSpendingByCategory(docs);
+    expect(r.total).toBe(30);
+    expect(r.categories).toEqual({ Grocery: 30 });
+    expect(r.byCurrency).toEqual({
+      USD: { total: 45, categories: { Shopping: 45 }, count: 1 },
+      EUR: { total: 30, categories: { Home: 30 }, count: 1 },
+    });
+  });
+
+  it('omits byCurrency when everything is CAD', () => {
+    expect(aggregateSpendingByCategory([{ total: 5, category: 'Grocery' }])).not.toHaveProperty('byCurrency');
+  });
+
+  it('a month with only USD receipts has a zero CAD total', () => {
+    const r = aggregateSpendingByCategory([{ total: 45, currency: 'USD', category: 'Shopping' }]);
+    expect(r.total).toBe(0);
+    expect(r.byCurrency.USD.total).toBe(45);
+  });
+});
+

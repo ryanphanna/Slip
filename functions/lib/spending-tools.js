@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { aggregateSpendingByCategory } = require('./query');
+const { currencyOf, DEFAULT_CURRENCY } = require('./money');
 const { normalizeMerchant } = require('./validate');
 
 
@@ -146,28 +147,43 @@ async function queryReceipts({ startDate, endDate, merchant, category } = {}) {
 
 async function getSpendingTotal({ startDate, endDate, merchant, category } = {}) {
   const docs = await queryReceipts({ startDate, endDate, merchant, category });
-  let total = 0;
-  let count = 0;
+  // `total`/`receiptCount` are CAD only; other currencies are reported
+  // separately in `byCurrency` and never added in.
+  const sums = {};
   for (const d of docs) {
-    if (d.total != null) { total += d.total; count++; }
+    if (d.total == null) continue;
+    const code = currencyOf(d);
+    sums[code] = sums[code] || { total: 0, receiptCount: 0 };
+    sums[code].total += d.total;
+    sums[code].receiptCount += 1;
   }
-  return { total: Math.round(total * 100) / 100, receiptCount: count };
+  const round = (n) => Math.round(n * 100) / 100;
+  const { [DEFAULT_CURRENCY]: primary = { total: 0, receiptCount: 0 }, ...others } = sums;
+  const byCurrency = Object.fromEntries(Object.entries(others).map(([c, v]) => [c, { total: round(v.total), receiptCount: v.receiptCount }]));
+  return {
+    total: round(primary.total),
+    receiptCount: primary.receiptCount,
+    currency: DEFAULT_CURRENCY,
+    ...(Object.keys(byCurrency).length ? { byCurrency } : {}),
+  };
 }
 
 async function getSpendingByCategory({ startDate, endDate, merchant } = {}) {
   const docs = await queryReceipts({ startDate, endDate, merchant });
-  const { categories, total } = aggregateSpendingByCategory(docs);
+  const { categories, total, byCurrency } = aggregateSpendingByCategory(docs);
   const sorted = Object.entries(categories)
     .sort(([, a], [, b]) => b - a)
     .map(([category, amount]) => ({ category, amount }));
-  return { categories: sorted, total, receiptCount: docs.length };
+  const primaryCount = docs.filter((d) => currencyOf(d) === DEFAULT_CURRENCY).length;
+  return { categories: sorted, total, currency: DEFAULT_CURRENCY, receiptCount: primaryCount, ...(byCurrency ? { byCurrency } : {}) };
 }
 
 async function getTopMerchants({ startDate, endDate, limit = 10 } = {}) {
   const docs = await queryReceipts({ startDate, endDate });
+  // CAD ranking only: merchant totals are never mixed across currencies.
   const merchants = {};
   for (const d of docs) {
-    if (!d.merchant || d.total == null) continue;
+    if (!d.merchant || d.total == null || currencyOf(d) !== DEFAULT_CURRENCY) continue;
     const normalized = normalizeMerchant(d.merchant);
     if (!merchants[normalized]) merchants[normalized] = { total: 0, visits: 0 };
     merchants[normalized].total  = Math.round((merchants[normalized].total + d.total) * 100) / 100;
@@ -213,11 +229,11 @@ async function getMonthlySummary({ year, month } = {}) {
 
   const docs = await queryReceipts({ startDate: start.toISOString(), endDate: end.toISOString() });
 
-  const { total, categories } = aggregateSpendingByCategory(docs);
+  const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
   
   const merchantMap = {};
   for (const d of docs) {
-    if (d.total == null || !d.merchant) continue;
+    if (d.total == null || !d.merchant || currencyOf(d) !== DEFAULT_CURRENCY) continue;
     const normalized = normalizeMerchant(d.merchant);
     merchantMap[normalized] = Math.round(((merchantMap[normalized] || 0) + d.total) * 100) / 100;
   }
@@ -237,9 +253,11 @@ async function getMonthlySummary({ year, month } = {}) {
     month: m,
     monthName: start.toLocaleString('default', { month: 'long' }),
     total,
-    receiptCount: docs.length,
+    currency: DEFAULT_CURRENCY,
+    receiptCount: docs.filter((d) => currencyOf(d) === DEFAULT_CURRENCY).length,
     categories: sortedCategories,
     topMerchants,
+    ...(byCurrency ? { byCurrency } : {}),
   };
 }
 
@@ -330,11 +348,19 @@ async function getSubscriptions() {
     lastBilled: s.lastBilled.toISOString().slice(0, 10),
   }));
 
-  const totalMonthlyOverhead = list.reduce((sum, s) => sum + s.amount, 0);
+  const round = (n) => Math.round(n * 100) / 100;
+  const overheadByCurrency = {};
+  for (const s of list) {
+    const code = currencyOf(s);
+    overheadByCurrency[code] = round((overheadByCurrency[code] || 0) + s.amount);
+  }
+  const { [DEFAULT_CURRENCY]: cadOverhead = 0, ...otherOverhead } = overheadByCurrency;
 
   return {
     subscriptions: list,
-    totalMonthlyOverhead: Math.round(totalMonthlyOverhead * 100) / 100,
+    totalMonthlyOverhead: cadOverhead, // CAD only
+    currency: DEFAULT_CURRENCY,
+    ...(Object.keys(otherOverhead).length ? { overheadByCurrency: otherOverhead } : {}),
   };
 }
 
