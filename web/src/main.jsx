@@ -339,12 +339,37 @@ function ImportTokens() {
   </div>;
 }
 
+const BAR_COLORS = ['#4a7c59', '#d9873f', '#6f8ba6', '#a8c490', '#c9b48a'];
+
+function categorySegments(categories) {
+  const positive = Object.entries(categories || {}).filter(([, amount]) => Number.isFinite(amount) && amount > 0).sort((a, b) => b[1] - a[1]);
+  const top = positive.slice(0, 4);
+  const rest = positive.slice(4);
+  const otherIndex = top.findIndex(([name]) => name === 'Other');
+  const restTotal = rest.reduce((sum, [, amount]) => sum + amount, 0);
+  if (restTotal > 0) {
+    if (otherIndex >= 0) top[otherIndex] = ['Other', top[otherIndex][1] + restTotal];
+    else top.push(['Other', restTotal]);
+  }
+  top.sort((a, b) => (a[0] === 'Other') - (b[0] === 'Other') || b[1] - a[1]);
+  return top.map(([name, amount], index) => ({ name, amount, color: BAR_COLORS[index] }));
+}
+
+function CategoryBar({ categories }) {
+  const segments = categorySegments(categories);
+  if (segments.length === 0) return null;
+  return <div className="category-breakdown">
+    <div className="category-bar" role="img" aria-label={segments.map((s) => `${s.name} ${formatMoney(s.amount)}`).join(', ')}>{segments.map((s) => <span key={s.name} style={{ flexGrow: s.amount, background: s.color }} />)}</div>
+    <ul className="category-legend">{segments.map((s) => <li key={s.name}><i style={{ background: s.color }} /><strong>{formatMoney(s.amount)}</strong> {s.name}</li>)}</ul>
+  </div>;
+}
+
 function NotificationsView({ failures, notifications, onRetry }) {
   const [showFailures, setShowFailures] = useState(false);
   return <section className="notifications-page">
     <h2>Notifications</h2>
     <p className="page-intro">Updates and things that need your attention.</p>
-    {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">MONTHLY SUMMARY</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong>{Object.keys(notification.byCurrency || {}).length > 0 && <p className="muted">Also spent: {Object.entries(notification.byCurrency).sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${value.count} ${value.count === 1 ? 'receipt' : 'receipts'})`).join(', ')}</p>}</div><div className="notification-breakdown">{Object.entries(notification.categories || {}).sort((a, b) => b[1] - a[1]).map(([category, amount]) => <div key={category}><span>{category}</span><strong>{formatMoney(amount)}</strong></div>)}</div></article>)}
+    {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">MONTHLY SUMMARY</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong>{Object.keys(notification.byCurrency || {}).length > 0 && <p className="muted">Also spent: {Object.entries(notification.byCurrency).sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${value.count} ${value.count === 1 ? 'receipt' : 'receipts'})`).join(', ')}</p>}</div><CategoryBar categories={notification.categories} /></article>)}
     {failures.length > 0 && <section className="failures"><div className="failure-summary"><span><h3>Processing history</h3><p className="muted">{failures.length} {failures.length === 1 ? 'receipt needs' : 'receipts need'} processing {formatFailureRange(failures)}.</p></span><button onClick={() => setShowFailures((visible) => !visible)}>{showFailures ? 'Hide receipts' : 'Review receipts'}</button></div>{showFailures && <div className="failure-list"><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</div>}</section>}
     {notifications.length === 0 && failures.length === 0 && <div className="empty notification-empty"><h3>You're all caught up.</h3><p>Monthly summaries and other updates will appear here.</p></div>}
   </section>;

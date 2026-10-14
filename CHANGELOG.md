@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 - **Item edits are validated**: editing an item (verify, rename, category, catalog fields) used to store whatever it was sent, such as "yes" for verified or any text as a category. Wrong types, unknown categories, empty names, over-long text and non-web product links are now rejected with a clear message instead of being saved.
+- **Monthly recap category bar**: the recap card now shows a colored bar of where the month went (top 4 categories plus Other) with amounts beneath, instead of a plain list.
 - **Totals no longer mix currencies**: a US$45 receipt used to be added into a CAD total (TOTAL, SUMMARY, budgets, monthly recap, weekly budget check, and the assistant's spending answers). Totals and budgets are now CAD only, other currencies are listed on their own line ("Also spent: US$45.00 (2 receipts)") and never converted, and LAST and save confirmations show the receipt's own currency. Receipts with no currency still count as CAD. (CIV-186)
 - **Web access limited to approved phone numbers**: until now anyone who could sign in with any phone number could use the web app's data functions (including creating AI-import tokens and importing Target receipts). They now need to be on the same approved list as text messaging, and AI-import tokens stop working if their number is removed from it. (CIV-182)
 - **Dependency security fixes**: updated packages with known vulnerabilities (including a critical one in the functions backend); no behavior change.
