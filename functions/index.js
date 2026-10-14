@@ -307,6 +307,7 @@ exports.sms = onRequest(
       // --- background processing starts here ---
       const images = [];
       let storedImagePaths = [];
+      let receiptSaved = false; // once true, later failures must not create a retryable failure row
       (async () => {
         let isFirstReceipt = false;
         try {
@@ -400,6 +401,7 @@ exports.sms = onRequest(
         const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
         await saveReceipt(receipt, from, messageSid, imagePaths,
           possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {});
+        receiptSaved = true;
 
         const merchant = receipt.merchant || 'Unknown';
         const receiptCurrency = currencyOf(receipt);
@@ -470,7 +472,13 @@ exports.sms = onRequest(
           from: maskedFrom,
           error: err && err.message ? err.message : err,
           cause: err && err.cause && err.cause.message ? err.cause.message : undefined,
+          receiptSaved,
         });
+
+        // The receipt is already stored; this was a later step (reply SMS, budget text...).
+        // Recording a failure would offer a Retry that creates a duplicate, and telling
+        // the user it failed would be wrong.
+        if (receiptSaved) return;
 
         let failureImagePaths = storedImagePaths;
         if (images.length > 0 && failureImagePaths.length === 0) {

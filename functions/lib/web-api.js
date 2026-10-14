@@ -188,6 +188,7 @@ async function claimRetry(db, failureRef, phone) {
     if (!failure.exists || failure.get('from') !== phone) throw retryError('not-found', 'Processing failure not found');
     const status = failure.get('status');
     if (status === 'recovered') throw retryError('failed-precondition', 'This receipt was already recovered');
+    if (status === 'resolved') throw retryError('failed-precondition', 'This item was already resolved');
     const startedAt = failure.get('retryStartedAt')?.toMillis?.() || 0;
     if (status === 'retrying' && Date.now() - startedAt < RETRY_CLAIM_STALE_MS) {
       throw retryError('failed-precondition', 'A retry for this receipt is already in progress');
@@ -239,7 +240,7 @@ async function retryProcessing(request) {
   // Only the claim's owner may release it, and only while it is still held;
   // a superseded or finished claim is never overwritten. `refund` returns the
   // rate-limit slot when no Gemini result was obtained.
-  const release = ({ refund }) => db.runTransaction(async (tx) => {
+  const release = ({ refund, status, extra = {} }) => db.runTransaction(async (tx) => {
     const current = await tx.get(failureRef);
     if (current.get('status') !== 'retrying' || current.get('retryToken') !== token) return;
     if (refund) {
@@ -249,11 +250,21 @@ async function retryProcessing(request) {
       }
     }
     tx.set(failureRef, {
-      status: previousStatus,
+      status: status || previousStatus,
       retryToken: null,
+      ...extra,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
   }).catch(() => {});
+
+  // Same rule as the SMS path: an account's very first receipt is parsed on the Pro model.
+  let isFirstReceipt = false;
+  try {
+    const existing = await db.collection('receipts').where('from', '==', phone).limit(1).get();
+    isFirstReceipt = existing.empty;
+  } catch (_) {
+    // Not critical; fall back to the default model.
+  }
 
   let receipt;
   try {
@@ -266,17 +277,24 @@ async function retryProcessing(request) {
         const [metadata] = await file.getMetadata();
         return { base64: buffer.toString('base64'), mimeType: metadata.contentType || 'image/jpeg' };
       }));
-      raw = await parseReceiptFromBase64(images);
+      raw = await parseReceiptFromBase64(images, undefined, isFirstReceipt);
     } else {
       // Text-only failure: re-parse the pasted text through the same text path SMS uses.
-      raw = await parseReceiptFromText(sourceText);
+      raw = await parseReceiptFromText(sourceText, isFirstReceipt);
       const extractedNothing = raw.merchant == null && raw.total == null
         && (!Array.isArray(raw.items) || raw.items.length === 0);
-      if (extractedNothing) throw retryError('failed-precondition', "That text didn't look like a receipt");
+      if (extractedNothing) throw retryError('not-a-receipt', "That text didn't look like a receipt");
     }
     receipt = validateReceipt(raw);
     if (raw.confidence != null) receipt.confidence = raw.confidence;
   } catch (error) {
+    if (error.code === 'not-a-receipt') {
+      // The text was read fine but is not a receipt: retrying can never help, so
+      // close the failure instead of leaving it retryable. The Gemini call was
+      // made, so the rate-limit slot stays used.
+      await release({ refund: false, status: 'resolved', extra: { resolution: 'not-a-receipt' } });
+      throw retryError('failed-precondition', error.message);
+    }
     await release({ refund: true });
     throw error;
   }

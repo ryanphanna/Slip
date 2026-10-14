@@ -422,6 +422,54 @@ describe('BUDGET category handling', () => {
   });
 });
 
+describe('failures after the receipt is saved', () => {
+  const logger = require('firebase-functions/logger');
+
+  it('text path: a failed confirmation SMS leaves the saved receipt alone and creates no failure row or retry', async () => {
+    seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
+    parseReceiptFromText.mockResolvedValue(GOOD);
+    sendSms.mockRejectedValue(new Error('twilio down'));
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(receipts().filter(([id]) => id !== 'prev')).toHaveLength(1);
+    expect(failures()).toHaveLength(0);
+    expect(sendSms).toHaveBeenCalledTimes(1); // no "couldn't read that receipt" follow-up
+    const logged = logger.error.mock.calls.filter(([msg]) => msg === 'Receipt processing failed');
+    expect(logged).toHaveLength(1);
+    expect(logged[0][1]).toMatchObject({ receiptSaved: true, error: 'twilio down' });
+  });
+
+  it('image path: same behavior, and the stored image is not duplicated into failed images', async () => {
+    fetchMedia.mockResolvedValue(imageResponse('jpegbytes'));
+    parseReceiptFromBase64.mockResolvedValue(GOOD);
+    saveImages.mockResolvedValue(['receipts-temporary/SM1/0.jpg']);
+    sendSms.mockRejectedValue(new Error('twilio down'));
+    await sms(makeReq({ NumMedia: '1', MediaUrl0: 'https://api.twilio.com/media/1', MediaContentType0: 'image/jpeg' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(receipts()).toHaveLength(1);
+    expect(failures()).toHaveLength(0);
+    expect(saveFailedImages).not.toHaveBeenCalled();
+    expect(sendSms).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failure BEFORE the save still records a retryable failure (unchanged)', async () => {
+    parseReceiptFromText.mockResolvedValue(GOOD);
+    const realCollection = fake.db.collection;
+    fake.db.collection = (name) => {
+      const col = realCollection(name);
+      if (name === 'receipts') return Object.assign(Object.create(col), { add: async () => { throw new Error('write failed'); } });
+      return col;
+    };
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => failures().length > 0 && sendSms.mock.calls.length > 0);
+    expect(failures()[0][1]).toMatchObject({ status: 'failed', error: 'write failed', sourceText: 'Costco 23.50' });
+    expect(receipts()).toHaveLength(0);
+    expect(lastSms()).toMatch(/^(Welcome to Slip|.*Couldn't read that receipt)/s);
+  });
+});
+
 describe('text commands', () => {
   it('LAST replies with the most recent receipt, and says so when there are none', async () => {
     await sms(makeReq({ Body: 'LAST' }), makeRes());

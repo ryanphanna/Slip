@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **No false "failed" receipts after a successful save**: if a step after saving a receipt failed (for example the confirmation text), Slip also recorded a processing failure and told you it couldn't read the receipt, and Retry then saved a duplicate. After the save, later problems are only logged. Also, retrying a pasted text that turns out not to be a receipt now closes it instead of leaving it retryable, and retries use the stronger model for an account's first receipt like text messages do. (CIV-195, CIV-196)
 - **Repeat purchases are no longer thrown away as duplicates**: two identical $4.50 coffees on the same day used to be dropped as "Duplicate". Now only a resend within 10 minutes (or the same message) is dropped; a same merchant, total and date receipt later on is saved, marked as a possible duplicate, and the reply says so. Applies to text messages and AI imports. (CIV-203)
 - **Web dependency security fix**: pinned the web app's gRPC library to a patched version, clearing 4 high-severity audit findings; the built app is byte-identical. (CIV-202)
 - **AI-import endpoint shrugs off junk requests**: requests with a missing, malformed or wrong-looking token are now turned away before any database or sign-in lookup, so a flood of junk can no longer queue behind (and delay) real imports. Every bad credential gets the same "invalid token" reply, and a missing content length no longer skips the request-size cap. (CIV-201)

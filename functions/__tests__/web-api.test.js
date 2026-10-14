@@ -394,7 +394,7 @@ describe('retryProcessing', () => {
         seedTextFailure('f1', { messageSid: 'SM9' });
         parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 23.5, category: 'Grocery', items: [{ name: 'Milk', price: 20.8 }], confidence: 0.9 });
         const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
-        expect(parseReceiptFromText).toHaveBeenCalledWith('Costco milk 20.80 total 23.50');
+        expect(parseReceiptFromText).toHaveBeenCalledWith('Costco milk 20.80 total 23.50', true); // account has no receipts yet -> first-receipt Pro flag
         expect(parseReceiptFromBase64).not.toHaveBeenCalled();
         expect(result.merchant).toBe('Costco');
         expect(fake.store.receipts.get(result.id)).toMatchObject({ from: PHONE, merchant: 'Costco', merchantKey: 'costco', imagePaths: [], messageSid: 'SM9', recoveredFromFailure: 'f1' });
@@ -418,12 +418,41 @@ describe('retryProcessing', () => {
         expect(fake.store.retry_limits.get('14165551234').count).toBe(0);
       });
 
-      it('text that still is not a receipt is rejected without saving anything', async () => {
+      it('text that is not a receipt is closed as resolved, never saved, and not retryable again', async () => {
         seedTextFailure();
         parseReceiptFromText.mockResolvedValue({ merchant: null, total: null, items: [] });
-        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition', message: "That text didn't look like a receipt" });
         expect(receiptCount()).toBe(0);
-        expect(fake.store.processing_failures.get('f1').status).toBe('failed');
+        expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'resolved', resolution: 'not-a-receipt', retryToken: null });
+        // A second click does not call Gemini again.
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+        expect(parseReceiptFromText).toHaveBeenCalledTimes(1);
+        // The Gemini call was made, so the hourly slot stays used.
+        expect(fake.store.retry_limits.get('14165551234').count).toBe(1);
+      });
+
+      it('passes the first-receipt flag only when the account has no receipts', async () => {
+        parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 5, items: [] });
+        seedTextFailure('f1');
+        await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        expect(parseReceiptFromText).toHaveBeenLastCalledWith('Costco milk 20.80 total 23.50', true);
+        seedTextFailure('f2');
+        await retryProcessing({ ...AUTH, data: { id: 'f2' } }); // f1's recovered receipt now exists
+        expect(parseReceiptFromText).toHaveBeenLastCalledWith('Costco milk 20.80 total 23.50', false);
+      });
+
+      it('image retries use the same first-receipt flag', async () => {
+        seedFailure('f1');
+        parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 5, items: [] });
+        await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        expect(parseReceiptFromBase64.mock.calls[0][2]).toBe(true);
+      });
+
+      it('an already resolved failure cannot be retried', async () => {
+        seedTextFailure('f1', { status: 'resolved' });
+        await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition', message: 'This item was already resolved' });
+        expect(parseReceiptFromText).not.toHaveBeenCalled();
+        expect(receiptCount()).toBe(0);
       });
 
       it('a failure with neither images nor text still cannot be retried', async () => {
