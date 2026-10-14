@@ -4,6 +4,7 @@ const { validateReceipt, normalizeEditPatch } = require('./validate');
 const { parseReceiptFromBase64 } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
+const { isAllowed } = require('./allowlist');
 const importTokens = require('./import-tokens');
 
 const EDITABLE_FIELDS = new Set([
@@ -17,6 +18,12 @@ function requireAuth(request) {
   if (!request.auth?.uid || !request.auth.token?.phone_number) {
     const error = new Error('Authentication required');
     error.code = 'unauthenticated';
+    throw error;
+  }
+  // Same ALLOWED_PHONES list the SMS path uses; fails closed if unset.
+  if (!isAllowed(request.auth.token.phone_number)) {
+    const error = new Error('This account is not enabled for Slip');
+    error.code = 'permission-denied';
     throw error;
   }
   return { uid: request.auth.uid, phone: request.auth.token.phone_number };

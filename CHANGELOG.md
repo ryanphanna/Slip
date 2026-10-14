@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Web access limited to approved phone numbers**: until now anyone who could sign in with any phone number could use the web app's data functions (including creating AI-import tokens and importing Target receipts). They now need to be on the same approved list as text messaging, and AI-import tokens stop working if their number is removed from it. (CIV-182)
 - **Dependency security fixes**: updated packages with known vulnerabilities (including a critical one in the functions backend); no behavior change.
 
 - **Retrying a failed receipt could add duplicates**: clicking Retry on an already-recovered receipt (or double-clicking) saved another copy of it and made another paid Gemini call each time. Recovered receipts are now rejected, simultaneous retries make only one call, the receipt and its "recovered" status are saved together, and retries are capped at 10 per hour per account. Recovered receipts also now get a merchant key, so duplicate detection sees them. A retry that fails before the AI responds no longer uses up one of the 10 hourly retries, retries get a longer time limit, and a retry in progress stays visible in the failures list. (CIV-181)

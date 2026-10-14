@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
+const { isAllowed } = require('./allowlist');
 
 const TOKEN_PREFIX = 'slip_pat_';
 const SCOPE = 'receipts:write';
@@ -71,6 +72,8 @@ async function authenticateToken(rawToken) {
   const ref = admin.firestore().collection('import_tokens').doc(hash);
   const doc = await ref.get();
   if (!doc.exists || doc.get('revokedAt') || doc.get('scope') !== SCOPE) return null;
+  // Tokens stop working if the number is removed from the allowlist.
+  if (!isAllowed(doc.get('from'))) return null;
 
   // The token is only valid while its Firebase user still owns the phone number.
   try {

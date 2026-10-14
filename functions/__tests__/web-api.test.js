@@ -15,6 +15,8 @@ const {
   getUserSettings, updateUserSettings,
 } = require('../lib/web-api');
 
+process.env.ALLOWED_PHONES = '+14165551234,+14165559999';
+
 const AUTH = { auth: { uid: 'user-1', token: { phone_number: '+14165551234' } } };
 
 function fakeBucket() {
@@ -40,6 +42,38 @@ function seed(collection, id, data) {
   const map = fake.store[collection] || (fake.store[collection] = new Map());
   map.set(id, data);
 }
+
+describe('allowlist enforcement', () => {
+  const webApi = require('../lib/web-api');
+  const handlers = Object.entries(webApi).filter(([name, fn]) => typeof fn === 'function' && !['requireAuth', 'cleanPatch'].includes(name));
+  const STRANGER = { auth: { uid: 'stranger', token: { phone_number: '+14165550000' } } };
+  const originalAllowed = process.env.ALLOWED_PHONES;
+  afterEach(() => { process.env.ALLOWED_PHONES = originalAllowed; });
+
+  it('covers every exported callable handler', () => {
+    expect(handlers.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it.each(handlers.map(([name]) => [name]))('%s rejects a signed-in phone that is not allowlisted', async (name) => {
+    await expect(webApi[name]({ ...STRANGER, data: { id: 'x', receipts: [{}], patch: {} } }))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+    expect(Object.values(fake.store).filter((m) => m instanceof Map).every((m) => m.size === 0)).toBe(true);
+  });
+
+  it.each(handlers.map(([name]) => [name]))('%s fails closed when ALLOWED_PHONES is unset', async (name) => {
+    delete process.env.ALLOWED_PHONES;
+    await expect(webApi[name]({ ...AUTH, data: {} })).rejects.toMatchObject({ code: 'permission-denied' });
+  });
+
+  it('lets an allowlisted phone through', () => {
+    expect(requireAuth(AUTH)).toEqual({ uid: 'user-1', phone: '+14165551234' });
+    expect(requireAuth({ auth: { uid: 'u2', token: { phone_number: '+14165559999' } } }).phone).toBe('+14165559999');
+  });
+
+  it('still reports unauthenticated before checking the allowlist', () => {
+    expect(() => requireAuth({ auth: null })).toThrow('Authentication required');
+  });
+});
 
 describe('web API helpers', () => {
   it('keeps only editable receipt fields', () => {

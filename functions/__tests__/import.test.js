@@ -15,6 +15,7 @@ const config = require('../lib/config');
 
 const PHONE_A = '+14165551111';
 const PHONE_B = '+14165552222';
+process.env.ALLOWED_PHONES = `${PHONE_A},${PHONE_B}`;
 const authFor = (uid, phone) => ({ auth: { uid, token: { phone_number: phone } } });
 
 let fake;
@@ -87,6 +88,14 @@ describe('token lifecycle', () => {
     users.delete('ua');
     expect((await call(token, valid({ idempotencyKey: 'key-0000003' }))).status).toBe(401);
     expect(receipts()).toHaveLength(1);
+  });
+
+  it('stops working when the number is removed from the allowlist', async () => {
+    const { token } = await mint(PHONE_A);
+    expect((await call(token, valid())).status).toBe(200);
+    process.env.ALLOWED_PHONES = PHONE_B;
+    expect((await call(token, valid({ idempotencyKey: 'key-0000002' }))).status).toBe(401);
+    process.env.ALLOWED_PHONES = `${PHONE_A},${PHONE_B}`;
   });
 
   it('cannot revoke another account\'s token', async () => {

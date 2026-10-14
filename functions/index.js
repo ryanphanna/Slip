@@ -511,7 +511,8 @@ exports.weeklyBudgetCheck = onSchedule(
 
 // Browser API. Firestore and Storage remain server-only; every operation is
 // scoped to the verified phone number in the Firebase Auth token.
-function callable(handler, options) {
+// Callables read ALLOWED_PHONES (via requireAuth), so every one must bind the secret.
+function callable(handler, options = {}) {
   const wrapped = async (request) => {
     try {
       return await handler(request);
@@ -522,7 +523,7 @@ function callable(handler, options) {
       throw new HttpsError(code, error.message || 'Request failed');
     }
   };
-  return options ? onCall(options, wrapped) : onCall(wrapped);
+  return onCall({ ...options, secrets: [allowedPhonesSecret] }, wrapped);
 }
 
 exports.listReceipts = callable(webApi.listReceipts);
@@ -546,7 +547,7 @@ exports.revokeImportToken = callable(webApi.revokeImportToken);
 // Remote MCP endpoint for user-owned AI assistants. Write-only create_receipt;
 // no Gemini secret is bound, so this path cannot make Gemini calls.
 // One request at a time on one instance keeps the hourly rate-limit count race-free.
-exports.mcp = onRequest({ memory: '256MiB', concurrency: 1, maxInstances: 1 }, async (req, res) => {
+exports.mcp = onRequest({ memory: '256MiB', concurrency: 1, maxInstances: 1, secrets: [allowedPhonesSecret] }, async (req, res) => {
   try {
     const rawLength = Number(req.headers['content-length']) || (req.rawBody ? req.rawBody.length : 0);
     const result = await handleMcp({ method: req.method, headers: req.headers, body: req.body, rawLength });
