@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Web dependency security fix**: pinned the web app's gRPC library to a patched version, clearing 4 high-severity audit findings; the built app is byte-identical. (CIV-202)
 - **AI-import endpoint shrugs off junk requests**: requests with a missing, malformed or wrong-looking token are now turned away before any database or sign-in lookup, so a flood of junk can no longer queue behind (and delay) real imports. Every bad credential gets the same "invalid token" reply, and a missing content length no longer skips the request-size cap. (CIV-201)
 - **Merchant names no longer rewritten by a hidden word**: a receipt from "Metrolinx" was renamed to "Metro" (and "Targeted…" to "Target") because the known-store list matched anywhere inside a name. Names now match only as whole words, so "METRO #123", "Metro Inc" and "Walmart Supercenter" still map correctly. (CIV-199)
 - **Budget command checks the category**: `BUDGET <category> <amount>` used to accept any word and quietly create a budget that never matched any receipt. It now recognizes the real categories (any capitalization, plurals like "Groceries", or just "Takeout"), and for anything else replies with the valid category names without saving.
