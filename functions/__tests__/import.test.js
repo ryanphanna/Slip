@@ -1,6 +1,6 @@
 const { createFakeFirestore } = require('../test-helpers/fake-firestore');
 
-jest.mock('firebase-admin', () => ({ firestore: jest.fn(), storage: jest.fn() }));
+jest.mock('firebase-admin', () => ({ firestore: jest.fn(), storage: jest.fn(), auth: jest.fn() }));
 jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn() }));
 jest.mock('../lib/gemini', () => ({ PROMPT: '', parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn(), parseReceiptFromUrl: jest.fn() }));
 
@@ -18,8 +18,16 @@ const PHONE_B = '+14165552222';
 const authFor = (uid, phone) => ({ auth: { uid, token: { phone_number: phone } } });
 
 let fake;
+let users;
 beforeEach(() => {
   fake = createFakeFirestore();
+  users = new Map();
+  admin.auth.mockReturnValue({
+    getUser: async (uid) => {
+      if (!users.has(uid)) throw new Error('auth/user-not-found');
+      return { uid, phoneNumber: users.get(uid) };
+    },
+  });
   admin.firestore.mockReturnValue(fake.db);
   admin.firestore.FieldValue = fake.db.FieldValue;
   admin.firestore.Timestamp = fake.db.Timestamp;
@@ -48,6 +56,7 @@ const call = (token, args) => handleMcp({
 const receipts = () => [...fake.store.receipts?.entries() || []];
 
 async function mint(phone, uid = 'u-' + phone) {
+  users.set(uid, phone);
   return tokens.createToken({ from: phone, uid, label: 'test' });
 }
 
@@ -68,6 +77,16 @@ describe('token lifecycle', () => {
     expect((await call(token, valid())).status).toBe(200);
     await tokens.revokeToken(PHONE_A, id);
     expect((await call(token, valid({ idempotencyKey: 'key-0000002' }))).status).toBe(401);
+  });
+
+  it('rejects a token whose user no longer owns the phone number', async () => {
+    const { token } = await mint(PHONE_A, 'ua');
+    expect((await call(token, valid())).status).toBe(200);
+    users.set('ua', PHONE_B);
+    expect((await call(token, valid({ idempotencyKey: 'key-0000002' }))).status).toBe(401);
+    users.delete('ua');
+    expect((await call(token, valid({ idempotencyKey: 'key-0000003' }))).status).toBe(401);
+    expect(receipts()).toHaveLength(1);
   });
 
   it('cannot revoke another account\'s token', async () => {
@@ -170,6 +189,56 @@ describe('import', () => {
     const first = (await call(token, valid())).body.result.structuredContent;
     const retry = (await call(token, valid())).body.result.structuredContent;
     expect(retry).toMatchObject({ receiptId: first.receiptId, deduplicated: true });
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('simultaneous calls with the same key save exactly one receipt', async () => {
+    const { token } = await mint(PHONE_A);
+    const results = await Promise.all([call(token, valid()), call(token, valid())]);
+    expect(receipts()).toHaveLength(1);
+    const ok = results.filter((r) => !r.body.result.isError);
+    expect(ok.length).toBeGreaterThanOrEqual(1);
+    const retry = (await call(token, valid())).body.result.structuredContent;
+    expect(retry).toMatchObject({ deduplicated: true, receiptId: receipts()[0][0] });
+  });
+
+  it('a failed save releases the claim so the same key can be retried', async () => {
+    const { token } = await mint(PHONE_A);
+    const realCollection = fake.db.collection;
+    let failNext = true;
+    fake.db.collection = (name) => {
+      const col = realCollection(name);
+      if (name === 'receipts' && failNext) return Object.assign(Object.create(col), { add: async () => { failNext = false; throw new Error('boom'); } });
+      return col;
+    };
+    const failed = await call(token, valid());
+    expect(failed.body.result.isError).toBe(true);
+    expect(fake.store.import_idempotency.size).toBe(0);
+    const retry = await call(token, valid());
+    expect(retry.body.result.isError).toBe(false);
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('takes over an abandoned claim but not a fresh one', async () => {
+    const { token } = await mint(PHONE_A);
+    const first = await call(token, valid());
+    expect(first.body.result.isError).toBe(false);
+    const [claimId, claim] = [...fake.store.import_idempotency.entries()][0];
+    const stamp = (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
+
+    // Fresh pending claim: caller is told to retry, nothing new saved.
+    fake.store.import_idempotency.set(claimId, { ...claim, receiptId: null, createdAt: stamp(Date.now()) });
+    fake.store.receipts.clear();
+    const busy = await call(token, valid());
+    expect(busy.body.result.isError).toBe(true);
+    expect(busy.body.result.content[0].text).toMatch(/in progress/);
+    expect(receipts()).toHaveLength(0);
+
+    // Stale pending claim (>2 min): taken over and completed.
+    fake.store.import_idempotency.set(claimId, { ...claim, receiptId: null, createdAt: stamp(Date.now() - 3 * 60 * 1000) });
+    const taken = await call(token, valid());
+    expect(taken.body.result.isError).toBe(false);
+    expect(taken.body.result.structuredContent.deduplicated).toBe(false);
     expect(receipts()).toHaveLength(1);
   });
 

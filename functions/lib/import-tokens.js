@@ -72,6 +72,14 @@ async function authenticateToken(rawToken) {
   const doc = await ref.get();
   if (!doc.exists || doc.get('revokedAt') || doc.get('scope') !== SCOPE) return null;
 
+  // The token is only valid while its Firebase user still owns the phone number.
+  try {
+    const user = await admin.auth().getUser(doc.get('uid'));
+    if (!user.phoneNumber || user.phoneNumber !== doc.get('from')) return null;
+  } catch {
+    return null;
+  }
+
   const lastUsed = doc.get('lastUsedAt')?.toMillis?.() || 0;
   if (Date.now() - lastUsed > LAST_USED_THROTTLE_MS) {
     await ref.set({ lastUsedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});

@@ -13,6 +13,8 @@ jest.mock('firebase-admin', () => ({
 const { getLastReceipt, getLastMonthStats } = require('../lib/query');
 
 describe('receipt queries', () => {
+  afterEach(() => jest.useRealTimers());
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -53,6 +55,5 @@ describe('receipt queries', () => {
       monthKey: '2026-08',
     });
     expect(mockWhere).toHaveBeenCalledWith('from', '==', '+14165551234');
-    jest.useRealTimers();
   });
 });

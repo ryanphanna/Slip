@@ -5,6 +5,8 @@ const { validateReceipt } = require('./validate');
 const { saveReceipt, findDuplicate, checkRateLimit } = require('./store');
 const { validateImport, SCHEMA_VERSION } = require('./import-schema');
 
+const CLAIM_STALE_MS = 2 * 60 * 1000;
+
 const sha = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
 function fail(code, message, details) {
@@ -44,22 +46,34 @@ async function importReceipt(identity, args) {
   const claimRef = db.collection('import_idempotency').doc(`${sha(from).slice(0, 24)}_${sha(args.idempotencyKey)}`);
   const payloadHash = sha(canonical({ ...args, idempotencyKey: undefined }));
 
-  const existing = await claimRef.get();
-  if (existing.exists) return replay(existing, payloadHash);
+  // Claim the idempotency key. A claim with no receipt yet that is older than
+  // CLAIM_STALE_MS belongs to a crashed call and may be taken over.
+  let claimed = false;
+  for (let attempt = 0; attempt < 2 && !claimed; attempt++) {
+    const existing = await claimRef.get();
+    if (existing.exists) {
+      const createdAt = existing.get('createdAt')?.toMillis?.() || 0;
+      const abandoned = !existing.get('receiptId') && Date.now() - createdAt > CLAIM_STALE_MS;
+      if (!abandoned) return replay(existing, payloadHash);
+      await claimRef.delete().catch(() => {});
+    }
 
-  const limit = await checkRateLimit(from);
-  if (limit.exceeded) throw fail('rate-limited', `Rate limit reached (${limit.reason}). Try again later.`);
-  if (await checkTokenRateLimit(from, tokenId)) {
-    throw fail('rate-limited', 'This token reached its hourly import limit. Try again later.');
-  }
+    const limit = await checkRateLimit(from);
+    if (limit.exceeded) throw fail('rate-limited', `Rate limit reached (${limit.reason}). Try again later.`);
+    if (await checkTokenRateLimit(from, tokenId)) {
+      throw fail('rate-limited', 'This token reached its hourly import limit. Try again later.');
+    }
 
-  try {
-    await claimRef.create({ from, payloadHash, receiptId: null, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-  } catch (err) {
-    const raced = await claimRef.get();
-    if (raced.exists) return replay(raced, payloadHash);
-    throw err;
+    try {
+      await claimRef.create({ from, payloadHash, receiptId: null, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+      claimed = true;
+    } catch (err) {
+      const raced = await claimRef.get();
+      if (raced.exists) return replay(raced, payloadHash);
+      throw err;
+    }
   }
+  if (!claimed) throw fail('conflict', 'An import with this idempotencyKey is still in progress. Retry shortly.');
 
   try {
     const receipt = validateReceipt(args);

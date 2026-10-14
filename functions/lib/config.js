@@ -15,7 +15,7 @@ module.exports = {
   RATE_LIMIT_PER_HOUR: 25,
   RATE_LIMIT_PER_DAY: 100,
   RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,    // 1 hour
-  IMPORT_TOKEN_RATE_LIMIT_PER_HOUR: 30,    // AI-assistant imports, per token
+  IMPORT_TOKEN_RATE_LIMIT_PER_HOUR: 10,    // AI-assistant imports, per token
 
 
   // === Casual Error Openers ===

@@ -11,6 +11,10 @@ if (!admin.firestore) {
   admin.firestore.FieldValue = FieldValue;
   admin.firestore.Timestamp = Timestamp;
 }
+if (!admin.auth) {
+  // Lazy: firebase-admin/auth pulls in ESM-only deps that break Jest at load time.
+  admin.auth = (...args) => require('firebase-admin/auth').getAuth(...args);
+}
 if (!admin.storage) {
   const { getStorage } = require('firebase-admin/storage');
   admin.storage = getStorage;
@@ -539,7 +543,8 @@ exports.revokeImportToken = callable(webApi.revokeImportToken);
 
 // Remote MCP endpoint for user-owned AI assistants. Write-only create_receipt;
 // no Gemini secret is bound, so this path cannot make Gemini calls.
-exports.mcp = onRequest({ memory: '256MiB', maxInstances: 5 }, async (req, res) => {
+// One request at a time on one instance keeps the hourly rate-limit count race-free.
+exports.mcp = onRequest({ memory: '256MiB', concurrency: 1, maxInstances: 1 }, async (req, res) => {
   try {
     const rawLength = Number(req.headers['content-length']) || (req.rawBody ? req.rawBody.length : 0);
     const result = await handleMcp({ method: req.method, headers: req.headers, body: req.body, rawLength });
