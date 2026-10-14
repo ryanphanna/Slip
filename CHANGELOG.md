@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Merchant names no longer rewritten by a hidden word**: a receipt from "Metrolinx" was renamed to "Metro" (and "Targeted…" to "Target") because the known-store list matched anywhere inside a name. Names now match only as whole words, so "METRO #123", "Metro Inc" and "Walmart Supercenter" still map correctly. (CIV-199)
 - **Budget command checks the category**: `BUDGET <category> <amount>` used to accept any word and quietly create a budget that never matched any receipt. It now recognizes the real categories (any capitalization, plurals like "Groceries", or just "Takeout"), and for anything else replies with the valid category names without saving.
 - **Text-message hang on a database error**: if the duplicate-message lookup failed, the request hung until it timed out and Twilio retried. It now carries on and logs the error once.
 - **Pasted-text receipts can now be retried**: when a text-message receipt failed to parse, only the error was kept, so the text was lost and couldn't be retried. The text is now saved with the failure (up to the 8,000-character message limit), shows in Processing history, and Retry re-parses it.

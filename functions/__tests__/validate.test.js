@@ -1,4 +1,5 @@
-const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate } = require('../lib/validate');
+const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, normalizeMerchant } = require('../lib/validate');
+const config = require('../lib/config');
 
 describe('validateReceipt', () => {
   it('preserves clear IKEA article numbers from OCR item names', () => {
@@ -221,5 +222,90 @@ describe('normalizeEditPatch (strict edit path)', () => {
     expect(isRealDate('2026-02-28')).toBe(true);
     expect(isRealDate('2026-02-30')).toBe(false);
     expect(isRealDate('2026-13-45')).toBe(false);
+  });
+});
+
+describe('normalizeMerchant whole-word matching', () => {
+  it.each([
+    ['METRO #123', 'Metro'],
+    ['Metro Inc', 'Metro'],
+    ['Metro Inc.', 'Metro'],
+    ['metro', 'Metro'],
+    ['Metro - Bloor St', 'Metro'],
+    ['Walmart Supercenter', 'Walmart'],
+    ['WAL-MART #1234', 'Walmart'],
+    ['Wal-Mart', 'Walmart'],
+    ['IKEA North York', 'IKEA'],
+    ['Ikea', 'IKEA'],
+    ['FRESH CO', 'FreshCo'],
+    ['FreshCo #204', 'FreshCo'],
+    ['Whole Foods', 'Whole Foods Market'],
+    ['WHOLE FOODS MARKET #12', 'Whole Foods Market'],
+    ["Trader Joe's #5", "Trader Joe's"],
+    ['trader joes', "Trader Joe's"],
+    ['TIM HORTONS 1234', 'Tim Hortons'],
+    ['T&T Supermarket Markham', 'T&T Supermarket'],
+    ['Shoppers Drug Mart #1', 'Shoppers Drug Mart'],
+    ['Loblaws Toronto', 'Loblaws'],
+    ['OLD NAVY', 'Old Navy'],
+    ['Uniqlo Eaton Centre', 'Uniqlo'],
+    ['Real Canadian Superstore', 'Superstore'],
+    ['Homesense #8', 'Homesense'],
+    ['Walgreens #1', 'Walgreens'],
+    ['Rexall Pharma Plus', 'Rexall'],
+    ['Target (Brampton)', 'Target'],
+    ['  Target  ', 'Target'],
+  ])('maps %j to %j', (input, expected) => {
+    expect(normalizeMerchant(input)).toBe(expected);
+  });
+
+  it.each([
+    ['Metrolinx'],
+    ['METROLINX / PRESTO'],
+    ['Metropolitan Museum'],
+    ['Targeted Marketing Inc'],
+    ['Retarget Co'],
+    ['Superstorey'],
+    ['Ikeabox'],
+    ['Walmartx'],
+    ['Rexallton'],
+    ['Unknown Store'],
+  ])('leaves %j unchanged (key only appears inside a longer word)', (input) => {
+    expect(normalizeMerchant(input)).toBe(input);
+  });
+
+  it('returns null for non-strings and trims otherwise', () => {
+    expect(normalizeMerchant(null)).toBeNull();
+    expect(normalizeMerchant(42)).toBeNull();
+    expect(normalizeMerchant('  Corner Shop ')).toBe('Corner Shop');
+  });
+
+  // Differential check against the previous substring behavior: for every key in
+  // the map, every realistic way a receipt prints it still maps the same way.
+  it('keeps every legitimate mapping the old substring matcher produced', () => {
+    const oldNormalize = (name) => {
+      const clean = name.trim();
+      const lower = clean.toLowerCase();
+      if (config.MERCHANT_NORMALIZE_MAP[lower]) return config.MERCHANT_NORMALIZE_MAP[lower];
+      for (const [key, canonical] of Object.entries(config.MERCHANT_NORMALIZE_MAP)) if (lower.includes(key)) return canonical;
+      return clean;
+    };
+    const wrappers = ['%s', '%s #123', '%s Inc', '%s Inc.', '%s - Downtown', '%s, Toronto', '(%s)', 'The %s', '%s/%s', '%s 4521', '%s#9'];
+    let checked = 0;
+    for (const key of Object.keys(config.MERCHANT_NORMALIZE_MAP)) {
+      for (const variant of [key, key.toUpperCase(), key.replace(/\b\w/g, (c) => c.toUpperCase())]) {
+        for (const wrapper of wrappers) {
+          const input = wrapper.replace(/%s/g, variant);
+          expect(normalizeMerchant(input)).toBe(oldNormalize(input));
+          checked += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+  });
+
+  it('validateReceipt uses the stricter matching', () => {
+    expect(validateReceipt({ merchant: 'Metrolinx' }).merchant).toBe('Metrolinx');
+    expect(validateReceipt({ merchant: 'METRO #123' }).merchant).toBe('Metro');
   });
 });

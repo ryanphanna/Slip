@@ -13,9 +13,11 @@ function normalizeMerchant(name) {
     return config.MERCHANT_NORMALIZE_MAP[lower];
   }
 
-  // Try substring checks for safety (e.g. "Walmart Supercenter" -> "Walmart")
+  // Whole-word match, so "Walmart Supercenter" -> "Walmart" and "METRO #123" ->
+  // "Metro", but "Metrolinx" (or any longer word that merely contains a key) is left alone.
   for (const [key, canonical] of Object.entries(config.MERCHANT_NORMALIZE_MAP || {})) {
-    if (lower.includes(key)) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(lower)) {
       return canonical;
     }
   }
