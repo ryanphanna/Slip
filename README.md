@@ -18,6 +18,7 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 - **Digests**: Monthly spending recap texts.
 - **Notifications**: Recaps are also saved as in-app notifications in the web inbox.
 - **Items**: Browse and correct individual line items across receipts in the web app.
+- **Retention**: finished processing-failure records (and their unused images) are purged 90 days after they were resolved; see [Security](./SECURITY.md).
 - **Private by Design**: Built for personal use with server-side storage, locked-down client access, and allowlisted intake.
 
 ## Web interface

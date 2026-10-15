@@ -15,11 +15,13 @@ function toComparable(v) {
 function matches(data, field, op, value) {
   const actual = getPath(data, field);
   if (op === '==') return actual === value;
+  if (op === 'array-contains') return Array.isArray(actual) && actual.includes(value);
   const left = toComparable(actual);
   const right = toComparable(value);
   if (left == null) return false;
   if (op === '>=') return left >= right;
   if (op === '<=') return left <= right;
+  if (op === '<') return left < right;
   throw new Error(`Unsupported operator in fake firestore: ${op}`);
 }
 
@@ -42,8 +44,8 @@ class FakeQuery {
   }
   orderBy(field, direction = 'asc') {
     const sorted = [...this.docs].sort((a, b) => {
-      const av = getPath(a.data, field);
-      const bv = getPath(b.data, field);
+      const av = toComparable(getPath(a.data, field));
+      const bv = toComparable(getPath(b.data, field));
       const cmp = av > bv ? 1 : av < bv ? -1 : 0;
       return direction === 'desc' ? -cmp : cmp;
     });

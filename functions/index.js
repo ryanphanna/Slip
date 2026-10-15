@@ -1,6 +1,6 @@
 const { onRequest, onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { defineSecret } = require('firebase-functions/params');
+const { defineSecret, defineString } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
 
@@ -34,6 +34,7 @@ const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
 const { summarizeRuntimeHealth } = require('./lib/runtime-health');
 const webApi = require('./lib/web-api');
 const { handleMcp } = require('./lib/mcp');
+const { purgeOldFailures } = require('./lib/retention');
 const config = require('./lib/config');
 
 const oops = () => config.ERROR_OPENERS[Math.floor(Math.random() * config.ERROR_OPENERS.length)];
@@ -542,6 +543,22 @@ exports.weeklyBudgetCheck = onSchedule(
     results.forEach((r, i) => {
       if (r.status === 'rejected') logger.error('Weekly budget check failed', { phone: phones[i], error: r.reason?.message });
     });
+  }
+);
+
+// Daily cleanup of finished processing failures (and their now-unused images).
+// Dry-run by default: set FAILURE_RETENTION_DRY_RUN=false to actually delete.
+const failureRetentionDryRun = defineString('FAILURE_RETENTION_DRY_RUN', { default: 'true' });
+exports.purgeOldFailures = onSchedule(
+  { schedule: '30 3 * * *', timeZone: 'America/Toronto', timeoutSeconds: 300, memory: '256MiB' },
+  async () => {
+    const dryRun = failureRetentionDryRun.value() !== 'false';
+    try {
+      const counts = await purgeOldFailures({ dryRun });
+      logger.info('Failure retention run', counts);
+    } catch (error) {
+      logger.error('Failure retention run failed', { error: error.message });
+    }
   }
 );
 

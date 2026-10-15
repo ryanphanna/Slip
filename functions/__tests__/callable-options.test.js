@@ -5,7 +5,10 @@ jest.mock('firebase-functions/v2/https', () => ({
   HttpsError: class HttpsError extends Error {},
 }));
 jest.mock('firebase-functions/v2/scheduler', () => ({ onSchedule: jest.fn((_o, h) => h) }));
-jest.mock('firebase-functions/params', () => ({ defineSecret: jest.fn(() => ({ value: () => '' })) }));
+jest.mock('firebase-functions/params', () => ({
+  defineSecret: jest.fn(() => ({ value: () => '' })),
+  defineString: jest.fn((_n, opts) => ({ value: () => (opts && opts.default) || '' })),
+}));
 jest.mock('firebase-functions/logger', () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }));
 jest.mock('firebase-admin', () => ({ initializeApp: jest.fn(), firestore: jest.fn(), storage: jest.fn(), auth: jest.fn() }));
 

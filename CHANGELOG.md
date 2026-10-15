@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Old processing failures are cleaned up**: a daily job removes finished failure records (recovered, resolved or duplicate) 90 days after they were closed, together with any pasted text and any stored image that no receipt uses. Open failures are never touched, and it starts in dry-run mode (it only logs counts) until switched on.
 - **No false "failed" receipts after a successful save**: if a step after saving a receipt failed (for example the confirmation text), Slip also recorded a processing failure and told you it couldn't read the receipt, and Retry then saved a duplicate. After the save, later problems are only logged. Also, retrying a pasted text that turns out not to be a receipt now closes it instead of leaving it retryable, and retries use the stronger model for an account's first receipt like text messages do. (CIV-195, CIV-196)
 - **Repeat purchases are no longer thrown away as duplicates**: two identical $4.50 coffees on the same day used to be dropped as "Duplicate". Now only a resend within 10 minutes (or the same message) is dropped; a same merchant, total and date receipt later on is saved, marked as a possible duplicate, and the reply says so. Applies to text messages and AI imports. (CIV-203)
 - **Web dependency security fix**: pinned the web app's gRPC library to a patched version, clearing 4 high-severity audit findings; the built app is byte-identical. (CIV-202)

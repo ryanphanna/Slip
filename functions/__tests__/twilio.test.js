@@ -2,6 +2,7 @@ jest.mock('firebase-functions/params', () => ({
   defineSecret: jest.fn(name => ({
     value: jest.fn(() => process.env[name] || ''),
   })),
+  defineString: jest.fn((_n, opts) => ({ value: () => (opts && opts.default) || '' })),
 }));
 
 jest.mock('firebase-functions/logger', () => ({
