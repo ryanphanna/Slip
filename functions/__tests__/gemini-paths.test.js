@@ -82,7 +82,7 @@ describe('malformed JSON handling', () => {
 });
 
 describe('multi-image and legacy signatures', () => {
-  it('sends every image, then the prompt, in one request', async () => {
+  it('sends every image, then the prompt and today\'s date, in one request', async () => {
     const { calls } = setup(GOOD);
     const images = [
       { base64: 'one', mimeType: 'image/jpeg' },
@@ -91,13 +91,14 @@ describe('multi-image and legacy signatures', () => {
     ];
     await parseReceiptFromBase64(images, 'key');
     const parts = calls[0];
-    expect(parts).toHaveLength(4);
+    expect(parts).toHaveLength(5);
     expect(parts.slice(0, 3).map((p) => p.inlineData)).toEqual([
       { data: 'one', mimeType: 'image/jpeg' },
       { data: 'two', mimeType: 'image/png' },
       { data: 'three', mimeType: 'image/webp' },
     ]);
     expect(parts[3].text).toContain('Extract the receipt data');
+    expect(parts[4].text).toMatch(/^Today's date is /);
   });
 
   it('accepts the legacy (base64String, mimeType) signature', async () => {
@@ -164,7 +165,8 @@ describe('parseReceiptFromText', () => {
     const { calls, models } = setup(GOOD);
     await expect(parseReceiptFromText('Costco total 5.00', 'key')).resolves.toEqual(GOOD);
     expect(models).toEqual(['gemini-flash-latest']);
-    expect(calls[0][1].text).toBe('Receipt Text:\nCostco total 5.00');
+    expect(calls[0][1].text).toMatch(/^Today's date is /);
+    expect(calls[0][2].text).toBe('Receipt Text:\nCostco total 5.00');
   });
 
   it('escalates on low confidence', async () => {

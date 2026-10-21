@@ -22,7 +22,7 @@ if (!admin.storage) {
 
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
-const { validateReceipt } = require('./lib/validate');
+const { validateReceipt, dateLooksWrong } = require('./lib/validate');
 const { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
 const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
 const { saveImages, saveFailedImages } = require('./lib/image-store');
@@ -400,8 +400,11 @@ exports.sms = onRequest(
 
         // Same merchant/total/date but outside the rapid-resend window: save it and flag it.
         const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
-        await saveReceipt(receipt, from, messageSid, imagePaths,
-          possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {});
+        const dateNeedsCheck = dateLooksWrong(receipt.date);
+        await saveReceipt(receipt, from, messageSid, imagePaths, {
+          ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
+          ...(dateNeedsCheck ? { dateNeedsCheck: true } : {}),
+        });
         receiptSaved = true;
 
         const merchant = receipt.merchant || 'Unknown';
@@ -421,6 +424,11 @@ exports.sms = onRequest(
         if (raw.confidence != null && raw.confidence < 0.7) {
           message = `⚠️ ${message}`;
           logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
+        }
+
+        if (dateNeedsCheck) {
+          message += `\nCheck the date: ${receipt.date} looks wrong.`;
+          logger.warn('Receipt saved with a suspicious date', { messageSid, merchant, date: receipt.date });
         }
 
         if (!receipt.date) {

@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const { validateReceipt, normalizeEditPatch, normalizeItemPatch } = require('./validate');
+const { validateReceipt, dateLooksWrong, normalizeEditPatch, normalizeItemPatch } = require('./validate');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
@@ -223,6 +223,7 @@ async function claimRetry(db, failureRef, phone) {
       token,
       messageSid: failure.get('messageSid') || null,
       previousStatus,
+      receivedAt: failure.get('createdAt')?.toDate?.() || new Date(),
       limitRef,
       windowStart: claimWindowStart,
     };
@@ -235,7 +236,7 @@ async function retryProcessing(request) {
   if (!id) throw retryError('invalid-argument', 'Failure id is required');
   const db = admin.firestore();
   const failureRef = db.collection('processing_failures').doc(id);
-  const { paths, sourceText, token, messageSid, previousStatus, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
+  const { paths, sourceText, token, messageSid, previousStatus, receivedAt, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
 
   // Only the claim's owner may release it, and only while it is still held;
   // a superseded or finished claim is never overwritten. `refund` returns the
@@ -287,6 +288,7 @@ async function retryProcessing(request) {
     }
     receipt = validateReceipt(raw);
     if (raw.confidence != null) receipt.confidence = raw.confidence;
+    if (dateLooksWrong(receipt.date, receivedAt)) receipt.dateNeedsCheck = true;
   } catch (error) {
     if (error.code === 'not-a-receipt') {
       // The text was read fine but is not a receipt: retrying can never help, so

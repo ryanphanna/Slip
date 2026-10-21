@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const config = require('./config');
 const logger = require('firebase-functions/logger');
+const { localDateString } = require('./validate');
 
 const FLASH_MODEL = 'gemini-flash-latest';
 const PRO_MODEL = 'gemini-pro-latest';
@@ -69,6 +70,14 @@ function cleanJsonResponse(text) {
   }
 }
 
+// Receipts are parsed the moment they arrive, so today's date anchors the
+// year. Without it the model read clearly printed 2026 dates as 2024.
+function datePromptPart(today = localDateString()) {
+  return {
+    text: `Today's date is ${today}. A receipt date is never after today and is almost always from the last few weeks, so if your reading gives a different year, re-read the date. Loblaws and Real Canadian Superstore receipts print short dates as YY/MM/DD ("26/08/19" is 2026-08-19). A long number printed near the barcode often contains the date as YYYYMMDD; use it to confirm your reading.`
+  };
+}
+
 function buildImagePromptParts(images) {
   return images.map(img => ({
     inlineData: { data: img.base64, mimeType: img.mimeType }
@@ -119,7 +128,7 @@ async function parseReceiptFromBase64(images, apiKey, forcePro = false) {
   const genAI = new GoogleGenerativeAI(apiKey);
 
   const promptParts = buildImagePromptParts(images);
-  promptParts.push({ text: PROMPT });
+  promptParts.push({ text: PROMPT }, datePromptPart());
 
   if (forcePro) {
     logger.info('Bypassing Flash model: prioritizing first-time user parsing on Pro');
@@ -171,6 +180,7 @@ async function parseReceiptFromText(text, apiKey, forcePro = false) {
   const genAI = new GoogleGenerativeAI(apiKey);
   const promptParts = [
     { text: PROMPT },
+    datePromptPart(),
     { text: `Receipt Text:\n${text}` }
   ];
 

@@ -1,4 +1,4 @@
-const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, normalizeMerchant } = require('../lib/validate');
+const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, dateLooksWrong, localDateString, normalizeMerchant } = require('../lib/validate');
 const config = require('../lib/config');
 
 describe('validateReceipt', () => {
@@ -307,5 +307,28 @@ describe('normalizeMerchant whole-word matching', () => {
   it('validateReceipt uses the stricter matching', () => {
     expect(validateReceipt({ merchant: 'Metrolinx' }).merchant).toBe('Metrolinx');
     expect(validateReceipt({ merchant: 'METRO #123' }).merchant).toBe('Metro');
+  });
+});
+
+describe('dateLooksWrong', () => {
+  const received = new Date('2026-10-21T16:00:00Z');
+
+  it('accepts recent dates and a missing date', () => {
+    expect(dateLooksWrong('2026-10-21', received)).toBe(false);
+    expect(dateLooksWrong('2026-10-22', received)).toBe(false);
+    expect(dateLooksWrong('2026-07-01', received)).toBe(false);
+    expect(dateLooksWrong(null, received)).toBe(false);
+  });
+
+  it('flags a wrong year, a misordered YY/MM/DD date, the future, and impossible dates', () => {
+    expect(dateLooksWrong('2024-10-19', received)).toBe(true);
+    expect(dateLooksWrong('2019-08-26', received)).toBe(true);
+    expect(dateLooksWrong('2026-10-25', received)).toBe(true);
+    expect(dateLooksWrong('2026-02-30', received)).toBe(true);
+  });
+
+  it('uses Toronto time for the received day', () => {
+    // 02:00 UTC on Oct 22 is still Oct 21 in Toronto.
+    expect(localDateString(new Date('2026-10-22T02:00:00Z'))).toBe('2026-10-21');
   });
 });

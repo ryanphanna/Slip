@@ -96,6 +96,26 @@ function isRealDate(val) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === val;
 }
 
+const RECEIPT_TIME_ZONE = 'America/Toronto';
+const MAX_RECEIPT_AGE_DAYS = 120;
+
+// Calendar date (YYYY-MM-DD) of `when` in Slip's home time zone.
+function localDateString(when = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: RECEIPT_TIME_ZONE }).format(when);
+}
+
+// True when a parsed receipt date is probably a misread: not a real calendar
+// date, after the day the receipt arrived (one day of slack for time zones),
+// or months before it. Wrong years (2026 read as 2024) and YY/MM/DD dates read
+// as DD/MM/YY both land far outside this window.
+function dateLooksWrong(date, receivedAt = new Date()) {
+  if (date == null) return false;
+  if (!isRealDate(date)) return true;
+  const received = Date.parse(`${localDateString(receivedAt)}T00:00:00Z`);
+  const days = (Date.parse(`${date}T00:00:00Z`) - received) / 86400000;
+  return days > 1 || days < -MAX_RECEIPT_AGE_DAYS;
+}
+
 function isValidDate(val) {
   return typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val);
 }
@@ -192,4 +212,4 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, normalizeEditPatch, normalizeItemPatch };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, dateLooksWrong, localDateString, normalizeEditPatch, normalizeItemPatch };

@@ -90,3 +90,12 @@ describe('cleanJsonResponse', () => {
     expect(() => cleanJsonResponse('not json at all')).toThrow('Gemini returned invalid JSON');
   });
 });
+
+describe('date prompt', () => {
+  it("sends today's date alongside the receipt prompt", async () => {
+    const generateContent = mockModelSequence(GOOD_RECEIPT);
+    await parseReceiptFromBase64(IMAGES, 'key');
+    const parts = generateContent.mock.calls[0][0];
+    expect(parts.some(p => /^Today's date is \d{4}-\d{2}-\d{2}\./.test(p.text || ''))).toBe(true);
+  });
+});
