@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+- **Flagged receipts keep their photo**: a receipt marked for a date or amounts check now keeps its photo permanently, so it can still be checked after the 30-day cleanup of ordinary photos. (CIV-433)
 - **Receipts that don't add up are flagged**: if the items don't sum to the subtotal, or subtotal plus tax isn't the total, the receipt is marked for checking and the text reply says so. A Wendy's receipt with a missed $3.20 coupon had slipped through unnoticed. (CIV-431)
 - **Wrong receipt years are caught**: 5 of 28 recent receipts were saved with the wrong year (clearly printed 2026 read as 2024, and Loblaws' year-first dates like "26/08/19" read as 2019). The reader now gets today's date and a hint about Loblaws' date order, and any date in the future or more than about 4 months before the receipt arrived is marked for checking, with a line in the text reply.
 - **Old processing failures are cleaned up**: a daily job removes finished failure records (recovered, resolved or duplicate) 90 days after they were closed, together with any pasted text and any stored image that no receipt uses. Open failures are never touched, and it starts in dry-run mode (it only logs counts) until switched on.

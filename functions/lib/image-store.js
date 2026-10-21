@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const config = require('./config');
+const { dateLooksWrong, totalsLookWrong } = require('./validate');
 
 async function saveImageFiles(images, messageSid, prefix) {
   const bucket = admin.storage().bucket();
@@ -37,7 +38,11 @@ async function saveImages(images, messageSid, receipt = null) {
     const isLowConfidence = confidence < config.PERMANENT_CONFIDENCE_THRESHOLD;
     const isRndMerchant = config.PERMANENT_MERCHANTS.some(m => merchant.includes(m.toLowerCase()));
 
-    if (isHighValue || isTaxOrMedical || isLowConfidence || isRndMerchant) {
+    // Receipts flagged for checking keep their photo, so the check can still
+    // be done after temporary photos are deleted.
+    const needsCheck = dateLooksWrong(receipt.date) || totalsLookWrong(receipt);
+
+    if (isHighValue || isTaxOrMedical || isLowConfidence || isRndMerchant || needsCheck) {
       prefix = config.STORAGE_PREFIX_PERMANENT;
     }
   }

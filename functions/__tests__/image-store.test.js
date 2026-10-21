@@ -96,4 +96,15 @@ describe('image-store helper', () => {
     expect(paths).toEqual(['receipts-failed/MM123/0.jpg']);
     expect(admin.__mocks.fileMock).toHaveBeenCalledWith('receipts-failed/MM123/0.jpg');
   });
+
+  it('keeps the photo of a receipt flagged for checking', async () => {
+    const images = [{ base64: 'abc', mimeType: 'image/jpeg' }];
+    const base = { total: 15.8, category: 'Takeout/Dining', confidence: 0.95, merchant: "Wendy's" };
+
+    const wrongYear = await saveImages(images, 'SM1', { ...base, date: '2019-08-26' });
+    const badTotals = await saveImages(images, 'SM2', { ...base, items: [{ name: 'Combo', price: 17.18 }], subtotal: 13.98 });
+
+    expect(wrongYear).toEqual(['receipts-permanent/SM1/0.jpg']);
+    expect(badTotals).toEqual(['receipts-permanent/SM2/0.jpg']);
+  });
 });
