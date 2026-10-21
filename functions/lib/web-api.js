@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const { validateReceipt, dateLooksWrong, normalizeEditPatch, normalizeItemPatch } = require('./validate');
+const { validateReceipt, dateLooksWrong, totalsLookWrong, normalizeEditPatch, normalizeItemPatch } = require('./validate');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
@@ -289,6 +289,7 @@ async function retryProcessing(request) {
     receipt = validateReceipt(raw);
     if (raw.confidence != null) receipt.confidence = raw.confidence;
     if (dateLooksWrong(receipt.date, receivedAt)) receipt.dateNeedsCheck = true;
+    if (totalsLookWrong(receipt)) receipt.totalsNeedCheck = true;
   } catch (error) {
     if (error.code === 'not-a-receipt') {
       // The text was read fine but is not a receipt: retrying can never help, so

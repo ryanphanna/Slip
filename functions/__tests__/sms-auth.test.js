@@ -37,6 +37,7 @@ jest.mock('../lib/receipt', () => ({
 jest.mock('../lib/validate', () => ({
   validateReceipt: jest.fn(),
   dateLooksWrong: jest.fn(() => false),
+  totalsLookWrong: jest.fn(() => false),
 }));
 
 jest.mock('../lib/store', () => ({

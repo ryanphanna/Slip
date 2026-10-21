@@ -1,4 +1,4 @@
-const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, dateLooksWrong, localDateString, normalizeMerchant } = require('../lib/validate');
+const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, dateLooksWrong, totalsLookWrong, localDateString, normalizeMerchant } = require('../lib/validate');
 const config = require('../lib/config');
 
 describe('validateReceipt', () => {
@@ -330,5 +330,31 @@ describe('dateLooksWrong', () => {
   it('uses Toronto time for the received day', () => {
     // 02:00 UTC on Oct 22 is still Oct 21 in Toronto.
     expect(localDateString(new Date('2026-10-22T02:00:00Z'))).toBe('2026-10-21');
+  });
+});
+
+describe('totalsLookWrong', () => {
+  const items = [{ name: 'A', price: 10 }, { name: 'B', price: 5.5 }];
+
+  it('accepts receipts that add up, within a few cents', () => {
+    expect(totalsLookWrong({ items, subtotal: 15.5, tax: 2.02, total: 17.52 })).toBe(false);
+    expect(totalsLookWrong({ items, subtotal: 15.53, tax: 2.02, total: 17.54 })).toBe(false);
+  });
+
+  it('skips the parts a receipt does not have', () => {
+    expect(totalsLookWrong({ items: [], subtotal: null, tax: null, total: 37.96 })).toBe(false);
+    expect(totalsLookWrong({ items, subtotal: null, tax: null, total: 99 })).toBe(false);
+  });
+
+  it('flags items that do not sum to the subtotal (missed coupon)', () => {
+    expect(totalsLookWrong({ items: [{ name: 'Combo', price: 17.18 }], subtotal: 13.98, tax: 1.82, total: 15.8 })).toBe(true);
+  });
+
+  it('flags subtotal plus tax that is not the total', () => {
+    expect(totalsLookWrong({ items: [], subtotal: 38.98, tax: 5.07, total: 50 })).toBe(true);
+  });
+
+  it('works on refunds, which are stored negative', () => {
+    expect(totalsLookWrong({ items: [{ name: 'A', price: -10 }], subtotal: -10, tax: -1.3, total: -11.3 })).toBe(false);
   });
 });

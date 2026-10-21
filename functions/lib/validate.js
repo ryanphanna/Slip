@@ -116,6 +116,25 @@ function dateLooksWrong(date, receivedAt = new Date()) {
   return days > 1 || days < -MAX_RECEIPT_AGE_DAYS;
 }
 
+const AMOUNT_TOLERANCE = 0.05;
+
+// True when a parsed receipt's numbers don't add up: the items don't sum to
+// the subtotal, or subtotal + tax isn't the total. Only checks the parts the
+// receipt has. A whole-receipt discount the items don't reflect (e.g. a 10%
+// card discount at the bottom) also trips it, which is worth a look too.
+function totalsLookWrong(receipt) {
+  const off = (a, b) => Math.abs(a - b) > AMOUNT_TOLERANCE;
+  const { subtotal, tax, total } = receipt;
+  const prices = Array.isArray(receipt.items)
+    ? receipt.items.map(i => i.price).filter(p => typeof p === 'number')
+    : [];
+  if (prices.length > 0 && typeof subtotal === 'number' && off(prices.reduce((a, b) => a + b, 0), subtotal)) {
+    return true;
+  }
+  return typeof subtotal === 'number' && typeof tax === 'number' && typeof total === 'number'
+    && off(subtotal + tax, total);
+}
+
 function isValidDate(val) {
   return typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val);
 }
@@ -212,4 +231,4 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, dateLooksWrong, localDateString, normalizeEditPatch, normalizeItemPatch };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, dateLooksWrong, totalsLookWrong, localDateString, normalizeEditPatch, normalizeItemPatch };
