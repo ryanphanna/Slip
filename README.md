@@ -13,25 +13,13 @@ Mint is gone in Canada, and credit card CSV exports only show a merchant name an
 - **Allowlisting**: Only approved phone numbers can submit receipts.
 - **Quick Confirmation**: Sends back a short receipt summary after each successful save.
 - **Detailed History**: Stores itemized receipts with merchant, date, totals, tax, categories, and line items.
-- **AI Assistant Import**: A token-authenticated MCP endpoint (`functions/lib/mcp.js`, `import-*.js`) lets a linked AI assistant save receipts without Gemini.
+- **AI Assistant Import**: Connect your own AI assistant to add receipts from photos.
 - **Budgets**: Set per-category monthly budgets and get weekly SMS budget checks.
 - **Digests**: Monthly spending recap texts.
+- **Web Inbox**: Browse, search, filter, and correct receipts in the browser.
 - **Notifications**: Recaps are also saved as in-app notifications in the web inbox.
 - **Items**: Browse and correct individual line items across receipts in the web app.
-- **Retention**: finished processing-failure records (and their unused images) are purged 90 days after they were resolved; see [Security](./SECURITY.md).
 - **Private by Design**: Built for personal use with server-side storage, locked-down client access, and allowlisted intake.
-
-## Web interface
-
-The React receipt inbox lives in `web/` and is hosted by Firebase Hosting. Setup: copy `web/.env.example` to `web/.env.local` and fill in the Firebase web app configuration (every variable is listed in that file), then run:
-
-```sh
-cd web
-npm install
-npm run dev
-```
-
-The browser uses Firebase Phone Authentication and calls authenticated Cloud Functions; Firestore and Cloud Storage remain inaccessible directly from the client. Historical records can be attached to an account with `cd functions && npm run migrate:accounts -- --phone <E.164> --uid <firebase-uid> --apply`.
 
 ## Stack
 
@@ -39,10 +27,12 @@ The browser uses Firebase Phone Authentication and calls authenticated Cloud Fun
 - **Intake**: Twilio SMS/MMS
 - **Vision / Parsing**: Google Gemini (gemini-flash-latest / gemini-pro-latest fallback)
 - **Database**: Firestore
+- **Web**: React, hosted on Firebase Hosting
 
 ---
 
 - [Roadmap](./ROADMAP.md)
+- [Development](./docs/DEVELOPMENT.md)
 - [Changelog](./CHANGELOG.md)
 - [Security](./SECURITY.md)
 
