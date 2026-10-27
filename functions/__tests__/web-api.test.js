@@ -243,6 +243,15 @@ describe('retryProcessing', () => {
     expect(receipt.data().merchantKey).toBe('costco');
   });
 
+  it('flags a re-read photo that came back with no items or no date', async () => {
+    storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
+    seed('processing_failures', 'f1', { from: '+14165551234', imagePaths: ['path/a.jpg'] });
+    parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 12.5, date: null, items: [] });
+
+    const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+    expect(fake.store.receipts.get(result.id)).toMatchObject({ itemsNeedCheck: true, dateNeedsCheck: true });
+  });
+
   describe('repeat and concurrent retries', () => {
     const PHONE = '+14165551234';
     const seedFailure = (id = 'f1', extra = {}) => {
@@ -399,6 +408,13 @@ describe('retryProcessing', () => {
         expect(result.merchant).toBe('Costco');
         expect(fake.store.receipts.get(result.id)).toMatchObject({ from: PHONE, merchant: 'Costco', merchantKey: 'costco', imagePaths: [], messageSid: 'SM9', recoveredFromFailure: 'f1' });
         expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'recovered', recoveredReceiptId: result.id });
+      });
+
+      it('does not flag a pasted text with no items, which is normal', async () => {
+        seedTextFailure('f1');
+        parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 23.5, date: '2026-10-01', items: [] });
+        const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        expect(fake.store.receipts.get(result.id).itemsNeedCheck).toBeUndefined();
       });
 
       it('a second retry of the same text failure is rejected (no duplicate, no second Gemini call)', async () => {

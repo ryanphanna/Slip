@@ -135,6 +135,14 @@ function totalsLookWrong(receipt) {
     && off(subtotal + tax, total);
 }
 
+// True when a photo receipt was saved with no line items. Every printed
+// receipt lists at least one item (the reader escalates to the stronger model
+// when one comes back empty), so none means a missed read. Only call it for
+// photo receipts: pasted text and AI imports may legitimately have no items.
+function itemsLookMissing(receipt) {
+  return !Array.isArray(receipt.items) || receipt.items.length === 0;
+}
+
 function isValidDate(val) {
   return typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val);
 }
@@ -231,4 +239,4 @@ function toNumber(val) {
   return isFinite(n) ? Math.round(n * 100) / 100 : null;
 }
 
-module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, dateLooksWrong, totalsLookWrong, localDateString, normalizeEditPatch, normalizeItemPatch };
+module.exports = { validateReceipt, normalizeMerchant, extractIkeaItemNumber, VALID_CATEGORIES, VALID_TYPES, isRealDate, dateLooksWrong, totalsLookWrong, itemsLookMissing, localDateString, normalizeEditPatch, normalizeItemPatch };

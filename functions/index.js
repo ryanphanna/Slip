@@ -22,7 +22,7 @@ if (!admin.storage) {
 
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
-const { validateReceipt, dateLooksWrong, totalsLookWrong } = require('./lib/validate');
+const { validateReceipt, dateLooksWrong, totalsLookWrong, itemsLookMissing } = require('./lib/validate');
 const { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
 const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
 const { saveImages, saveFailedImages } = require('./lib/image-store');
@@ -400,12 +400,14 @@ exports.sms = onRequest(
 
         // Same merchant/total/date but outside the rapid-resend window: save it and flag it.
         const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
-        const dateNeedsCheck = dateLooksWrong(receipt.date);
+        const dateNeedsCheck = receipt.date == null || dateLooksWrong(receipt.date);
         const totalsNeedCheck = totalsLookWrong(receipt);
+        const itemsNeedCheck = images.length > 0 && itemsLookMissing(receipt);
         await saveReceipt(receipt, from, messageSid, imagePaths, {
           ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
           ...(dateNeedsCheck ? { dateNeedsCheck: true } : {}),
           ...(totalsNeedCheck ? { totalsNeedCheck: true } : {}),
+          ...(itemsNeedCheck ? { itemsNeedCheck: true } : {}),
         });
         receiptSaved = true;
 
@@ -428,7 +430,7 @@ exports.sms = onRequest(
           logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
         }
 
-        if (dateNeedsCheck) {
+        if (dateNeedsCheck && receipt.date) {
           message += `\nCheck the date: ${receipt.date} looks wrong.`;
           logger.warn('Receipt saved with a suspicious date', { messageSid, merchant, date: receipt.date });
         }
@@ -436,6 +438,11 @@ exports.sms = onRequest(
         if (totalsNeedCheck) {
           message += '\nCheck the amounts: the items, tax and total don\'t add up.';
           logger.warn('Receipt saved with totals that do not add up', { messageSid, merchant });
+        }
+
+        if (itemsNeedCheck) {
+          message += '\nCheck the items: none were read from this receipt.';
+          logger.warn('Receipt saved with no items', { messageSid, merchant });
         }
 
         if (!receipt.date) {

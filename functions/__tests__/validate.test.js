@@ -1,4 +1,4 @@
-const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, dateLooksWrong, totalsLookWrong, localDateString, normalizeMerchant } = require('../lib/validate');
+const { validateReceipt, extractIkeaItemNumber, normalizeEditPatch, isRealDate, dateLooksWrong, totalsLookWrong, itemsLookMissing, localDateString, normalizeMerchant } = require('../lib/validate');
 const config = require('../lib/config');
 
 describe('validateReceipt', () => {
@@ -356,5 +356,17 @@ describe('totalsLookWrong', () => {
 
   it('works on refunds, which are stored negative', () => {
     expect(totalsLookWrong({ items: [{ name: 'A', price: -10 }], subtotal: -10, tax: -1.3, total: -11.3 })).toBe(false);
+  });
+});
+
+describe('itemsLookMissing', () => {
+  it('flags a receipt with no items', () => {
+    expect(itemsLookMissing({ items: [] })).toBe(true);
+    expect(itemsLookMissing({})).toBe(true);
+  });
+
+  it('accepts a receipt with at least one item, refunds included', () => {
+    expect(itemsLookMissing({ items: [{ name: 'A', price: 10 }] })).toBe(false);
+    expect(itemsLookMissing({ type: 'refund', items: [{ name: 'A', price: -10 }] })).toBe(false);
   });
 });
