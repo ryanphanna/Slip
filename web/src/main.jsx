@@ -52,6 +52,13 @@ function formatPurchaseDate(value) {
   return Number.isNaN(date.getTime()) ? value : `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+function formatListDate(value) {
+  if (!value) return 'No date';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  const full = formatPurchaseDate(value);
+  return date.getFullYear() === new Date().getFullYear() ? full.replace(/, \d{4}$/, '') : full;
+}
 
 function formatFailureDate(createdAt, numMedia) {
   const seconds = createdAt?.seconds ?? createdAt?._seconds;
@@ -156,7 +163,7 @@ function SetupRequired() {
 
 function ReceiptRow({ receipt, onSelect }) {
   return <button className="receipt-row" onClick={() => onSelect(receipt)}>
-    <span className="receipt-date">{receipt.date || 'No date'}</span>
+    <span className="receipt-date">{formatListDate(receipt.date)}</span>
     <span className="receipt-name">{receipt.merchant || 'Unknown merchant'}<small>{receipt.category || 'Other'} · {receipt.items?.length || 0} items</small></span>
     <strong className={receipt.type === 'refund' ? 'refund' : ''}>{formatMoney(receipt.total, receipt.currency)}</strong>
   </button>;
@@ -278,7 +285,7 @@ function ItemsView({ receipts, catalogItems, onReceiptUpdated, search }) {
 
   return <section className="items-page">
     <div className="item-tabs"><button className={mode === 'verified' ? 'active' : 'secondary'} onClick={() => setMode('verified')}>Verified</button><button className={mode === 'review' ? 'active' : 'secondary'} onClick={() => setMode('review')}>Needs review</button></div>
-    {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <><div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id} onClick={() => setSelectedItem(item)}><div><strong>{item.publicName || item.name || 'Unnamed item'}</strong><small>{[item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() ? item.name : '', item.merchant, item.date, item.category].filter(Boolean).join(' · ')}</small></div><span className="item-action"><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={(e) => { e.stopPropagation(); verifyItem(item); }}>Approve</button>}</span></div>)}</div><div className="list-footer"><span className="count">{filtered.length} items</span></div></>}
+    {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <><div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id} onClick={() => setSelectedItem(item)}><div><strong>{item.publicName || item.name || 'Unnamed item'}</strong><small>{[item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() ? item.name : '', item.merchant, item.date && formatListDate(item.date), item.category].filter(Boolean).join(' · ')}</small></div><span className="item-action"><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={(e) => { e.stopPropagation(); verifyItem(item); }}>Approve</button>}</span></div>)}</div><div className="list-footer"><span className="count">{filtered.length} items</span></div></>}
     {selectedItem && <ItemDetail item={selectedItem} onClose={() => setSelectedItem(null)} />}
   </section>;
 }
