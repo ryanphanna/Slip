@@ -16,7 +16,7 @@
   "dependencies": {
     "@google-cloud/logging": "^12.3.0",
     "@google/generative-ai": "^0.24.1",
-    "csv-parse": "^7.0.2",
+    "csv-parse": "^7.0.3",
     "firebase-admin": "^14.5.0",
     "firebase-functions": "^7.3.2",
     "twilio": "^6.2.0"
