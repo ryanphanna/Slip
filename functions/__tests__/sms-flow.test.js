@@ -285,7 +285,7 @@ describe('happy path: photo', () => {
     expect(lastSms()).toContain('Saved: Costco');
   });
 
-  it('flags a photo read with no items and says so', async () => {
+  it('flags a photo read with no items without mentioning it in the reply', async () => {
     fetchMedia.mockResolvedValue(imageResponse('jpegbytes'));
     parseReceiptFromBase64.mockResolvedValue({ ...GOOD, items: [], subtotal: null });
     saveImages.mockResolvedValue(['receipts-temporary/SM1/0.jpg']);
@@ -293,7 +293,7 @@ describe('happy path: photo', () => {
     await waitFor(() => sendSms.mock.calls.length > 0);
 
     expect(receipts()[0][1]).toMatchObject({ merchant: 'Costco', itemsNeedCheck: true });
-    expect(lastSms()).toContain('Check the items');
+    expect(lastSms()).not.toContain('Check the items');
   });
 
   it('skips unsupported media types and replies when no image is usable', async () => {

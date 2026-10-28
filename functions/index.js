@@ -441,7 +441,6 @@ exports.sms = onRequest(
         }
 
         if (itemsNeedCheck) {
-          message += '\nCheck the items: none were read from this receipt.';
           logger.warn('Receipt saved with no items', { messageSid, merchant });
         }
 
