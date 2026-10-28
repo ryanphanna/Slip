@@ -396,6 +396,8 @@ async function importTargetReceipts(request) {
       sourceDiscountTotal: Number.isFinite(Number(record.sourceDiscountTotal)) ? Number(record.sourceDiscountTotal) : null,
       sourceTotal: Number.isFinite(Number(record.sourceTotal)) ? Number(record.sourceTotal) : null,
       auditLineItemsTotal: receipt.items.reduce((sum, item) => sum + (item.lineTotal ?? item.price ?? 0), 0),
+      // Saved as CAD when no currency was sent; flag it like an AI import (CIV-434).
+      currencyNeedsCheck: record.currency === undefined ? true : admin.firestore.FieldValue.delete(),
     };
     if (!existing.empty) {
       await existing.docs[0].ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -413,6 +415,7 @@ async function importTargetReceipts(request) {
     }
 
     const ref = db.collection('receipts').doc();
+    if (record.currency !== undefined) delete sourceFields.currencyNeedsCheck;
     await ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', from: phone, ownerUid: uid, messageSid: null, imagePaths: [], createdAt: admin.firestore.FieldValue.serverTimestamp() });
     imported.push({ sourceOrderId: String(record.sourceOrderId), id: ref.id });
   }

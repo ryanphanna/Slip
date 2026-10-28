@@ -537,6 +537,22 @@ describe('importTargetReceipts', () => {
     expect(listed[0].currency).toBe('USD');
   });
 
+  it('flags a record saved without a currency, but not one that has it', async () => {
+    const { imported } = await importTargetReceipts({ ...AUTH, data: { receipts: [validRecord, { ...validRecord, sourceOrderId: 'ord-2', date: '2026-01-02', currency: 'USD' }] } });
+    const [missing, given] = await Promise.all(imported.map(({ id }) => fake.db.collection('receipts').doc(id).get()));
+    expect(missing.data()).toMatchObject({ currency: 'CAD', currencyNeedsCheck: true });
+    expect(given.data().currency).toBe('USD');
+    expect(given.data().currencyNeedsCheck).toBeUndefined();
+  });
+
+  it('clears the currency flag when the record is re-imported with a currency', async () => {
+    const { imported } = await importTargetReceipts({ ...AUTH, data: { receipts: [validRecord] } });
+    await importTargetReceipts({ ...AUTH, data: { receipts: [{ ...validRecord, currency: 'USD' }] } });
+    const receipt = (await fake.db.collection('receipts').doc(imported[0].id).get()).data();
+    expect(receipt.currency).toBe('USD');
+    expect(receipt.currencyNeedsCheck).toBeUndefined();
+  });
+
   it('updates rather than duplicates a record with the same sourceOrderId', async () => {
     const first = await importTargetReceipts({ ...AUTH, data: { receipts: [validRecord] } });
     const second = await importTargetReceipts({ ...AUTH, data: { receipts: [{ ...validRecord, total: 20 }] } });
