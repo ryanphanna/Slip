@@ -186,14 +186,6 @@ button:hover {
   margin-right: 1.25rem;
 }
 
-.topbar h1 {
-  color: #777269;
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: .01em;
-  margin: 0;
-}
-
 .topbar .eyebrow {
   color: #25231f;
   font: 700 1.15rem 'DM Sans', sans-serif;
@@ -223,7 +215,6 @@ button:hover {
 
 .view-nav button,
 .item-tabs button,
-.account button,
 .account-button,
 .topbar-tools > button,
 .sort-control select {
@@ -239,7 +230,6 @@ button:hover {
 
 .view-nav button:hover,
 .item-tabs button:hover,
-.account button:hover,
 .account-button:hover,
 .topbar-tools > button:hover,
 .sort-control select:hover {
@@ -260,17 +250,6 @@ button:hover {
 .topbar-tools > .notification.active:hover {
   background: transparent;
   color: #25231f;
-}
-
-.account {
-  align-items: center;
-  display: flex;
-  margin-left: auto;
-}
-
-.account button {
-  font-size: .9rem;
-  padding: .35rem 0;
 }
 
 .topbar-tools {
@@ -515,29 +494,6 @@ button:hover {
 
 /* Notifications: processing history */
 
-.failure-access {
-  align-items: center;
-  color: #806d5a;
-  display: flex;
-  font-size: .75rem;
-  gap: .75rem;
-  margin: .45rem 0;
-}
-
-.failure-history-button {
-  background: transparent;
-  border: 0;
-  color: #9d4e2d;
-  font-size: .75rem;
-  padding: .2rem 0;
-}
-
-.failure-history-button:hover {
-  background: transparent;
-  color: #803c22;
-  text-decoration: underline;
-}
-
 .failures {
   padding: 1.25rem;
 }
@@ -660,8 +616,10 @@ button:hover {
 
 .setting-row {
   align-items: center;
+  color: inherit;
   display: flex;
   flex-direction: row;
+  font-size: inherit;
   gap: 1.5rem;
   justify-content: space-between;
   padding: 1.25rem 0;
@@ -1026,18 +984,6 @@ button:hover {
   padding: .55rem .65rem;
 }
 
-.item-verified {
-  align-items: center;
-  display: flex;
-  font-size: .7rem;
-  gap: .3rem;
-  white-space: nowrap;
-}
-
-.item-verified input {
-  width: auto;
-}
-
 .actions {
   display: flex;
   gap: .6rem;
@@ -1152,14 +1098,6 @@ button:hover {
   .view-nav {
     flex: 1 0 100%;
     order: 3;
-  }
-
-  .topbar h1 {
-    font-size: 2rem;
-  }
-
-  .account {
-    margin-left: 0;
   }
 
   .receipt-filters {

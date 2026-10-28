@@ -1,4 +1,5 @@
 import ReceiptRow from '../components/ReceiptRow.jsx';
+import { countLabel } from '../format.js';
 
 export const EMPTY_FILTERS = { category: '', startDate: '', endDate: '', minAmount: '', maxAmount: '' };
 
@@ -48,7 +49,7 @@ export default function ReceiptsView({ receipts, categories, search, sortOrder, 
     </div>}
     <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={onSelect} />)}</div>
     <div className="list-footer">
-      <span className="count">{filtered.length} receipts loaded</span>
+      <span className="count">{countLabel(filtered.length, 'receipt')} loaded</span>
       {hasMore && <button className="load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>}
     </div>
   </>;

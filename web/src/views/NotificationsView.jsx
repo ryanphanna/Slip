@@ -1,11 +1,7 @@
 import { useState } from 'react';
 import CategoryBar from '../components/CategoryBar.jsx';
 import FailureRow from '../components/FailureRow.jsx';
-import { formatFailureRange, formatMoney } from '../format.js';
-
-function receiptCount(count) {
-  return `${count} ${count === 1 ? 'receipt' : 'receipts'}`;
-}
+import { countLabel, formatFailureRange, formatMoney } from '../format.js';
 
 function RecapCard({ notification }) {
   const otherCurrencies = Object.entries(notification.byCurrency || {});
@@ -13,8 +9,8 @@ function RecapCard({ notification }) {
     <div>
       <p className="eyebrow">Monthly summary</p>
       <h3>{notification.title}</h3>
-      <strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong>
-      {otherCurrencies.length > 0 && <p className="muted">Also spent: {otherCurrencies.sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${receiptCount(value.count)})`).join(', ')}</p>}
+      <strong>{formatMoney(notification.total)} <span className="muted">across {countLabel(notification.count, 'receipt')}</span></strong>
+      {otherCurrencies.length > 0 && <p className="muted">Also spent: {otherCurrencies.sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${countLabel(value.count, 'receipt')})`).join(', ')}</p>}
     </div>
     <CategoryBar categories={notification.categories} />
   </article>;

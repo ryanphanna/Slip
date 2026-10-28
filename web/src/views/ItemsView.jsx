@@ -1,19 +1,25 @@
 import { useMemo, useState } from 'react';
 import ItemDetail from '../components/ItemDetail.jsx';
 import { call } from '../firebase.js';
-import { formatListDate, formatMoney, hasDistinctPublicName } from '../format.js';
+import { countLabel, formatListDate, formatMoney, hasDistinctPublicName } from '../format.js';
 
 export default function ItemsView({ receipts, catalogItems, onReceiptUpdated, search }) {
   const [mode, setMode] = useState('verified');
   const [selectedItem, setSelectedItem] = useState(null);
-  const items = useMemo(() => (catalogItems.length > 0 ? catalogItems : receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
-    ...item,
-    id: `${receipt.id}-${index}`,
-    receiptId: receipt.id,
-    index,
-    merchant: receipt.merchant || 'Unknown merchant',
-    date: receipt.date || 'No date',
-  })))), [catalogItems, receipts]);
+  const items = useMemo(() => {
+    if (catalogItems.length === 0) return receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
+      ...item,
+      id: `${receipt.id}-${index}`,
+      receiptId: receipt.id,
+      index,
+      merchant: receipt.merchant || 'Unknown merchant',
+      date: receipt.date || 'No date',
+      currency: receipt.currency,
+    })));
+    // Catalog items don't store a currency; take it from the receipt that lists them.
+    const currencyByItemId = new Map(receipts.flatMap((receipt) => (receipt.items || []).filter((item) => item.itemId).map((item) => [item.itemId, receipt.currency])));
+    return catalogItems.map((item) => ({ ...item, currency: item.currency || currencyByItemId.get(item.id) }));
+  }, [catalogItems, receipts]);
   const visibleItems = items.filter((item) => mode === 'verified' ? item.verified === true : item.verified !== true);
   const filtered = visibleItems.filter((item) => `${item.name} ${item.publicName || ''} ${item.category} ${item.merchant}`.toLowerCase().includes(search.toLowerCase()));
 
@@ -46,12 +52,12 @@ export default function ItemsView({ receipts, catalogItems, onReceiptUpdated, se
           </div>
           <span className="item-action">
             <span>×{item.quantity || 1}</span>
-            <strong>{formatMoney(item.price)}</strong>
+            <strong>{formatMoney(item.price, item.currency)}</strong>
             {mode === 'review' && <button onClick={(e) => { e.stopPropagation(); verifyItem(item); }}>Approve</button>}
           </span>
         </div>)}
       </div>
-      <div className="list-footer"><span className="count">{filtered.length} items</span></div>
+      <div className="list-footer"><span className="count">{countLabel(filtered.length, 'item')}</span></div>
     </>}
     {selectedItem && <ItemDetail item={selectedItem} onClose={() => setSelectedItem(null)} />}
   </section>;

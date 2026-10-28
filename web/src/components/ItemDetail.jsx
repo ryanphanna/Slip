@@ -1,4 +1,4 @@
-import { formatMoney, hasDistinctPublicName } from '../format.js';
+import { formatMoney, formatPurchaseDate, hasDistinctPublicName } from '../format.js';
 
 export default function ItemDetail({ item, onClose }) {
   return <>
@@ -10,11 +10,11 @@ export default function ItemDetail({ item, onClose }) {
       </div>
       {hasDistinctPublicName(item) && <p className="muted">{item.name}</p>}
       <div className="summary-grid">
-        <div><small>Price</small><strong>{formatMoney(item.price)}</strong></div>
+        <div><small>Price</small><strong>{formatMoney(item.price, item.currency)}</strong></div>
         <div><small>Quantity</small><strong>×{item.quantity || 1}</strong></div>
         <div><small>Category</small><strong>{item.category || 'Other'}</strong></div>
         <div><small>Merchant</small><strong>{item.merchant || 'Unknown merchant'}</strong></div>
-        <div><small>Date</small><strong>{item.date || 'No date'}</strong></div>
+        <div><small>Date</small><strong>{formatPurchaseDate(item.date)}</strong></div>
         <div><small>Status</small><strong>{item.verified ? 'Verified' : 'Needs review'}</strong></div>
       </div>
       {(item.itemNumber || item.upc || item.dpci || item.productUrl) && <div className="summary-grid">

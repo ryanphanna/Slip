@@ -12,6 +12,11 @@ export function normalizePhone(value) {
   return String(value || '').trim().replace(/[^\d+]/g, '');
 }
 
+// "1 item", "2 items".
+export function countLabel(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export function formatMoney(value, currency = 'CAD') {
   if (value == null) return '—';
   return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
