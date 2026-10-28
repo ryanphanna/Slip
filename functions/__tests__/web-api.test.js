@@ -528,6 +528,15 @@ describe('importTargetReceipts', () => {
     expect(receipt.data()).toMatchObject({ merchant: 'Target', source: 'target', sourceOrderId: 'ord-1' });
   });
 
+  it('stores the receipt currency on each catalog item', async () => {
+    await importTargetReceipts({ ...AUTH, data: { receipts: [{ ...validRecord, currency: 'USD' }] } });
+    const items = [...fake.store.items.values()];
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ name: 'Widget', currency: 'USD', merchantKey: 'target' });
+    const { items: listed } = await listItems({ ...AUTH, data: {} });
+    expect(listed[0].currency).toBe('USD');
+  });
+
   it('updates rather than duplicates a record with the same sourceOrderId', async () => {
     const first = await importTargetReceipts({ ...AUTH, data: { receipts: [validRecord] } });
     const second = await importTargetReceipts({ ...AUTH, data: { receipts: [{ ...validRecord, total: 20 }] } });

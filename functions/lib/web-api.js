@@ -371,6 +371,9 @@ async function importTargetReceipts(request) {
         id: itemId,
         merchant: 'Target',
         merchantKey: 'target',
+        // The receipt's currency, so the web app can show an item's price
+        // without loading its receipt (CIV-434).
+        currency: receipt.currency,
         from: phone,
         ownerUid: uid,
         publicName: item.publicName || item.name,

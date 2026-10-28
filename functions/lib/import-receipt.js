@@ -89,6 +89,8 @@ async function importReceipt(identity, args) {
     if (possibleDuplicateOf) warnings.push(POSSIBLE_DUPLICATE_WARNING);
     const receiptId = await saveReceipt(receipt, from, null, [], {
       ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
+      // No currency sent: validateReceipt saved it as CAD; mark it for checking.
+      ...(args.currency === undefined ? { currencyNeedsCheck: true } : {}),
       importSource: {
         client: args.source.client.trim(),
         ...(args.source.model ? { model: args.source.model.trim() } : {}),

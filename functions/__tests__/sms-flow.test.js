@@ -206,6 +206,17 @@ describe('happy path: pasted text', () => {
     expect(lastSms()).not.toContain('Check the items');
   });
 
+  it('a text receipt with no currency is saved as CAD without a currency flag (SMS path unchanged)', async () => {
+    seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
+    const { currency, ...noCurrency } = GOOD;
+    parseReceiptFromText.mockResolvedValue(noCurrency);
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    const saved = receipts().find(([id]) => id !== 'prev')[1];
+    expect(saved.currency).toBe('CAD');
+    expect(saved.currencyNeedsCheck).toBeUndefined();
+  });
+
   it('appends budget status when a budget exists for the category', async () => {
     seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
     seed('budgets', `${FROM.replace(/\D/g, '')}_grocery`, { from: FROM, category: 'Grocery', limit: 100 });
