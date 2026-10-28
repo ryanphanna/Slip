@@ -142,7 +142,7 @@ function Login() {
   }
 
   return <main className="auth-card">
-    <p className="eyebrow">SLIP</p>
+    <p className="eyebrow">Slip</p>
     <h1>Your receipts, without the shoebox.</h1>
     <p className="muted">Sign in with the phone number you use to text receipts to Slip.</p>
     {!confirmation ? <form onSubmit={sendCode}>
@@ -158,7 +158,7 @@ function Login() {
 }
 
 function SetupRequired() {
-  return <main className="auth-card"><p className="eyebrow">SLIP</p><h1>One small setup step.</h1><p className="muted">The web app is built, but Firebase configuration has not been provided for this environment. Add the values from <code>web/.env.example</code> as frontend environment variables, then reload.</p></main>;
+  return <main className="auth-card"><p className="eyebrow">Slip</p><h1>One small setup step.</h1><p className="muted">The web app is built, but Firebase configuration has not been provided for this environment. Add the values from <code>web/.env.example</code> as frontend environment variables, then reload.</p></main>;
 }
 
 function ReceiptRow({ receipt, onSelect }) {
@@ -211,7 +211,7 @@ function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
   }
 
   return <aside className="detail-panel">
-    <div className="detail-header"><div><p className="eyebrow">RECEIPT</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><div className="detail-actions"><button className="edit-button" onClick={() => setEditing((value) => !value)}>{editing ? 'Done' : 'Edit'}</button><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
+    <div className="detail-header"><div><p className="eyebrow">Receipt</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><div className="detail-actions"><button className="edit-button" onClick={() => setEditing((value) => !value)}>{editing ? 'Done' : 'Edit'}</button><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
     <div className="detail-body">
       <div className="detail-media">{images.length > 0 && <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div>}</div>
       {editing ? <form onSubmit={save} className="detail-form">
@@ -238,7 +238,7 @@ function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
 
 function ItemDetail({ item, onClose }) {
   return <><div className="detail-backdrop" onClick={onClose} /><aside className="detail-panel item-detail-panel">
-    <div className="detail-header"><div><p className="eyebrow">ITEM</p><h2>{item.publicName || item.name || 'Unnamed item'}</h2></div><div className="detail-actions"><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
+    <div className="detail-header"><div><p className="eyebrow">Item</p><h2>{item.publicName || item.name || 'Unnamed item'}</h2></div><div className="detail-actions"><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
     {item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() && <p className="muted">{item.name}</p>}
     <div className="summary-grid">
       <div><small>Price</small><strong>{formatMoney(item.price)}</strong></div>
@@ -376,7 +376,7 @@ function NotificationsView({ failures, notifications, onRetry }) {
   return <section className="notifications-page">
     <h2>Notifications</h2>
     <p className="page-intro">Updates and things that need your attention.</p>
-    {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">MONTHLY SUMMARY</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong>{Object.keys(notification.byCurrency || {}).length > 0 && <p className="muted">Also spent: {Object.entries(notification.byCurrency).sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${value.count} ${value.count === 1 ? 'receipt' : 'receipts'})`).join(', ')}</p>}</div><CategoryBar categories={notification.categories} /></article>)}
+    {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">Monthly summary</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong>{Object.keys(notification.byCurrency || {}).length > 0 && <p className="muted">Also spent: {Object.entries(notification.byCurrency).sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${value.count} ${value.count === 1 ? 'receipt' : 'receipts'})`).join(', ')}</p>}</div><CategoryBar categories={notification.categories} /></article>)}
     {failures.length > 0 && <section className="failures"><div className="failure-summary"><span><h3>Processing history</h3><p className="muted">{failures.length} {failures.length === 1 ? 'receipt needs' : 'receipts need'} processing {formatFailureRange(failures)}.</p></span><button onClick={() => setShowFailures((visible) => !visible)}>{showFailures ? 'Hide receipts' : 'Review receipts'}</button></div>{showFailures && <div className="failure-list"><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</div>}</section>}
     {notifications.length === 0 && failures.length === 0 && <div className="empty notification-empty"><h3>You're all caught up.</h3><p>Monthly summaries and other updates will appear here.</p></div>}
   </section>;
@@ -460,7 +460,7 @@ function Inbox({ user }) {
     });
 
   return <main className="app-shell">
-    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">SLIP</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{view === 'items' && <>{showItemSearch && <input className="header-search" autoFocus value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search items or merchants" />}<button aria-expanded={showItemSearch} onClick={() => setShowItemSearch((visible) => !visible)}>Search</button></>}{(failures.length > 0 || notifications.length > 0) && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length + notifications.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">Slip</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{view === 'items' && <>{showItemSearch && <input className="header-search" autoFocus value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search items or merchants" />}<button aria-expanded={showItemSearch} onClick={() => setShowItemSearch((visible) => !visible)}>Search</button></>}{(failures.length > 0 || notifications.length > 0) && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length + notifications.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
     {loading && <p className="empty">Loading…</p>}
     {!loading && error && <p className="error">{error}</p>}
     {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} search={itemSearch} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
