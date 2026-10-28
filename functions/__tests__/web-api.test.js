@@ -243,6 +243,15 @@ describe('retryProcessing', () => {
     expect(receipt.data().merchantKey).toBe('costco');
   });
 
+  it('flags a re-read photo that came back with no items or no date', async () => {
+    storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
+    seed('processing_failures', 'f1', { from: '+14165551234', imagePaths: ['path/a.jpg'] });
+    parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 12.5, date: null, items: [] });
+
+    const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+    expect(fake.store.receipts.get(result.id)).toMatchObject({ itemsNeedCheck: true, dateNeedsCheck: true });
+  });
+
   describe('repeat and concurrent retries', () => {
     const PHONE = '+14165551234';
     const seedFailure = (id = 'f1', extra = {}) => {
@@ -401,6 +410,13 @@ describe('retryProcessing', () => {
         expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'recovered', recoveredReceiptId: result.id });
       });
 
+      it('does not flag a pasted text with no items, which is normal', async () => {
+        seedTextFailure('f1');
+        parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 23.5, date: '2026-10-01', items: [] });
+        const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+        expect(fake.store.receipts.get(result.id).itemsNeedCheck).toBeUndefined();
+      });
+
       it('a second retry of the same text failure is rejected (no duplicate, no second Gemini call)', async () => {
         seedTextFailure();
         parseReceiptFromText.mockResolvedValue({ merchant: 'Costco', total: 23.5, items: [] });
@@ -510,6 +526,31 @@ describe('importTargetReceipts', () => {
     expect(imported).toEqual([{ sourceOrderId: 'ord-1', id: expect.any(String) }]);
     const receipt = await fake.db.collection('receipts').doc(imported[0].id).get();
     expect(receipt.data()).toMatchObject({ merchant: 'Target', source: 'target', sourceOrderId: 'ord-1' });
+  });
+
+  it('stores the receipt currency on each catalog item', async () => {
+    await importTargetReceipts({ ...AUTH, data: { receipts: [{ ...validRecord, currency: 'USD' }] } });
+    const items = [...fake.store.items.values()];
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ name: 'Widget', currency: 'USD', merchantKey: 'target' });
+    const { items: listed } = await listItems({ ...AUTH, data: {} });
+    expect(listed[0].currency).toBe('USD');
+  });
+
+  it('flags a record saved without a currency, but not one that has it', async () => {
+    const { imported } = await importTargetReceipts({ ...AUTH, data: { receipts: [validRecord, { ...validRecord, sourceOrderId: 'ord-2', date: '2026-01-02', currency: 'USD' }] } });
+    const [missing, given] = await Promise.all(imported.map(({ id }) => fake.db.collection('receipts').doc(id).get()));
+    expect(missing.data()).toMatchObject({ currency: 'CAD', currencyNeedsCheck: true });
+    expect(given.data().currency).toBe('USD');
+    expect(given.data().currencyNeedsCheck).toBeUndefined();
+  });
+
+  it('clears the currency flag when the record is re-imported with a currency', async () => {
+    const { imported } = await importTargetReceipts({ ...AUTH, data: { receipts: [validRecord] } });
+    await importTargetReceipts({ ...AUTH, data: { receipts: [{ ...validRecord, currency: 'USD' }] } });
+    const receipt = (await fake.db.collection('receipts').doc(imported[0].id).get()).data();
+    expect(receipt.currency).toBe('USD');
+    expect(receipt.currencyNeedsCheck).toBeUndefined();
   });
 
   it('updates rather than duplicates a record with the same sourceOrderId', async () => {

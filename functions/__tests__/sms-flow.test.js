@@ -191,7 +191,30 @@ describe('happy path: pasted text', () => {
     await waitFor(() => sendSms.mock.calls.length > 0);
     expect(lastSms()).toContain('⚠️ Saved Refund: Costco');
     expect(lastSms()).toContain("Couldn't find a date");
-    expect(receipts().find(([id]) => id !== 'prev')[1].total).toBe(-23.5);
+    expect(lastSms()).not.toContain('Check the date');
+    const saved = receipts().find(([id]) => id !== 'prev')[1];
+    expect(saved.total).toBe(-23.5);
+    expect(saved.dateNeedsCheck).toBe(true);
+  });
+
+  it('does not flag a pasted text with no items', async () => {
+    seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
+    parseReceiptFromText.mockResolvedValue({ ...GOOD, items: [], subtotal: null });
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    expect(receipts().find(([id]) => id !== 'prev')[1].itemsNeedCheck).toBeUndefined();
+    expect(lastSms()).not.toContain('Check the items');
+  });
+
+  it('a text receipt with no currency is saved as CAD without a currency flag (SMS path unchanged)', async () => {
+    seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
+    const { currency, ...noCurrency } = GOOD;
+    parseReceiptFromText.mockResolvedValue(noCurrency);
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    const saved = receipts().find(([id]) => id !== 'prev')[1];
+    expect(saved.currency).toBe('CAD');
+    expect(saved.currencyNeedsCheck).toBeUndefined();
   });
 
   it('appends budget status when a budget exists for the category', async () => {
@@ -271,6 +294,17 @@ describe('happy path: photo', () => {
     expect(parseReceiptFromBase64.mock.calls[0][0]).toEqual([{ base64: Buffer.from('jpegbytes').toString('base64'), mimeType: 'image/jpeg' }]);
     expect(receipts()[0][1]).toMatchObject({ merchant: 'Costco', imagePaths: ['receipts-temporary/SM1/0.jpg'], messageSid: 'SM1' });
     expect(lastSms()).toContain('Saved: Costco');
+  });
+
+  it('flags a photo read with no items without mentioning it in the reply', async () => {
+    fetchMedia.mockResolvedValue(imageResponse('jpegbytes'));
+    parseReceiptFromBase64.mockResolvedValue({ ...GOOD, items: [], subtotal: null });
+    saveImages.mockResolvedValue(['receipts-temporary/SM1/0.jpg']);
+    await sms(makeReq(photoBody), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+
+    expect(receipts()[0][1]).toMatchObject({ merchant: 'Costco', itemsNeedCheck: true });
+    expect(lastSms()).not.toContain('Check the items');
   });
 
   it('skips unsupported media types and replies when no image is usable', async () => {

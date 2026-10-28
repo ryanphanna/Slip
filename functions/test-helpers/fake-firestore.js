@@ -110,16 +110,18 @@ class FakeCollection {
 }
 
 // Replace FieldValue.serverTimestamp() sentinels with a fixed fake Timestamp
-// so tests can assert deterministic values.
+// so tests can assert deterministic values; FieldValue.delete() drops the field.
 function resolveSentinels(data) {
   const resolved = {};
   for (const [key, value] of Object.entries(data)) {
+    if (value === DELETE_SENTINEL) continue;
     resolved[key] = value === SERVER_TIMESTAMP_SENTINEL ? makeTimestamp(new Date()) : value;
   }
   return resolved;
 }
 
 const SERVER_TIMESTAMP_SENTINEL = Symbol('serverTimestamp');
+const DELETE_SENTINEL = Symbol('delete');
 
 function makeTimestamp(date) {
   return { toDate: () => date, toMillis: () => date.getTime() };
@@ -141,7 +143,7 @@ function createFakeFirestore() {
     txChain = run.catch(() => {});
     return run;
   };
-  db.FieldValue = { serverTimestamp: () => SERVER_TIMESTAMP_SENTINEL };
+  db.FieldValue = { serverTimestamp: () => SERVER_TIMESTAMP_SENTINEL, delete: () => DELETE_SENTINEL };
   db.Timestamp = { fromMillis: (ms) => makeTimestamp(new Date(ms)) };
   return { db, store };
 }

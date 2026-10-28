@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const { validateReceipt, dateLooksWrong, totalsLookWrong, normalizeEditPatch, normalizeItemPatch } = require('./validate');
+const { validateReceipt, dateLooksWrong, totalsLookWrong, itemsLookMissing, normalizeEditPatch, normalizeItemPatch } = require('./validate');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
@@ -288,8 +288,9 @@ async function retryProcessing(request) {
     }
     receipt = validateReceipt(raw);
     if (raw.confidence != null) receipt.confidence = raw.confidence;
-    if (dateLooksWrong(receipt.date, receivedAt)) receipt.dateNeedsCheck = true;
+    if (receipt.date == null || dateLooksWrong(receipt.date, receivedAt)) receipt.dateNeedsCheck = true;
     if (totalsLookWrong(receipt)) receipt.totalsNeedCheck = true;
+    if (paths.length > 0 && itemsLookMissing(receipt)) receipt.itemsNeedCheck = true;
   } catch (error) {
     if (error.code === 'not-a-receipt') {
       // The text was read fine but is not a receipt: retrying can never help, so
@@ -370,6 +371,9 @@ async function importTargetReceipts(request) {
         id: itemId,
         merchant: 'Target',
         merchantKey: 'target',
+        // The receipt's currency, so the web app can show an item's price
+        // without loading its receipt (CIV-434).
+        currency: receipt.currency,
         from: phone,
         ownerUid: uid,
         publicName: item.publicName || item.name,
@@ -392,6 +396,8 @@ async function importTargetReceipts(request) {
       sourceDiscountTotal: Number.isFinite(Number(record.sourceDiscountTotal)) ? Number(record.sourceDiscountTotal) : null,
       sourceTotal: Number.isFinite(Number(record.sourceTotal)) ? Number(record.sourceTotal) : null,
       auditLineItemsTotal: receipt.items.reduce((sum, item) => sum + (item.lineTotal ?? item.price ?? 0), 0),
+      // Saved as CAD when no currency was sent; flag it like an AI import (CIV-434).
+      currencyNeedsCheck: record.currency === undefined ? true : admin.firestore.FieldValue.delete(),
     };
     if (!existing.empty) {
       await existing.docs[0].ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -409,6 +415,7 @@ async function importTargetReceipts(request) {
     }
 
     const ref = db.collection('receipts').doc();
+    if (record.currency !== undefined) delete sourceFields.currencyNeedsCheck;
     await ref.set({ ...receipt, ...sourceFields, merchantKey: 'target', from: phone, ownerUid: uid, messageSid: null, imagePaths: [], createdAt: admin.firestore.FieldValue.serverTimestamp() });
     imported.push({ sourceOrderId: String(record.sourceOrderId), id: ref.id });
   }

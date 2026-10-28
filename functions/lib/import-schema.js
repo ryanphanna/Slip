@@ -21,7 +21,11 @@ const TOP_PROPERTIES = {
   date: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Purchase date, YYYY-MM-DD.' },
   subtotal: { type: 'number' },
   tax: { type: 'number' },
-  currency: { type: 'string', pattern: '^[A-Z]{3}$', default: 'CAD' },
+  currency: {
+    type: 'string',
+    pattern: '^[A-Z]{3}$',
+    description: 'Required. 3-letter ISO currency code the receipt was paid in, e.g. CAD, USD, EUR. Read it from the receipt itself: the store address or country, and the currency symbols or codes printed on it (US$, USD, €). Do not assume CAD.',
+  },
   type: { type: 'string', enum: VALID_TYPES, default: 'purchase' },
   category: { type: 'string', enum: VALID_CATEGORIES },
   subCategory: { type: 'string', maxLength: 80 },
@@ -43,9 +47,15 @@ const TOP_PROPERTIES = {
   },
 };
 
+// Listed as required so assistants always send it, but a receipt that still
+// arrives without one is saved as CAD and flagged (currencyNeedsCheck) rather
+// than rejected. See CIV-434.
+const SOFT_REQUIRED = new Set(['currency']);
+const MISSING_CURRENCY_WARNING = 'no currency provided; saved as CAD and marked for checking';
+
 const INPUT_SCHEMA = {
   type: 'object',
-  required: ['schemaVersion', 'idempotencyKey', 'merchant', 'total', 'date', 'source'],
+  required: ['schemaVersion', 'idempotencyKey', 'merchant', 'currency', 'total', 'date', 'source'],
   additionalProperties: false,
   properties: TOP_PROPERTIES,
 };
@@ -83,7 +93,7 @@ function validateImport(args, now = new Date()) {
     if (!(key in TOP_PROPERTIES)) errors.push(`unknown field "${key}"`);
   }
   for (const key of INPUT_SCHEMA.required) {
-    if (args[key] === undefined) errors.push(`${key} is required`);
+    if (args[key] === undefined && !SOFT_REQUIRED.has(key)) errors.push(`${key} is required`);
   }
 
   if (args.schemaVersion !== undefined && args.schemaVersion !== SCHEMA_VERSION) {
@@ -175,8 +185,9 @@ function validateImport(args, now = new Date()) {
     if (!near(sum, Math.abs(args.subtotal))) warnings.push('item prices do not add up to subtotal');
   }
   if (!args.items?.length) warnings.push('no line items provided');
+  if (args.currency === undefined) warnings.push(MISSING_CURRENCY_WARNING);
 
   return { errors, warnings };
 }
 
-module.exports = { SCHEMA_VERSION, INPUT_SCHEMA, validateImport, isRealDate };
+module.exports = { SCHEMA_VERSION, INPUT_SCHEMA, MISSING_CURRENCY_WARNING, validateImport, isRealDate };

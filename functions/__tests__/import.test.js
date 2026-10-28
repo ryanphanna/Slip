@@ -9,7 +9,7 @@ const receiptLib = require('../lib/receipt');
 const gemini = require('../lib/gemini');
 const tokens = require('../lib/import-tokens');
 const { handleMcp } = require('../lib/mcp');
-const { validateImport } = require('../lib/import-schema');
+const { validateImport, INPUT_SCHEMA, MISSING_CURRENCY_WARNING } = require('../lib/import-schema');
 const { updateReceipt, createImportToken, listImportTokens, revokeImportToken } = require('../lib/web-api');
 const config = require('../lib/config');
 
@@ -39,6 +39,7 @@ const valid = (over = {}) => ({
   schemaVersion: 1,
   idempotencyKey: 'key-0000001',
   merchant: 'Costco',
+  currency: 'CAD',
   total: 23.5,
   date: '2026-10-01',
   subtotal: 20.8,
@@ -55,6 +56,11 @@ const call = (token, args) => handleMcp({
   body: { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'create_receipt', arguments: args } },
 });
 const receipts = () => [...fake.store.receipts?.entries() || []];
+const withoutCurrency = (over = {}) => {
+  const args = valid(over);
+  delete args.currency;
+  return args;
+};
 
 async function mint(phone, uid = 'u-' + phone) {
   users.set(uid, phone);
@@ -151,6 +157,23 @@ describe('validation', () => {
     ['missing source', { source: undefined }],
   ])('rejects %s', (_n, over) => {
     expect(validateImport(valid(over)).errors.length).toBeGreaterThan(0);
+  });
+
+  it('lists currency as required, telling the assistant to read it from the receipt', async () => {
+    expect(INPUT_SCHEMA.required).toContain('currency');
+    expect(INPUT_SCHEMA.properties.currency.default).toBeUndefined();
+    expect(INPUT_SCHEMA.properties.currency.description).toMatch(/ISO/);
+    expect(INPUT_SCHEMA.properties.currency.description).toMatch(/address/);
+    expect(INPUT_SCHEMA.properties.currency.description).toMatch(/symbol/);
+    const { token } = await mint(PHONE_A);
+    const res = await handleMcp({ method: 'POST', headers: { authorization: `Bearer ${token}` }, body: { jsonrpc: '2.0', id: 1, method: 'tools/list' } });
+    expect(res.body.result.tools[0].inputSchema.required).toContain('currency');
+  });
+
+  it('does not reject a payload with no currency, but warns', () => {
+    const { errors, warnings } = validateImport(withoutCurrency());
+    expect(errors).toEqual([]);
+    expect(warnings).toContain(MISSING_CURRENCY_WARNING);
   });
 
   it('accepts a good payload and flags inconsistencies as warnings', () => {
@@ -307,6 +330,25 @@ describe('import', () => {
     const { token } = await mint(PHONE_A);
     await call(token, valid({ merchant: 'wal-mart', type: 'refund', total: 10, subtotal: undefined, tax: undefined, items: undefined }));
     expect(receipts()[0][1]).toMatchObject({ merchant: 'Walmart', total: -10, type: 'refund' });
+  });
+
+  it('saves a receipt with no currency as CAD, flagged for checking (not rejected)', async () => {
+    const { token } = await mint(PHONE_A);
+    const res = await call(token, withoutCurrency());
+    expect(res.body.result.isError).toBe(false);
+    expect(res.body.result.structuredContent.warnings).toContain(MISSING_CURRENCY_WARNING);
+    const [[, doc]] = receipts();
+    expect(doc).toMatchObject({ currency: 'CAD', currencyNeedsCheck: true });
+    expect(doc.importSource.warnings).toContain(MISSING_CURRENCY_WARNING);
+  });
+
+  it('does not flag a receipt that gives its currency', async () => {
+    const { token } = await mint(PHONE_A);
+    await call(token, valid({ currency: 'USD', merchant: 'Target' }));
+    const [[, doc]] = receipts();
+    expect(doc.currency).toBe('USD');
+    expect(doc.currencyNeedsCheck).toBeUndefined();
+    expect(doc.importSource.warnings).not.toContain(MISSING_CURRENCY_WARNING);
   });
 
   it('records validation warnings on the receipt', async () => {
