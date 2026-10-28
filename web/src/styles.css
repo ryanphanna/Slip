@@ -156,6 +156,12 @@ button:hover {
   background: transparent;
 }
 
+/* Pages that stack cards use one gap between them */
+.card-stack {
+  display: grid;
+  gap: 1rem;
+}
+
 /* App shell, top bar and nav */
 
 .app-shell {
@@ -242,14 +248,16 @@ button:hover {
 }
 
 .view-nav .active,
-.item-tabs .active {
+.item-tabs .active,
+.topbar-tools > .notification.active {
   background: transparent;
   border-bottom-color: #9d4e2d;
   color: #25231f;
 }
 
 .view-nav .active:hover,
-.item-tabs .active:hover {
+.item-tabs .active:hover,
+.topbar-tools > .notification.active:hover {
   background: transparent;
   color: #25231f;
 }
@@ -531,7 +539,6 @@ button:hover {
 }
 
 .failures {
-  margin: 2rem 0;
   padding: 1.25rem;
 }
 
@@ -647,19 +654,6 @@ button:hover {
   max-width: 760px;
 }
 
-.settings-intro {
-  margin-bottom: 1.75rem;
-}
-
-.settings-intro h2 {
-  margin-bottom: .45rem;
-}
-
-.settings-intro p {
-  color: #777269;
-  margin: 0;
-}
-
 .settings-section {
   padding: 0 1.25rem;
 }
@@ -731,15 +725,6 @@ button:hover {
   max-width: 760px;
 }
 
-.notifications-page h2 {
-  margin-bottom: .45rem;
-}
-
-.page-intro {
-  color: #777269;
-  margin-bottom: 1.75rem;
-}
-
 .notification-empty {
   padding: 3rem 1.25rem;
 }
@@ -752,7 +737,6 @@ button:hover {
   display: grid;
   gap: 1.25rem;
   grid-template-columns: 1fr;
-  margin-bottom: 1rem;
   padding: 1.25rem;
 }
 
@@ -796,6 +780,17 @@ button:hover {
   display: flex;
   font-size: .9rem;
   gap: .4rem;
+}
+
+.category-bar span,
+.category-legend li {
+  transition: opacity .15s ease;
+}
+
+/* Hovering a segment or legend entry dims the other categories */
+.category-breakdown.has-active .category-bar span:not(.active),
+.category-breakdown.has-active .category-legend li:not(.active) {
+  opacity: .3;
 }
 
 .category-legend i {

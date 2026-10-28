@@ -38,9 +38,7 @@ function ProcessingHistory({ failures, onRetry }) {
 }
 
 export default function NotificationsView({ failures, notifications, onRetry }) {
-  return <section className="notifications-page">
-    <h2>Notifications</h2>
-    <p className="page-intro">Updates and things that need your attention.</p>
+  return <section className="notifications-page card-stack">
     {notifications.map((notification) => <RecapCard key={notification.id} notification={notification} />)}
     {failures.length > 0 && <ProcessingHistory failures={failures} onRetry={onRetry} />}
     {notifications.length === 0 && failures.length === 0 && <div className="card card-plain empty notification-empty">

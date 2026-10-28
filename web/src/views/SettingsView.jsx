@@ -12,8 +12,7 @@ export default function SettingsView({ settings, onDigestChange }) {
       setStatus(error.message || 'Could not save settings.');
     }
   }
-  return <section className="settings-page">
-    <div className="settings-intro"><h2>Settings</h2><p>Choose which updates Slip sends you.</p></div>
+  return <section className="settings-page card-stack">
     <div className="card settings-section">
       <label className="setting-row">
         <span>
