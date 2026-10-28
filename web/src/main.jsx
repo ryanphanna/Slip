@@ -1,385 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, RecaptchaVerifier, signInWithPhoneNumber, signOut } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import Topbar from './components/Topbar.jsx';
+import ReceiptDetail from './components/ReceiptDetail.jsx';
+import { auth, call, isConfigured } from './firebase.js';
+import ItemsView from './views/ItemsView.jsx';
+import Login from './views/Login.jsx';
+import NotificationsView from './views/NotificationsView.jsx';
+import ReceiptsView, { EMPTY_FILTERS } from './views/ReceiptsView.jsx';
+import SettingsView from './views/SettingsView.jsx';
+import SetupRequired from './views/SetupRequired.jsx';
 import './styles.css';
-
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
-
-const isConfigured = Object.values(firebaseConfig).every(Boolean);
-const app = isConfigured ? (getApps().length ? getApp() : initializeApp(firebaseConfig)) : null;
-const auth = app ? getAuth(app) : null;
-const functions = app ? getFunctions(app) : null;
-const call = (name, data) => httpsCallable(functions, name)(data).then((result) => result.data);
 
 const VIEW_PATHS = { receipts: '/', items: '/items', notifications: '/notifications', settings: '/settings' };
 function viewFromPath(pathname) {
   const match = Object.entries(VIEW_PATHS).find(([, path]) => path === pathname);
   return match ? match[0] : 'receipts';
-}
-
-// Empty field -> null (not 0); unparseable text is sent as-is so the server rejects it.
-function amountOrNull(value) {
-  if (value === '' || value == null) return null;
-  const n = Number(value);
-  return Number.isNaN(n) ? value : n;
-}
-
-function normalizePhone(value) {
-  const digits = String(value || '').replace(/[^\d]/g, '');
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-  return String(value || '').trim().replace(/[^\d+]/g, '');
-}
-
-function formatMoney(value, currency = 'CAD') {
-  if (value == null) return '—';
-  return new Intl.NumberFormat('en-CA', { style: 'currency', currency }).format(value);
-}
-
-function formatPurchaseDate(value) {
-  if (!value) return 'No date';
-  const date = new Date(`${value}T00:00:00`);
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'June', 'July', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
-  return Number.isNaN(date.getTime()) ? value : `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-}
-
-function formatListDate(value) {
-  if (!value) return 'No date';
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  const full = formatPurchaseDate(value);
-  return date.getFullYear() === new Date().getFullYear() ? full.replace(/, \d{4}$/, '') : full;
-}
-
-function formatFailureDate(createdAt, numMedia) {
-  const seconds = createdAt?.seconds ?? createdAt?._seconds;
-  const date = createdAt?.toDate?.() || (seconds ? new Date(seconds * 1000) : null);
-  const source = numMedia > 0 ? 'photo receipt' : 'pasted receipt';
-  return `${date ? date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Unprocessed'} · ${source}`;
-}
-
-function failureDate(createdAt) {
-  const seconds = createdAt?.seconds ?? createdAt?._seconds;
-  return createdAt?.toDate?.() || (seconds ? new Date(seconds * 1000) : null);
-}
-
-function formatFailureRange(failures) {
-  const dates = failures.map((failure) => failureDate(failure.createdAt)).filter(Boolean).sort((a, b) => a - b);
-  if (!dates.length) return '';
-  const format = (date, includeYear = true) => date.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', ...(includeYear ? { year: 'numeric' } : {}) });
-  if (dates[0].toDateString() === dates.at(-1).toDateString()) return `from ${format(dates[0])}`;
-  const sameYear = dates[0].getFullYear() === dates.at(-1).getFullYear();
-  return `from ${format(dates[0], !sameYear)}–${format(dates.at(-1))}`;
-}
-
-function FailureRow({ failure, onRetry }) {
-  const [image, setImage] = useState(null);
-  useEffect(() => {
-    call('getProcessingFailureImageUrls', { id: failure.id }).then(({ urls }) => setImage(urls?.[0] || null)).catch(() => {});
-  }, [failure.id]);
-  return <div className="failure-row"><span className="failure-info">{image ? <img src={image} alt="Receipt awaiting processing" /> : <span className="failure-placeholder">Receipt</span>}<span><strong>{formatFailureDate(failure.createdAt, failure.numMedia)}</strong><small>Slip couldn’t read this receipt.</small></span></span><button onClick={() => onRetry(failure.id)}>Retry</button></div>;
-}
-
-function Login() {
-  const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
-  const [confirmation, setConfirmation] = useState(null);
-  const [message, setMessage] = useState('');
-  const recaptcha = useRef(null);
-
-  function createRecaptcha() {
-    if (!recaptcha.current) recaptcha.current = new RecaptchaVerifier(auth, 'recaptcha', { size: 'invisible' });
-    return recaptcha.current;
-  }
-
-  useEffect(() => {
-    createRecaptcha();
-    return () => {
-      recaptcha.current?.clear();
-      recaptcha.current = null;
-    };
-  }, []);
-
-  async function sendCode(event) {
-    event.preventDefault();
-    const normalizedPhone = normalizePhone(phone);
-    if (!/^\+\d{8,15}$/.test(normalizedPhone)) {
-      setMessage('Enter a valid phone number, such as (416) 555-1234.');
-      return;
-    }
-    setMessage('Sending code…');
-    try {
-      const verifier = createRecaptcha();
-      const result = await signInWithPhoneNumber(auth, normalizedPhone, verifier);
-      verifier.clear();
-      recaptcha.current = null;
-      setConfirmation(result);
-      setMessage('Enter the six-digit code we texted you.');
-    } catch (error) {
-      recaptcha.current?.clear();
-      recaptcha.current = null;
-      setMessage(error.message || 'Could not send a code.');
-    }
-  }
-
-  async function verifyCode(event) {
-    event.preventDefault();
-    setMessage('Verifying…');
-    try {
-      await confirmation.confirm(code);
-    } catch (error) {
-      setMessage(error.message || 'That code did not work.');
-    }
-  }
-
-  return <main className="auth-card">
-    <p className="eyebrow">Slip</p>
-    <h1>Your receipts, without the shoebox.</h1>
-    <p className="muted">Sign in with the phone number you use to text receipts to Slip.</p>
-    {!confirmation ? <form onSubmit={sendCode}>
-      <label>Phone number<input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 416 555 1234" required /></label>
-      <button id="send-code-button" type="submit">Text me a code</button>
-    </form> : <form onSubmit={verifyCode}>
-      <label>Verification code<input value={code} onChange={(e) => setCode(e.target.value)} inputMode="numeric" autoComplete="one-time-code" required /></label>
-      <button type="submit">Sign in</button>
-    </form>}
-    <div id="recaptcha" />
-    {message && <p className="status">{message}</p>}
-  </main>;
-}
-
-function SetupRequired() {
-  return <main className="auth-card"><p className="eyebrow">Slip</p><h1>One small setup step.</h1><p className="muted">The web app is built, but Firebase configuration has not been provided for this environment. Add the values from <code>web/.env.example</code> as frontend environment variables, then reload.</p></main>;
-}
-
-function ReceiptRow({ receipt, onSelect }) {
-  return <button className="receipt-row" onClick={() => onSelect(receipt)}>
-    <span className="receipt-date">{formatListDate(receipt.date)}</span>
-    <span className="receipt-name">{receipt.merchant || 'Unknown merchant'}<small>{receipt.category || 'Other'} · {receipt.items?.length || 0} items</small></span>
-    <strong className={receipt.type === 'refund' ? 'refund' : ''}>{formatMoney(receipt.total, receipt.currency)}</strong>
-  </button>;
-}
-
-function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
-  const [draft, setDraft] = useState({ ...receipt, items: receipt.items || [] });
-  const [editing, setEditing] = useState(false);
-  const [images, setImages] = useState([]);
-  const [zoomedImage, setZoomedImage] = useState(null);
-  const [status, setStatus] = useState('');
-  const [otherCategory, setOtherCategory] = useState(receipt.category ? !categories.includes(receipt.category) : false);
-  const [expandedItems, setExpandedItems] = useState(() => new Set());
-
-  useEffect(() => {
-    setDraft({ ...receipt, items: receipt.items || [] });
-    setEditing(false);
-    setStatus('');
-    setOtherCategory(receipt.category ? !categories.includes(receipt.category) : false);
-    setExpandedItems(new Set());
-    call('getReceiptImageUrls', { id: receipt.id }).then(({ urls }) => setImages(urls)).catch(() => setStatus('The receipt image could not be loaded.'));
-  }, [receipt.id]);
-
-  function toggleItemCatalog(index) {
-    setExpandedItems((current) => {
-      const next = new Set(current);
-      if (next.has(index)) next.delete(index); else next.add(index);
-      return next;
-    });
-  }
-
-  const update = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
-  async function save(event) {
-    event.preventDefault();
-    setStatus('Saving…');
-    try {
-      const result = await call('updateReceipt', { id: receipt.id, patch: {
-        merchant: draft.merchant, location: draft.location, date: draft.date,
-        total: amountOrNull(draft.total), subtotal: amountOrNull(draft.subtotal), tax: amountOrNull(draft.tax),
-        category: draft.category, subCategory: draft.subCategory, currency: draft.currency, items: draft.items,
-      } });
-      setStatus('Saved.');
-      onSaved(result);
-    } catch (error) { setStatus(error.message || 'Could not save.'); }
-  }
-
-  return <aside className="detail-panel">
-    <div className="detail-header"><div><p className="eyebrow">Receipt</p><h2>{receipt.merchant || 'Unknown merchant'}</h2></div><div className="detail-actions"><button className="edit-button" onClick={() => setEditing((value) => !value)}>{editing ? 'Done' : 'Edit'}</button><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
-    <div className="detail-body">
-      <div className="detail-media">{images.length > 0 && <div className="image-strip">{images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}</div>}</div>
-      {editing ? <form onSubmit={save} className="detail-form">
-      <div className="field-grid">
-        <label>Merchant<input value={draft.merchant || ''} onChange={(e) => update('merchant', e.target.value)} /></label>
-        <label>Date<input type="date" value={draft.date || ''} onChange={(e) => update('date', e.target.value)} /></label>
-        <label>Total<input type="number" step="0.01" value={draft.total ?? ''} onChange={(e) => update('total', e.target.value)} /></label>
-        <label>Currency<select value={draft.currency || 'CAD'} onChange={(e) => update('currency', e.target.value)}>{draft.currency && !['CAD', 'USD', 'EUR', 'GBP', 'AUD', 'JPY'].includes(draft.currency) && <option value={draft.currency}>{draft.currency}</option>}<option value="CAD">CAD — Canadian dollar</option><option value="USD">USD — US dollar</option><option value="EUR">EUR — Euro</option><option value="GBP">GBP — Pound sterling</option><option value="AUD">AUD — Australian dollar</option><option value="JPY">JPY — Japanese yen</option></select></label>
-        <label>Category<select value={otherCategory ? '__other__' : (draft.category || '')} onChange={(e) => { if (e.target.value === '__other__') { setOtherCategory(true); update('category', ''); } else { setOtherCategory(false); update('category', e.target.value); } }}><option value="">Select category</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}<option value="__other__">Other…</option></select>{otherCategory && <input placeholder="New category" value={draft.category || ''} onChange={(e) => update('category', e.target.value)} />}</label>
-      </div>
-      <p className="meta">{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</p>
-      <h3>Items</h3>
-      <div className="items">
-        <div className="item-row item-row-header"><span>Item</span><span>Qty</span><span>Price</span></div>
-        {draft.items.map((item, index) => { const expanded = expandedItems.has(index); return <div className="item-entry" key={`${receipt.id}-${index}`}><div className="item-row"><input value={item.name} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, name: e.target.value } : current))} /><input aria-label={`Quantity for ${item.name}`} type="number" min="1" step="1" value={item.quantity ?? 1} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, quantity: Number(e.target.value) } : current))} /><input aria-label={`Price for ${item.name}`} type="number" step="0.01" value={item.price ?? ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, price: Number(e.target.value) } : current))} /></div><button type="button" className="item-catalog-toggle" onClick={() => toggleItemCatalog(index)}>{expanded ? 'Hide catalog details' : 'Catalog details'}</button>{expanded && <div className="item-metadata"><input aria-label={`Public name for ${item.name}`} placeholder="Public name" value={item.publicName || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, publicName: e.target.value } : current))} /><input aria-label={`Item number for ${item.name}`} placeholder="TCIN / item number" value={item.itemNumber || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, itemNumber: e.target.value } : current))} /><input aria-label={`UPC for ${item.name}`} placeholder="UPC" value={item.upc || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, upc: e.target.value } : current))} /><input aria-label={`DPCI for ${item.name}`} placeholder="DPCI" value={item.dpci || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, dpci: e.target.value } : current))} /><input aria-label={`Product URL for ${item.name}`} placeholder="Product URL" value={item.productUrl || ''} onChange={(e) => update('items', draft.items.map((current, i) => i === index ? { ...current, productUrl: e.target.value } : current))} /></div>}</div>; })}
-      </div>
-      <div className="actions"><button type="submit">Save corrections</button><button type="button" className="secondary" onClick={() => setDraft({ ...receipt, items: receipt.items || [] })}>Reset</button></div>
-      {status && <p className="status">{status}</p>}
-      </form> : <div className="detail-form read-only-detail"><div className="summary-grid"><div><small>Purchased</small><strong>{formatPurchaseDate(receipt.date)}</strong></div><div><small>Category</small><strong>{receipt.category || 'Other'}</strong></div><div><small>Items</small><strong>{(receipt.items || []).length}</strong></div><div><small>Type</small><strong>{receipt.type === 'refund' ? 'Refund' : 'Purchase'}</strong></div></div><div className="read-only-items">{(receipt.items || []).map((item, index) => <div className="read-only-item" key={`${item.name}-${index}`}><span><strong>{item.publicName || item.name || 'Unnamed item'}</strong>{item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() && <small>{item.name}</small>}</span><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price, receipt.currency)}</strong></div>)}</div><div className="receipt-totals"><div><span>Subtotal</span><strong>{formatMoney(receipt.subtotal, receipt.currency)}</strong></div><div><span>Tax</span><strong>{formatMoney(receipt.tax, receipt.currency)}</strong></div><div className="receipt-total"><span>Total</span><strong>{formatMoney(receipt.total, receipt.currency)}</strong></div></div></div>}
-    </div>
-    {zoomedImage && <div className="image-modal" role="dialog" aria-label="Expanded receipt image" onClick={() => setZoomedImage(null)}><button className="image-modal-close" aria-label="Close expanded image" onClick={() => setZoomedImage(null)}>×</button><img src={zoomedImage} alt="Expanded original receipt" onClick={(event) => event.stopPropagation()} /></div>}
-  </aside>;
-}
-
-function ItemDetail({ item, onClose }) {
-  return <><div className="detail-backdrop" onClick={onClose} /><aside className="detail-panel item-detail-panel">
-    <div className="detail-header"><div><p className="eyebrow">Item</p><h2>{item.publicName || item.name || 'Unnamed item'}</h2></div><div className="detail-actions"><button className="icon-button" onClick={onClose} aria-label="Close">×</button></div></div>
-    {item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() && <p className="muted">{item.name}</p>}
-    <div className="summary-grid">
-      <div><small>Price</small><strong>{formatMoney(item.price)}</strong></div>
-      <div><small>Quantity</small><strong>×{item.quantity || 1}</strong></div>
-      <div><small>Category</small><strong>{item.category || 'Other'}</strong></div>
-      <div><small>Merchant</small><strong>{item.merchant || 'Unknown merchant'}</strong></div>
-      <div><small>Date</small><strong>{item.date || 'No date'}</strong></div>
-      <div><small>Status</small><strong>{item.verified ? 'Verified' : 'Needs review'}</strong></div>
-    </div>
-    {(item.itemNumber || item.upc || item.dpci || item.productUrl) && <div className="summary-grid">
-      {item.itemNumber && <div><small>TCIN / item number</small><strong>{item.itemNumber}</strong></div>}
-      {item.upc && <div><small>UPC</small><strong>{item.upc}</strong></div>}
-      {item.dpci && <div><small>DPCI</small><strong>{item.dpci}</strong></div>}
-      {item.productUrl && <div><small>Product page</small><strong><a href={item.productUrl} target="_blank" rel="noreferrer">View product ↗</a></strong></div>}
-    </div>}
-  </aside></>;
-}
-
-function ItemsView({ receipts, catalogItems, onReceiptUpdated, search }) {
-  const [mode, setMode] = useState('verified');
-  const [selectedItem, setSelectedItem] = useState(null);
-  const items = useMemo(() => (catalogItems.length > 0 ? catalogItems : receipts.flatMap((receipt) => (receipt.items || []).map((item, index) => ({
-    ...item,
-    id: `${receipt.id}-${index}`,
-    receiptId: receipt.id,
-    index,
-    merchant: receipt.merchant || 'Unknown merchant',
-    date: receipt.date || 'No date',
-  })))), [catalogItems, receipts]);
-  const visibleItems = items.filter((item) => mode === 'verified' ? item.verified === true : item.verified !== true);
-  const filtered = visibleItems.filter((item) => `${item.name} ${item.publicName || ''} ${item.category} ${item.merchant}`.toLowerCase().includes(search.toLowerCase()));
-
-  async function verifyItem(item) {
-    if (item.id && !item.receiptId) {
-      await call('updateItem', { id: item.id, patch: { verified: true } });
-      onReceiptUpdated(null);
-      return;
-    }
-    const receipt = receipts.find((candidate) => candidate.id === item.receiptId);
-    if (!receipt) return;
-    const updated = await call('updateReceipt', { id: receipt.id, patch: { items: receipt.items.map((current, index) => index === item.index ? { ...current, verified: true } : current) } });
-    onReceiptUpdated(updated);
-  }
-
-  return <section className="items-page">
-    <div className="item-tabs"><button className={mode === 'verified' ? 'active' : 'secondary'} onClick={() => setMode('verified')}>Verified</button><button className={mode === 'review' ? 'active' : 'secondary'} onClick={() => setMode('review')}>Needs review</button></div>
-    {filtered.length === 0 ? <div className="empty"><h2>{mode === 'verified' ? 'No verified items yet.' : 'Nothing needs review.'}</h2><p>{mode === 'verified' ? 'Approve items from the Needs review tab before they appear here.' : 'Newly captured items will appear here for approval.'}</p></div> : <><div className="item-list">{filtered.map((item) => <div className="catalog-item" key={item.id} onClick={() => setSelectedItem(item)}><div><strong>{item.publicName || item.name || 'Unnamed item'}</strong><small>{[item.publicName && item.name && item.publicName.trim().toLowerCase() !== item.name.trim().toLowerCase() ? item.name : '', item.merchant, item.date && formatListDate(item.date), item.category].filter(Boolean).join(' · ')}</small></div><span className="item-action"><span>×{item.quantity || 1}</span><strong>{formatMoney(item.price)}</strong>{mode === 'review' && <button onClick={(e) => { e.stopPropagation(); verifyItem(item); }}>Approve</button>}</span></div>)}</div><div className="list-footer"><span className="count">{filtered.length} items</span></div></>}
-    {selectedItem && <ItemDetail item={selectedItem} onClose={() => setSelectedItem(null)} />}
-  </section>;
-}
-
-function SettingsView({ settings, onDigestChange }) {
-  const [status, setStatus] = useState('');
-  async function toggle(event) {
-    setStatus('Saving…');
-    try {
-      await onDigestChange(event.target.checked);
-      setStatus('Saved.');
-    } catch (error) {
-      setStatus(error.message || 'Could not save settings.');
-    }
-  }
-  return <section className="settings-page">
-    <div className="settings-intro"><h2>Settings</h2><p>Choose which updates Slip sends you.</p></div>
-    <div className="settings-section"><label className="setting-row"><span><strong>Monthly recap</strong><small>Get a text at the start of each month with your previous month’s spending.</small></span><input className="setting-toggle" type="checkbox" checked={settings.monthlyDigestEnabled !== false} onChange={toggle} /></label></div>
-    {status && <p className="status">{status}</p>}
-    <ImportTokens />
-  </section>;
-}
-
-function ImportTokens() {
-  const [tokens, setTokens] = useState([]);
-  const [label, setLabel] = useState('');
-  const [newToken, setNewToken] = useState('');
-  const [message, setMessage] = useState('');
-  const mcpUrl = import.meta.env.VITE_MCP_URL || '';
-  const refresh = () => call('listImportTokens').then((result) => setTokens(result.tokens)).catch(() => setMessage('Could not load tokens.'));
-  useEffect(() => { refresh(); }, []);
-  async function create() {
-    setMessage('');
-    try {
-      const created = await call('createImportToken', { label });
-      setNewToken(created.token);
-      setLabel('');
-      refresh();
-    } catch (error) {
-      setMessage(error.message || 'Could not create a token.');
-    }
-  }
-  async function revoke(id) {
-    try {
-      await call('revokeImportToken', { id });
-      refresh();
-    } catch (error) {
-      setMessage(error.message || 'Could not revoke the token.');
-    }
-  }
-  return <div className="settings-section import-tokens">
-    <div className="setting-row"><span><strong>Import with your own AI assistant</strong><small>Connect an assistant that can read receipt photos. It can only add receipts to your account, never read them. Revoke access any time.</small></span></div>
-    {mcpUrl && <p className="muted">Server address: <code>{mcpUrl}</code></p>}
-    {newToken && <div className="new-token"><p><strong>Copy this token now. It won’t be shown again.</strong></p><code>{newToken}</code> <button onClick={() => { navigator.clipboard?.writeText(newToken); }}>Copy</button> <button onClick={() => setNewToken('')}>Done</button></div>}
-    <div className="setting-row"><input aria-label="Token name" placeholder="Name, e.g. Claude" value={label} maxLength={60} onChange={(e) => setLabel(e.target.value)} /><button onClick={create}>Create token</button></div>
-    {tokens.map((token) => <div className="setting-row" key={token.id}><span><strong>{token.label}</strong><small>{token.revoked ? 'Revoked' : token.lastUsedAt ? `Last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'Never used'}</small></span>{!token.revoked && <button onClick={() => revoke(token.id)}>Revoke</button>}</div>)}
-    {message && <p className="status">{message}</p>}
-  </div>;
-}
-
-const BAR_COLORS = ['#4a7c59', '#d9873f', '#6f8ba6', '#a8c490', '#c9b48a'];
-
-function categorySegments(categories) {
-  const positive = Object.entries(categories || {}).filter(([, amount]) => Number.isFinite(amount) && amount > 0).sort((a, b) => b[1] - a[1]);
-  const top = positive.slice(0, 4);
-  const rest = positive.slice(4);
-  const otherIndex = top.findIndex(([name]) => name === 'Other');
-  const restTotal = rest.reduce((sum, [, amount]) => sum + amount, 0);
-  if (restTotal > 0) {
-    if (otherIndex >= 0) top[otherIndex] = ['Other', top[otherIndex][1] + restTotal];
-    else top.push(['Other', restTotal]);
-  }
-  top.sort((a, b) => (a[0] === 'Other') - (b[0] === 'Other') || b[1] - a[1]);
-  return top.map(([name, amount], index) => ({ name, amount, color: BAR_COLORS[index] }));
-}
-
-function CategoryBar({ categories }) {
-  const segments = categorySegments(categories);
-  if (segments.length === 0) return null;
-  return <div className="category-breakdown">
-    <div className="category-bar" role="img" aria-label={segments.map((s) => `${s.name} ${formatMoney(s.amount)}`).join(', ')}>{segments.map((s) => <span key={s.name} style={{ flexGrow: s.amount, background: s.color }} />)}</div>
-    <ul className="category-legend">{segments.map((s) => <li key={s.name}><i style={{ background: s.color }} /><strong>{formatMoney(s.amount)}</strong> {s.name}</li>)}</ul>
-  </div>;
-}
-
-function NotificationsView({ failures, notifications, onRetry }) {
-  const [showFailures, setShowFailures] = useState(false);
-  return <section className="notifications-page">
-    <h2>Notifications</h2>
-    <p className="page-intro">Updates and things that need your attention.</p>
-    {notifications.map((notification) => <article className="notification-card" key={notification.id}><div><p className="eyebrow">Monthly summary</p><h3>{notification.title}</h3><strong>{formatMoney(notification.total)} <span className="muted">across {notification.count} {notification.count === 1 ? 'receipt' : 'receipts'}</span></strong>{Object.keys(notification.byCurrency || {}).length > 0 && <p className="muted">Also spent: {Object.entries(notification.byCurrency).sort(([a], [b]) => a.localeCompare(b)).map(([code, value]) => `${formatMoney(value.total, code)} (${value.count} ${value.count === 1 ? 'receipt' : 'receipts'})`).join(', ')}</p>}</div><CategoryBar categories={notification.categories} /></article>)}
-    {failures.length > 0 && <section className="failures"><div className="failure-summary"><span><h3>Processing history</h3><p className="muted">{failures.length} {failures.length === 1 ? 'receipt needs' : 'receipts need'} processing {formatFailureRange(failures)}.</p></span><button onClick={() => setShowFailures((visible) => !visible)}>{showFailures ? 'Hide receipts' : 'Review receipts'}</button></div>{showFailures && <div className="failure-list"><p className="muted">These receipts were not added to your inbox. Retry one to process it again.</p>{failures.map((failure) => <FailureRow key={failure.id} failure={failure} onRetry={onRetry} />)}</div>}</section>}
-    {notifications.length === 0 && failures.length === 0 && <div className="empty notification-empty"><h3>You're all caught up.</h3><p>Monthly summaries and other updates will appear here.</p></div>}
-  </section>;
 }
 
 function Inbox({ user }) {
@@ -409,11 +45,7 @@ function Inbox({ user }) {
   const [itemSearch, setItemSearch] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
   const [showFilters, setShowFilters] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [minAmount, setMinAmount] = useState('');
-  const [maxAmount, setMaxAmount] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -443,36 +75,66 @@ function Inbox({ user }) {
     finally { setLoading(false); setLoadingMore(false); }
   }
   useEffect(() => { load(); }, []);
-  const filtered = [...receipts]
-    .filter((receipt) => `${receipt.merchant} ${receipt.category} ${receipt.items?.map((i) => i.name).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
-    .filter((receipt) => !categoryFilter || receipt.category === categoryFilter)
-    .filter((receipt) => !startDate || (receipt.date || '') >= startDate)
-    .filter((receipt) => !endDate || (receipt.date || '') <= endDate)
-    .filter((receipt) => minAmount === '' || Number(receipt.total) >= Number(minAmount))
-    .filter((receipt) => maxAmount === '' || Number(receipt.total) <= Number(maxAmount))
-    .sort((a, b) => {
-      const aDate = a.date || '';
-      const bDate = b.date || '';
-      if (!aDate && bDate) return 1;
-      if (aDate && !bDate) return -1;
-      const comparison = aDate.localeCompare(bDate);
-      return sortOrder === 'oldest' ? comparison : -comparison;
-    });
+
+  const categories = [...new Set(receipts.map((receipt) => receipt.category).filter(Boolean))].sort();
+  const ready = !loading && !error;
+
+  async function retryFailure(id) {
+    try {
+      await call('retryProcessing', { id });
+      setFailures((all) => all.filter((item) => item.id !== id));
+      await load();
+    } catch (err) { setError(err.message || 'Could not retry receipt.'); }
+  }
+
+  function receiptUpdated(updated) {
+    if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt));
+    load();
+  }
+
+  async function changeDigest(monthlyDigestEnabled) {
+    const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } });
+    setSettings(updated);
+  }
+
+  function receiptSaved(updated) {
+    setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
+    setSelected((current) => ({ ...current, ...updated }));
+  }
 
   return <main className="app-shell">
-    <header className="topbar"><div className="topbar-brand"><button className="brand-home" onClick={() => setView('receipts')} aria-label="Go to receipts"><p className="eyebrow">Slip</p></button></div><nav className="view-nav"><button className={view === 'receipts' ? 'active' : ''} onClick={() => setView('receipts')}>Receipts</button><button className={view === 'items' ? 'active' : ''} onClick={() => setView('items')}>Items</button><button className={view === 'settings' ? 'active' : ''} onClick={() => setView('settings')}>Settings</button></nav><div className="topbar-tools">{view === 'receipts' && <>{showSearch && <input className="header-search" autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search receipts" />}<button aria-expanded={showSearch} onClick={() => setShowSearch((visible) => !visible)}>Search</button></>}{view === 'items' && <>{showItemSearch && <input className="header-search" autoFocus value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Search items or merchants" />}<button aria-expanded={showItemSearch} onClick={() => setShowItemSearch((visible) => !visible)}>Search</button></>}{(failures.length > 0 || notifications.length > 0) && <button className="notification" onClick={() => setView('notifications')}>Notifications <span className="notification-count">{failures.length + notifications.length}</span></button>}<button className="account-button" onClick={() => signOut(auth)}>Sign out</button></div></header>
+    <Topbar
+      view={view}
+      onNavigate={setView}
+      receiptSearch={{ open: showSearch, onToggle: () => setShowSearch((visible) => !visible), value: search, onChange: setSearch }}
+      itemSearch={{ open: showItemSearch, onToggle: () => setShowItemSearch((visible) => !visible), value: itemSearch, onChange: setItemSearch }}
+      notificationCount={failures.length + notifications.length}
+      onSignOut={() => signOut(auth)}
+    />
     {loading && <p className="empty">Loading…</p>}
     {!loading && error && <p className="error">{error}</p>}
-    {!loading && !error && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} search={itemSearch} onReceiptUpdated={(updated) => { if (updated) setReceipts((all) => all.map((receipt) => receipt.id === updated.id ? { ...receipt, ...updated } : receipt)); load(); }} />}
-    {!loading && !error && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={async (id) => { try { await call('retryProcessing', { id }); setFailures((all) => all.filter((item) => item.id !== id)); await load(); } catch (err) { setError(err.message || 'Could not retry receipt.'); } }} />}
-    {!loading && !error && view === 'settings' && <SettingsView settings={settings} onDigestChange={async (monthlyDigestEnabled) => { const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } }); setSettings(updated); }} />}
-    {!loading && !error && view === 'receipts' && <>
-      <section className="toolbar"><label className="sort-control">Sort<select aria-label="Sort receipts" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option></select></label><button className="toolbar-link" onClick={() => setShowFilters((visible) => !visible)}>{showFilters ? 'Hide filters' : 'Filter receipts'}</button></section>
-      {showFilters && <section className="receipt-filters"><label>Category<select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">All categories</option>{[...new Set(receipts.map((receipt) => receipt.category).filter(Boolean))].sort().map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label>From<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label><label>To<input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></label><label>Minimum<input inputMode="decimal" type="number" min="0" step="0.01" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} placeholder="$0" /></label><label>Maximum<input inputMode="decimal" type="number" min="0" step="0.01" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} placeholder="Any amount" /></label><button className="clear-filters" onClick={() => { setCategoryFilter(''); setStartDate(''); setEndDate(''); setMinAmount(''); setMaxAmount(''); }}>Clear</button></section>}
-      {filtered.length === 0 && <div className="empty"><h2>No receipts here yet.</h2><p>Text a receipt photo to Slip and it will appear in this inbox.</p></div>}
-      <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={setSelected} />)}</div><div className="list-footer"><span className="count">{filtered.length} receipts loaded</span>{hasMore && <button className="load-more" disabled={loadingMore} onClick={() => load({ append: true, cursor: nextCursor })}>{loadingMore ? 'Loading…' : 'Load more'}</button>}</div>
+    {ready && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} search={itemSearch} onReceiptUpdated={receiptUpdated} />}
+    {ready && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={retryFailure} />}
+    {ready && view === 'settings' && <SettingsView settings={settings} onDigestChange={changeDigest} />}
+    {ready && view === 'receipts' && <ReceiptsView
+      receipts={receipts}
+      categories={categories}
+      search={search}
+      sortOrder={sortOrder}
+      onSortChange={setSortOrder}
+      showFilters={showFilters}
+      onToggleFilters={() => setShowFilters((visible) => !visible)}
+      filters={filters}
+      onFiltersChange={setFilters}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onLoadMore={() => load({ append: true, cursor: nextCursor })}
+      onSelect={setSelected}
+    />}
+    {selected && <>
+      <div className="detail-backdrop" onClick={() => setSelected(null)} />
+      <ReceiptDetail receipt={selected} categories={categories} onClose={() => setSelected(null)} onSaved={receiptSaved} />
     </>}
-    {selected && <><div className="detail-backdrop" onClick={() => setSelected(null)} /><ReceiptDetail receipt={selected} categories={[...new Set(receipts.map((receipt) => receipt.category).filter(Boolean))].sort()} onClose={() => setSelected(null)} onSaved={(updated) => { setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r)); setSelected((current) => ({ ...current, ...updated })); }} /></>}
   </main>;
 }
 
