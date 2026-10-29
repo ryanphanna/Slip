@@ -84,12 +84,11 @@ async function getMonthlyStats(from) {
 }
 
 // TOTAL: filtered on the printed date, so a receipt sent in a later month
-// still counts in the month it was bought. Receipts without a printed date
-// count only in all-time totals.
+// still counts in the month it was bought.
 async function getSpendingStats(from, startDate) {
   const all = (await loadAllReceipts(from)).map((doc) => doc.data());
   const start = startDate ? dateKey(startDate) : null;
-  const docs = start ? all.filter((d) => typeof d.date === 'string' && d.date >= start) : all;
+  const docs = start ? all.filter((d) => { const day = countedDate(d); return day != null && day >= start; }) : all;
   const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
   return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}) };
 }
@@ -129,7 +128,10 @@ function monthName(monthKey) {
 function monthStatsFromDocs(docs, monthKey) {
   const startDate = `${monthKey}-01`;
   const endDate = `${shiftMonthKey(monthKey, 1)}-01`;
-  const monthDocs = docs.filter((doc) => typeof doc.date === 'string' && doc.date >= startDate && doc.date < endDate);
+  const monthDocs = docs.filter((doc) => {
+    const day = countedDate(doc);
+    return day != null && day >= startDate && day < endDate;
+  });
   const { total, categories, byCurrency } = aggregateSpendingByCategory(monthDocs);
   return { total, categories, count: countPrimary(monthDocs), ...(byCurrency ? { byCurrency } : {}), month: monthName(monthKey), monthKey, docs: monthDocs };
 }
@@ -137,6 +139,13 @@ function monthStatsFromDocs(docs, monthKey) {
 async function loadAllReceipts(from) {
   const snapshot = await admin.firestore().collection('receipts').where('from', '==', from).get();
   return snapshot.docs;
+}
+
+// This month's receipts by counted date (budgets and the weekly budget text).
+async function currentMonthDocs(from) {
+  const monthKey = dateKey(new Date()).slice(0, 7);
+  const docs = (await loadAllReceipts(from)).map((doc) => doc.data());
+  return monthStatsFromDocs(docs, monthKey).docs;
 }
 
 async function getLastMonthStats(from) {
@@ -148,8 +157,16 @@ async function getLastMonthStats(from) {
   return stats;
 }
 
+// The day a receipt counts on: its printed date, or the day it was sent when
+// no date was read, so undated receipts still show up in monthly numbers.
+function countedDate(doc) {
+  if (typeof doc.date === 'string') return doc.date;
+  const sent = doc.createdAt?.toDate ? doc.createdAt.toDate() : doc.createdAt;
+  return sent instanceof Date && !Number.isNaN(sent.getTime()) ? dateKey(sent) : null;
+}
+
 function dateKey(date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
 }
 
-module.exports = { getMonthlyStats, getLastMonthStats, monthStatsFromDocs, loadAllReceipts, isMonthKey, shiftMonthKey, monthName, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
+module.exports = { getMonthlyStats, getLastMonthStats, monthStatsFromDocs, loadAllReceipts, currentMonthDocs, countedDate, dateKey, isMonthKey, shiftMonthKey, monthName, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };

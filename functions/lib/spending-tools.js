@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { aggregateSpendingByCategory } = require('./query');
+const { aggregateSpendingByCategory, countedDate, dateKey } = require('./query');
 const { currencyOf, DEFAULT_CURRENCY } = require('./money');
 const { normalizeMerchant } = require('./validate');
 
@@ -110,28 +110,30 @@ const TOOL_DECLARATIONS = [
   },
 ];
 
-function buildDateRange(startDate, endDate) {
-  const constraints = {};
-  if (startDate) constraints.start = new Date(startDate);
-  if (endDate) {
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
-    constraints.end = end;
-  }
-  return constraints;
+// "2025-01-31" or "2025-01-31T..." -> "2025-01-31"; other date text is parsed.
+function toDayKey(value) {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : dateKey(parsed);
 }
 
+// Date ranges use the printed receipt date (sent date when none was read),
+// the same rule as TOTAL, SUMMARY and the recap page. Both ends inclusive.
 async function queryReceipts({ startDate, endDate, merchant, category } = {}) {
   const db = admin.firestore();
-  const { start, end } = buildDateRange(startDate, endDate);
+  const start = toDayKey(startDate);
+  const end = toDayKey(endDate);
 
   // Single-user app — no need to filter by `from`, avoids composite index requirements
-  let q = db.collection('receipts');
-  if (start) q = q.where('createdAt', '>=', start);
-  if (end)   q = q.where('createdAt', '<=', end);
-
-  const snapshot = await q.get();
+  const snapshot = await db.collection('receipts').get();
   let docs = snapshot.docs.map(d => d.data());
+  if (start || end) {
+    docs = docs.filter((d) => {
+      const day = countedDate(d);
+      return day != null && (!start || day >= start) && (!end || day <= end);
+    });
+  }
 
   if (merchant) {
     const needle = normalizeMerchant(merchant).toLowerCase();
@@ -225,9 +227,9 @@ async function getMonthlySummary({ year, month } = {}) {
   const m = month || (now.getMonth() + 1);
 
   const start = new Date(y, m - 1, 1);
-  const end   = new Date(y, m, 0, 23, 59, 59, 999); // last day of month
+  const end   = new Date(y, m, 0); // last day of month
 
-  const docs = await queryReceipts({ startDate: start.toISOString(), endDate: end.toISOString() });
+  const docs = await queryReceipts({ startDate: dateKey(start), endDate: dateKey(end) });
 
   const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
   

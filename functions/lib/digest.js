@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { aggregateSpendingByCategory, getLastMonthStats } = require('./query');
+const { aggregateSpendingByCategory, getLastMonthStats, currentMonthDocs } = require('./query');
 const { getAllBudgets } = require('./budget');
 const { getSettings } = require('./settings');
 const { sendSms } = require('./twilio');
@@ -43,16 +43,8 @@ async function sendWeeklyBudgetCheck(from) {
   const budgets = await getAllBudgets(from);
   if (budgets.length === 0) return;
 
-  const db = admin.firestore();
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const snapshot = await db.collection('receipts')
-    .where('from', '==', from)
-    .where('createdAt', '>=', startOfMonth)
-    .get();
-
-  const docs = snapshot.docs.map(doc => doc.data());
+  const docs = await currentMonthDocs(from);
   const { categories: spentMap, byCurrency } = aggregateSpendingByCategory(docs);
 
   const lines = budgets

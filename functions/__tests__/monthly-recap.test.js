@@ -156,8 +156,8 @@ describe('counting by printed date', () => {
   it('SUMMARY counts a late-sent receipt in the month printed on it', async () => {
     seedLateReceipt();
     const summary = await getMonthlyStats(FROM);
-    expect(summary.total).toBe(10);
-    expect(summary.count).toBe(1);
+    expect(summary.total).toBe(17);
+    expect(summary.count).toBe(2);
     const september = await getMonthlyRecap({ ...AUTH, data: { month: '2026-09' } });
     expect(september.total).toBe(40);
   });
@@ -165,15 +165,16 @@ describe('counting by printed date', () => {
   it('TOTAL MONTH and TOTAL YEAR filter on the printed date', async () => {
     seedLateReceipt();
     const month = await getSpendingStats(FROM, new Date(2026, 9, 1));
-    expect(month).toMatchObject({ total: 10, count: 1 });
+    expect(month).toMatchObject({ total: 17, count: 2 });
     const year = await getSpendingStats(FROM, new Date(2026, 0, 1));
-    expect(year).toMatchObject({ total: 50, count: 2 });
+    expect(year).toMatchObject({ total: 57, count: 3 });
   });
 
-  it('all-time TOTAL still counts receipts with no printed date', async () => {
+  it('counts a receipt with no printed date in the month it was sent, on the recap page too', async () => {
     seedLateReceipt();
-    const all = await getSpendingStats(FROM, null);
-    expect(all).toMatchObject({ total: 57, count: 3 });
+    const october = await getMonthlyRecap({ ...AUTH, data: { month: '2026-10' } });
+    expect(october.total).toBe(17);
+    expect(october.categories).toMatchObject({ Dining: 7 });
   });
 });
 
