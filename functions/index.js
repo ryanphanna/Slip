@@ -606,6 +606,7 @@ exports.updateReceipt = callable(webApi.updateReceipt);
 exports.getReceiptImageUrls = callable(webApi.getReceiptImageUrls);
 exports.listProcessingFailures = callable(webApi.listProcessingFailures);
 exports.listNotifications = callable(webApi.listNotifications);
+exports.getMonthlyRecap = callable(webApi.getMonthlyRecap);
 exports.getProcessingFailureImageUrls = callable(webApi.getProcessingFailureImageUrls);
 // Gemini parsing can take up to GEMINI_TIMEOUT_MS per attempt; keep well above the default.
 exports.retryProcessing = callable(webApi.retryProcessing, { timeoutSeconds: config.FUNCTION_TIMEOUT_SECONDS });

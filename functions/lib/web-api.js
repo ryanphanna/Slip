@@ -6,6 +6,8 @@ const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
 const { isAllowed } = require('./allowlist');
 const importTokens = require('./import-tokens');
+const { monthStatsFromDocs, loadAllReceipts, isMonthKey, shiftMonthKey } = require('./query');
+const { DEFAULT_CURRENCY, currencyOf } = require('./money');
 
 const EDITABLE_FIELDS = new Set([
   'merchant', 'location', 'date', 'total', 'subtotal', 'tax', 'category',
@@ -154,6 +156,57 @@ async function listNotifications(request) {
     .limit(50)
     .get();
   return { notifications: snapshot.docs.map(serializeDoc) };
+}
+
+const TOP_MERCHANT_LIMIT = 5;
+
+// Where the most CAD went: same `total` field and CAD-only rule as the
+// recap total, so the list is always a subset of the headline number.
+function topMerchants(docs) {
+  const byKey = new Map();
+  for (const doc of docs) {
+    if (doc.total == null || currencyOf(doc) !== DEFAULT_CURRENCY) continue;
+    const name = (doc.merchant || '').trim() || 'Unknown merchant';
+    const key = name.toLowerCase();
+    const entry = byKey.get(key) || { name, total: 0, count: 0 };
+    // Same store typed in different case: prefer a capitalized spelling.
+    if (entry.name === entry.name.toLowerCase() && name !== name.toLowerCase()) entry.name = name;
+    entry.total += doc.total;
+    entry.count += 1;
+    byKey.set(key, entry);
+  }
+  return [...byKey.values()]
+    .map((entry) => ({ ...entry, total: Math.round(entry.total * 100) / 100 }))
+    .filter((entry) => entry.total > 0)
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+    .slice(0, TOP_MERCHANT_LIMIT);
+}
+
+// One month's recap for the web recap page (CIV-1073). Uses the same month
+// filter and aggregation as the monthly recap SMS / Notifications card.
+async function getMonthlyRecap(request) {
+  const { phone } = requireAuth(request);
+  const monthKey = request.data?.month;
+  if (!isMonthKey(monthKey)) {
+    const error = new Error('Month must look like 2026-09');
+    error.code = 'invalid-argument';
+    throw error;
+  }
+  const snapshots = await loadAllReceipts(phone);
+  const all = snapshots.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const { docs, ...current } = monthStatsFromDocs(all, monthKey);
+  const { docs: _previousDocs, ...previous } = monthStatsFromDocs(all, shiftMonthKey(monthKey, -1));
+  // Full receipt documents, the same shape listReceipts returns, because the
+  // receipt detail panel edits and saves whatever it is given.
+  const receipts = docs.sort((a, b) => (b.date || '').localeCompare(a.date || '')
+    || (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  return {
+    ...current,
+    year: Number(monthKey.slice(0, 4)),
+    previous: { ...previous, year: Number(previous.monthKey.slice(0, 4)) },
+    topMerchants: topMerchants(docs),
+    receipts,
+  };
 }
 
 async function getProcessingFailureImageUrls(request) {
@@ -485,6 +538,7 @@ module.exports = {
   getReceiptImageUrls,
   listProcessingFailures,
   listNotifications,
+  getMonthlyRecap,
   getProcessingFailureImageUrls,
   retryProcessing,
   importTargetReceipts,

@@ -112,24 +112,51 @@ async function getLastReceipt(from) {
   return snapshot.empty ? null : snapshot.docs[0].data();
 }
 
+const MONTH_KEY = /^\d{4}-(0[1-9]|1[0-2])$/;
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function isMonthKey(value) {
+  return typeof value === 'string' && MONTH_KEY.test(value);
+}
+
+// "2026-01" -> "2025-12"; "2026-09" -> "2026-10" with offset 1.
+function shiftMonthKey(monthKey, offset) {
+  const [year, month] = monthKey.split('-').map(Number);
+  const index = year * 12 + (month - 1) + offset;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+function monthName(monthKey) {
+  return MONTH_NAMES[Number(monthKey.slice(5, 7)) - 1];
+}
+
+// One month's stats from already-loaded receipt data, filtered on the
+// purchase date. This is the single month rule the monthly recap (SMS and
+// Notifications card) and the web recap page share, so their numbers match.
+function monthStatsFromDocs(docs, monthKey) {
+  const startDate = `${monthKey}-01`;
+  const endDate = `${shiftMonthKey(monthKey, 1)}-01`;
+  const monthDocs = docs.filter((doc) => typeof doc.date === 'string' && doc.date >= startDate && doc.date < endDate);
+  const { total, categories, byCurrency } = aggregateSpendingByCategory(monthDocs);
+  return { total, categories, count: countPrimary(monthDocs), ...(byCurrency ? { byCurrency } : {}), month: monthName(monthKey), monthKey, docs: monthDocs };
+}
+
+async function loadAllReceipts(from) {
+  const snapshot = await admin.firestore().collection('receipts').where('from', '==', from).get();
+  return snapshot.docs;
+}
+
 async function getLastMonthStats(from) {
-  const db = admin.firestore();
   const now = new Date();
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const snapshot = await db.collection('receipts').where('from', '==', from).get();
-  const startDate = formatDate(startOfLastMonth);
-  const endDate = formatDate(startOfThisMonth);
-  const docs = snapshot.docs.map(doc => doc.data()).filter((doc) => doc.date >= startDate && doc.date < endDate);
-  const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
-  const monthName = startOfLastMonth.toLocaleString('en-CA', { month: 'long' });
-
-  return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}), month: monthName, monthKey: formatDate(startOfLastMonth).slice(0, 7) };
+  const monthKey = formatDate(startOfLastMonth).slice(0, 7);
+  const docs = (await loadAllReceipts(from)).map((doc) => doc.data());
+  const { docs: _monthDocs, ...stats } = monthStatsFromDocs(docs, monthKey);
+  return stats;
 }
 
 function formatDate(date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), '01'].join('-');
 }
 
-module.exports = { getMonthlyStats, getLastMonthStats, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
+module.exports = { getMonthlyStats, getLastMonthStats, monthStatsFromDocs, loadAllReceipts, isMonthKey, shiftMonthKey, monthName, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
