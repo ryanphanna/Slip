@@ -4,7 +4,7 @@ let fake;
 let storageFiles;
 
 jest.mock('firebase-admin', () => ({ firestore: jest.fn(), storage: jest.fn() }));
-jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn() }));
+jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn(), photoReadNothing: (raw) => !raw || (raw.merchant == null && raw.total == null && (!Array.isArray(raw.items) || raw.items.length === 0)), groupReceiptPhotos: jest.fn(async (images) => [images.map((_, i) => i)]) }));
 
 const admin = require('firebase-admin');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('../lib/receipt');
@@ -250,6 +250,25 @@ describe('retryProcessing', () => {
 
     const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
     expect(fake.store.receipts.get(result.id)).toMatchObject({ itemsNeedCheck: true, dateNeedsCheck: true });
+  });
+
+  it('keeps the failure open instead of saving a blank receipt when the photos still read as nothing', async () => {
+    storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
+    seed('processing_failures', 'f1', { from: '+14165551234', imagePaths: ['path/a.jpg'], status: 'failed' });
+    parseReceiptFromBase64.mockResolvedValue({ merchant: null, total: null, items: [] });
+
+    await expect(retryProcessing({ ...AUTH, data: { id: 'f1' } })).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(fake.store.receipts ? fake.store.receipts.size : 0).toBe(0);
+    expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'failed', retryToken: null });
+  });
+
+  it('a recovered receipt keeps its place in a multi-receipt text', async () => {
+    storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
+    seed('processing_failures', 'SM1-1', { from: '+14165551234', messageSid: 'SM1', messagePart: 1, imagePaths: ['path/a.jpg'] });
+    parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 12.5, date: '2026-10-01', items: [{ name: 'Milk', price: 12.5 }] });
+
+    const result = await retryProcessing({ ...AUTH, data: { id: 'SM1-1' } });
+    expect(fake.store.receipts.get(result.id)).toMatchObject({ messageSid: 'SM1', messagePart: 1 });
   });
 
   describe('repeat and concurrent retries', () => {

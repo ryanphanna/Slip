@@ -60,16 +60,18 @@ async function checkRateLimit(from) {
 // A hard duplicate: the same message/import being processed again, or the same
 // merchant + total submitted within DUPLICATE_WINDOW_MS (rapid re-sends). These
 // are dropped. Returns the existing receipt id, or null.
-async function findDuplicate(receipt, from, { messageSid } = {}) {
+// `messagePart` numbers the receipts in a text that held several; the same
+// message only counts as a resend for the same part.
+async function findDuplicate(receipt, from, { messageSid, messagePart } = {}) {
   const db = admin.firestore();
 
   if (messageSid) {
     const sidSnap = await db.collection('receipts')
       .where('from', '==', from)
       .where('messageSid', '==', messageSid)
-      .limit(1)
       .get();
-    if (!sidSnap.empty) return sidSnap.docs[0].id;
+    const samePart = sidSnap.docs.find((doc) => (doc.get('messagePart') ?? null) === (messagePart ?? null));
+    if (samePart) return samePart.id;
   }
 
   if (!receipt.merchant || receipt.total == null) return null;
@@ -119,7 +121,7 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {
   return doc.id;
 }
 
-async function saveProcessingFailure({ from, messageSid, error, imagePaths = [], numMedia = 0, sourceText }) {
+async function saveProcessingFailure({ from, messageSid, error, imagePaths = [], numMedia = 0, sourceText, messagePart }) {
   const db = admin.firestore();
   const data = {
     from,
@@ -130,15 +132,18 @@ async function saveProcessingFailure({ from, messageSid, error, imagePaths = [],
     numMedia,
     // Pasted receipt text (text-only messages), capped, so the failure can be retried.
     ...(typeof sourceText === 'string' && sourceText.trim() ? { sourceText: sourceText.slice(0, config.MAX_BODY_TEXT_LENGTH) } : {}),
+    ...(messagePart != null ? { messagePart } : {}),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
   if (messageSid) {
-    await db.collection('processing_failures').doc(messageSid).set({
+    // One failure per receipt: a text with several receipts can fail on more than one.
+    const id = messagePart != null ? `${messageSid}-${messagePart}` : messageSid;
+    await db.collection('processing_failures').doc(id).set({
       ...data,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
-    return messageSid;
+    return id;
   }
 
   const doc = await db.collection('processing_failures').add({

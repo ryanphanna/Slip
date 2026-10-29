@@ -10,7 +10,9 @@ async function saveImageFiles(images, messageSid, prefix) {
 
   const uploadPromises = images.map(async (img, idx) => {
     const ext = img.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-    const path = `${prefix}/${safeSid}/${idx}.${ext}`;
+    // Photos from a text with several receipts keep their number in the text.
+    const number = Number.isInteger(img.index) ? img.index : idx;
+    const path = `${prefix}/${safeSid}/${number}.${ext}`;
     const file = bucket.file(path);
 
     await file.save(Buffer.from(img.base64, 'base64'), {

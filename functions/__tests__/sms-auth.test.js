@@ -32,6 +32,7 @@ jest.mock('../lib/twilio', () => ({
 jest.mock('../lib/receipt', () => ({
   parseReceiptFromBase64: jest.fn(),
   parseReceiptFromText: jest.fn(),
+  photoReadNothing: (raw) => !raw || (raw.merchant == null && raw.total == null && (!Array.isArray(raw.items) || raw.items.length === 0)), groupReceiptPhotos: jest.fn(async (images) => [images.map((_, i) => i)]),
 }));
 
 jest.mock('../lib/validate', () => ({

@@ -11,6 +11,7 @@ const {
   parseReceiptFromBase64: _parseBase64,
   parseReceiptFromText: _parseText,
   parseReceiptFromUrl: _parseUrl,
+  groupReceiptPhotos: _groupPhotos,
 } = require('./gemini');
 
 /**
@@ -47,6 +48,15 @@ async function parseReceiptFromBase64(images, mimeType, forcePro = false) {
   }
 }
 
+async function groupReceiptPhotos(images) {
+  return _groupPhotos(images, geminiApiKey.value());
+}
+
+// A photo read where nothing at all came back: no store, no total, no items.
+function photoReadNothing(raw) {
+  return !raw || (raw.merchant == null && raw.total == null && (!Array.isArray(raw.items) || raw.items.length === 0));
+}
+
 async function parseReceiptFromText(text, forcePro = false) {
   const apiKey = geminiApiKey.value();
   return _parseText(text, apiKey, forcePro);
@@ -61,6 +71,8 @@ async function parseReceiptFromUrl(imageUrl) {
 
 module.exports = {
   PROMPT,                    // re-exported for any internal use that still needs it
+  groupReceiptPhotos,
+  photoReadNothing,
   parseReceiptFromUrl,
   parseReceiptFromBase64,
   parseReceiptFromText,

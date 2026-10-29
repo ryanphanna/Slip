@@ -21,10 +21,10 @@ if (!admin.storage) {
 }
 
 const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio');
-const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
+const { parseReceiptFromBase64, parseReceiptFromText, groupReceiptPhotos, photoReadNothing } = require('./lib/receipt');
 const { validateReceipt, dateLooksWrong, totalsLookWrong, itemsLookMissing } = require('./lib/validate');
 const { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
-const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
+const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory, currentMonthDocs } = require('./lib/query');
 const { saveImages, saveFailedImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport, getBudgetStatus } = require('./lib/budget');
@@ -319,6 +319,7 @@ exports.sms = onRequest(
         }
 
         let raw;
+        let photoGroups = [];
         if (numMedia === 0) {
           const bodyText = (req.body.Body || '').trim();
           if (!bodyText) {
@@ -373,113 +374,152 @@ exports.sms = onRequest(
             return;
           }
 
-          raw = await parseReceiptFromBase64(images, undefined, isFirstReceipt);
-        }
-
-        const receipt = validateReceipt(raw);
-        if (raw.confidence != null) receipt.confidence = raw.confidence;
-
-        // Store images and check for duplicates in parallel to optimize latency
-        const [imagePathsResult, duplicateId] = await Promise.all([
-          images.length > 0
-            ? saveImages(images, messageSid, receipt).catch(err => {
-                logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
-                return [];
-              })
-            : Promise.resolve([]),
-          findDuplicate(receipt, from, { messageSid })
-        ]);
-
-        const imagePaths = imagePathsResult;
-        storedImagePaths = imagePaths;
-        if (duplicateId) {
-          logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
-          await sendSms(from, `Duplicate: ${receipt.merchant} — ${formatMoney(Math.abs(receipt.total), currencyOf(receipt))} was already logged.`);
-          return;
-        }
-
-        // Same merchant/total/date but outside the rapid-resend window: save it and flag it.
-        const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
-        const dateNeedsCheck = receipt.date == null || dateLooksWrong(receipt.date);
-        const totalsNeedCheck = totalsLookWrong(receipt);
-        const itemsNeedCheck = images.length > 0 && itemsLookMissing(receipt);
-        await saveReceipt(receipt, from, messageSid, imagePaths, {
-          ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
-          ...(dateNeedsCheck ? { dateNeedsCheck: true } : {}),
-          ...(totalsNeedCheck ? { totalsNeedCheck: true } : {}),
-          ...(itemsNeedCheck ? { itemsNeedCheck: true } : {}),
-        });
-        receiptSaved = true;
-
-        const merchant = receipt.merchant || 'Unknown';
-        const receiptCurrency = currencyOf(receipt);
-        const total = receipt.total != null ? formatMoney(Math.abs(receipt.total), receiptCurrency) : '?';
-        const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
-        const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
-        const itemCount = Array.isArray(receipt.items) ? receipt.items.length : 0;
-        const itemSuffix = itemCount === 1 ? '1 item' : `${itemCount} items`;
-
-        let message = `${prefix}: ${merchant} — ${total} (${categoryDisplay}, ${itemSuffix})`;
-
-        if (possibleDuplicateOf) {
-          message += '\nPossible duplicate of an earlier receipt.';
-        }
-
-        if (raw.confidence != null && raw.confidence < 0.7) {
-          message = `⚠️ ${message}`;
-          logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
-        }
-
-        if (dateNeedsCheck && receipt.date) {
-          message += `\nCheck the date: ${receipt.date} looks wrong.`;
-          logger.warn('Receipt saved with a suspicious date', { messageSid, merchant, date: receipt.date });
-        }
-
-        if (totalsNeedCheck) {
-          message += '\nCheck the amounts: the items, tax and total don\'t add up.';
-          logger.warn('Receipt saved with totals that do not add up', { messageSid, merchant });
-        }
-
-        if (itemsNeedCheck) {
-          logger.warn('Receipt saved with no items', { messageSid, merchant });
-        }
-
-        if (!receipt.date) {
-          message += '\n\nCouldn\'t find a date on this one — re-send if it matters.';
-          logger.warn('Receipt saved with no date', { messageSid, merchant });
-        }
-
-        // Budgets are CAD limits, so a non-CAD receipt gets no budget status.
-        if (receipt.category && receiptCurrency === DEFAULT_CURRENCY) {
-          try {
-            const budget = await getBudget(from, receipt.category);
-            if (budget && budget.limit > 0) {
-              const db = admin.firestore();
-              const now = new Date();
-              const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-              const snapshot = await db.collection('receipts')
-                .where('from', '==', from)
-                .where('createdAt', '>=', startOfMonth)
-                .get();
-
-              const docs = snapshot.docs.map(doc => doc.data());
-              const { categories } = aggregateSpendingByCategory(docs);
-              const spentKey = Object.keys(categories).find(k => k.toLowerCase() === receipt.category.toLowerCase());
-              const spent = spentKey ? categories[spentKey] : 0;
-
-              const remaining = Math.round((budget.limit - spent) * 100) / 100;
-              const budgetLine = `\nBudget: $${spent.toFixed(2)}/$${budget.limit.toFixed(2)} spent`;
-
-              if (spent > budget.limit) {
-                message += `${budgetLine} (⚠️ over by $${Math.abs(remaining).toFixed(2)})`;
-              } else {
-                message += `${budgetLine} ($${remaining.toFixed(2)} left)`;
-              }
-            }
-          } catch (budgetErr) {
-            logger.error('Failed to append budget status to receipt confirmation', { messageSid, error: budgetErr.message });
+          // Photos in one text can be one long receipt or several receipts.
+          photoGroups = await groupReceiptPhotos(images);
+          if (photoGroups.length === 1) {
+            raw = await parseReceiptFromBase64(images, undefined, isFirstReceipt);
+            if (photoReadNothing(raw)) throw new Error('Nothing could be read from the photos');
           }
+        }
+
+        // Saves one read receipt and returns its reply text. `part` numbers the
+        // receipts of a text that held several (null for a single receipt).
+        async function saveParsedReceipt(raw, receiptImages, part) {
+          const receipt = validateReceipt(raw);
+          if (raw.confidence != null) receipt.confidence = raw.confidence;
+
+          // Store images and check for duplicates in parallel to optimize latency
+          const [imagePathsResult, duplicateId] = await Promise.all([
+            receiptImages.length > 0
+              ? saveImages(receiptImages, messageSid, receipt).catch(err => {
+                  logger.error('Image storage failed (non-fatal)', { messageSid, error: err.message });
+                  return [];
+                })
+              : Promise.resolve([]),
+            findDuplicate(receipt, from, { messageSid, messagePart: part })
+          ]);
+
+          const imagePaths = imagePathsResult;
+          storedImagePaths = imagePaths;
+          if (duplicateId) {
+            logger.info('Duplicate receipt detected, skipping save', { messageSid, from: maskedFrom, duplicateId });
+            return `Duplicate: ${receipt.merchant} — ${formatMoney(Math.abs(receipt.total), currencyOf(receipt))} was already logged.`;
+          }
+
+          // Same merchant/total/date but outside the rapid-resend window: save it and flag it.
+          const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
+          const dateNeedsCheck = receipt.date == null || dateLooksWrong(receipt.date);
+          const totalsNeedCheck = totalsLookWrong(receipt);
+          const itemsNeedCheck = receiptImages.length > 0 && itemsLookMissing(receipt);
+          await saveReceipt(receipt, from, messageSid, imagePaths, {
+            ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
+            ...(dateNeedsCheck ? { dateNeedsCheck: true } : {}),
+            ...(totalsNeedCheck ? { totalsNeedCheck: true } : {}),
+            ...(itemsNeedCheck ? { itemsNeedCheck: true } : {}),
+            ...(part != null ? { messagePart: part } : {}),
+          });
+          receiptSaved = true;
+
+          const merchant = receipt.merchant || 'Unknown';
+          const receiptCurrency = currencyOf(receipt);
+          const total = receipt.total != null ? formatMoney(Math.abs(receipt.total), receiptCurrency) : '?';
+          const categoryDisplay = receipt.subCategory ? `${receipt.category}: ${receipt.subCategory}` : receipt.category;
+          const prefix = receipt.type === 'refund' ? 'Saved Refund' : 'Saved';
+          const itemCount = Array.isArray(receipt.items) ? receipt.items.length : 0;
+          const itemSuffix = itemCount === 1 ? '1 item' : `${itemCount} items`;
+
+          let message = `${prefix}: ${merchant} — ${total} (${categoryDisplay}, ${itemSuffix})`;
+
+          if (possibleDuplicateOf) {
+            message += '\nPossible duplicate of an earlier receipt.';
+          }
+
+          if (raw.confidence != null && raw.confidence < 0.7) {
+            message = `⚠️ ${message}`;
+            logger.warn('Low confidence receipt saved', { messageSid, confidence: raw.confidence, merchant });
+          }
+
+          if (dateNeedsCheck && receipt.date) {
+            message += `\nCheck the date: ${receipt.date} looks wrong.`;
+            logger.warn('Receipt saved with a suspicious date', { messageSid, merchant, date: receipt.date });
+          }
+
+          if (totalsNeedCheck) {
+            message += '\nCheck the amounts: the items, tax and total don\'t add up.';
+            logger.warn('Receipt saved with totals that do not add up', { messageSid, merchant });
+          }
+
+          if (itemsNeedCheck) {
+            logger.warn('Receipt saved with no items', { messageSid, merchant });
+          }
+
+          if (!receipt.date) {
+            message += '\n\nCouldn\'t find a date on this one — re-send if it matters.';
+            logger.warn('Receipt saved with no date', { messageSid, merchant });
+          }
+
+          // Budgets are CAD limits, so a non-CAD receipt gets no budget status.
+          if (receipt.category && receiptCurrency === DEFAULT_CURRENCY) {
+            try {
+              const budget = await getBudget(from, receipt.category);
+              if (budget && budget.limit > 0) {
+                const docs = await currentMonthDocs(from);
+                const { categories } = aggregateSpendingByCategory(docs);
+                const spentKey = Object.keys(categories).find(k => k.toLowerCase() === receipt.category.toLowerCase());
+                const spent = spentKey ? categories[spentKey] : 0;
+
+                const remaining = Math.round((budget.limit - spent) * 100) / 100;
+                const budgetLine = `\nBudget: $${spent.toFixed(2)}/$${budget.limit.toFixed(2)} spent`;
+
+                if (spent > budget.limit) {
+                  message += `${budgetLine} (⚠️ over by $${Math.abs(remaining).toFixed(2)})`;
+                } else {
+                  message += `${budgetLine} ($${remaining.toFixed(2)} left)`;
+                }
+              }
+            } catch (budgetErr) {
+              logger.error('Failed to append budget status to receipt confirmation', { messageSid, error: budgetErr.message });
+            }
+          }
+
+          logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total, part, confidence: raw.confidence });
+          return message;
+        }
+
+        let message;
+        if (photoGroups.length <= 1) {
+          message = await saveParsedReceipt(raw, images, null);
+        } else {
+          const replies = [];
+          for (const [part, indexes] of photoGroups.entries()) {
+            const groupImages = indexes.map((index) => ({ ...images[index], index }));
+            const label = `Receipt ${part + 1} of ${photoGroups.length}`;
+            receiptSaved = false; // tracks this part only until the loop ends
+            try {
+              const partRaw = await parseReceiptFromBase64(groupImages, undefined, isFirstReceipt);
+              if (photoReadNothing(partRaw)) throw new Error('Nothing could be read from the photos');
+              const reply = await saveParsedReceipt(partRaw, groupImages, part);
+              replies.push(`${label}: ${reply}`);
+            } catch (partErr) {
+              logger.error('Receipt in a multi-receipt text failed', { messageSid, part, error: partErr.message });
+              if (receiptSaved) continue;
+              let failureImagePaths = [];
+              try {
+                failureImagePaths = await saveFailedImages(groupImages, messageSid);
+              } catch (storageErr) {
+                logger.error('Failed to preserve images for processing failure', { messageSid, part, error: storageErr.message });
+              }
+              try {
+                await saveProcessingFailure({ from, messageSid, messagePart: part, error: partErr.message, imagePaths: failureImagePaths, numMedia: groupImages.length });
+              } catch (failureErr) {
+                logger.error('Failed to save processing failure record', { messageSid, part, error: failureErr.message });
+              }
+              replies.push(`${label}: couldn't read it. It's in Notifications to retry.`);
+            }
+          }
+          // Every part is saved or recorded, so a later error must not record the whole text again.
+          receiptSaved = true;
+          message = `${photoGroups.length} receipts in that message.\n\n${replies.join('\n\n')}`;
         }
 
         if (isFirstReceipt) {
@@ -487,7 +527,6 @@ exports.sms = onRequest(
         }
 
         await sendSms(from, message);
-        logger.info('Successfully processed receipt', { messageSid, from: maskedFrom, merchant, total, confidence: raw.confidence });
       })().catch(async (err) => {
         logger.error('Receipt processing failed', {
           messageSid,

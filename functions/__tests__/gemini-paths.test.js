@@ -3,7 +3,7 @@ jest.mock('firebase-functions/logger', () => ({ info: jest.fn(), warn: jest.fn()
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const config = require('../lib/config');
-const { parseReceiptFromBase64, parseReceiptFromText, parseReceiptFromUrl } = require('../lib/gemini');
+const { parseReceiptFromBase64, parseReceiptFromText, parseReceiptFromUrl, groupReceiptPhotos } = require('../lib/gemini');
 
 // Each step is an object (JSON reply), a raw string (reply text), an Error, or a function.
 function setup(...steps) {
@@ -219,5 +219,37 @@ describe('parseReceiptFromUrl', () => {
   it('throws on a failed download', async () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 404 });
     await expect(parseReceiptFromUrl('https://example.test/missing.png', 'key')).rejects.toThrow('Failed to fetch image: 404');
+  });
+});
+
+describe('grouping photos sent together', () => {
+  const THREE = [0, 1, 2].map((n) => ({ base64: `p${n}`, mimeType: 'image/jpeg' }));
+
+  it('makes no call for a single photo', async () => {
+    const { generateContent } = setup();
+    expect(await groupReceiptPhotos(ONE, 'key')).toEqual([[0]]);
+    expect(generateContent).not.toHaveBeenCalled();
+  });
+
+  it('returns the groups from the flash model, in photo order', async () => {
+    const { models } = setup({ receipts: [[2], [1, 0]] });
+    expect(await groupReceiptPhotos(THREE, 'key')).toEqual([[0, 1], [2]]);
+    expect(models).toEqual(['gemini-flash-latest']);
+  });
+
+  it.each([
+    ['a missing photo', { receipts: [[0], [1]] }],
+    ['a repeated photo', { receipts: [[0, 1], [1, 2]] }],
+    ['an out-of-range photo', { receipts: [[0, 1, 2, 3]] }],
+    ['an empty group', { receipts: [[0, 1, 2], []] }],
+    ['no list', { groups: 'all' }],
+  ])('falls back to one receipt on %s', async (_name, answer) => {
+    setup(answer);
+    expect(await groupReceiptPhotos(THREE, 'key')).toEqual([[0, 1, 2]]);
+  });
+
+  it('falls back to one receipt when the call fails', async () => {
+    setup(new Error('quota'));
+    expect(await groupReceiptPhotos(THREE, 'key')).toEqual([[0, 1, 2]]);
   });
 });

@@ -19,7 +19,7 @@ jest.mock('../lib/twilio', () => ({
   sendSms: jest.fn(),
   fetchMedia: jest.fn(),
 }));
-jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn() }));
+jest.mock('../lib/receipt', () => ({ parseReceiptFromBase64: jest.fn(), parseReceiptFromText: jest.fn(), photoReadNothing: (raw) => !raw || (raw.merchant == null && raw.total == null && (!Array.isArray(raw.items) || raw.items.length === 0)), groupReceiptPhotos: jest.fn(async (images) => [images.map((_, i) => i)]) }));
 jest.mock('../lib/image-store', () => ({ saveImages: jest.fn(), saveFailedImages: jest.fn() }));
 
 const FROM = '+14165551234';
@@ -27,7 +27,7 @@ process.env.ALLOWED_PHONES = FROM;
 
 const admin = require('firebase-admin');
 const { validateTwilioSignature, sendSms, fetchMedia } = require('../lib/twilio');
-const { parseReceiptFromBase64, parseReceiptFromText } = require('../lib/receipt');
+const { parseReceiptFromBase64, parseReceiptFromText, groupReceiptPhotos } = require('../lib/receipt');
 const { saveImages, saveFailedImages } = require('../lib/image-store');
 const config = require('../lib/config');
 const { sms } = require('../index');
@@ -321,6 +321,73 @@ describe('happy path: photo', () => {
     await waitFor(() => sendSms.mock.calls.length > 0);
     expect(lastSms()).toMatch(/couldn't read that photo/);
     expect(parseReceiptFromBase64).not.toHaveBeenCalled();
+  });
+});
+
+describe('photos with nothing readable or several receipts', () => {
+  const threePhotos = {
+    NumMedia: '3',
+    MediaUrl0: 'https://api.twilio.com/media/0', MediaContentType0: 'image/jpeg',
+    MediaUrl1: 'https://api.twilio.com/media/1', MediaContentType1: 'image/jpeg',
+    MediaUrl2: 'https://api.twilio.com/media/2', MediaContentType2: 'image/jpeg',
+  };
+  const BLANK = { merchant: null, total: null, date: null, items: [], category: 'Other' };
+  beforeEach(() => {
+    seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
+    fetchMedia.mockImplementation(async (url) => imageResponse(`photo-${url.slice(-1)}`));
+  });
+
+  it('records a retryable failure instead of saving a blank receipt', async () => {
+    parseReceiptFromBase64.mockResolvedValue(BLANK);
+    await sms(makeReq(threePhotos), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+
+    expect(receipts().filter(([id]) => id !== 'prev')).toHaveLength(0);
+    expect(failures()).toHaveLength(1);
+    expect(failures()[0][1]).toMatchObject({ status: 'failed', numMedia: 3 });
+    expect(lastSms()).toMatch(/Couldn't read that receipt/);
+  });
+
+  it('saves each receipt of a multi-receipt text on its own, with its own photos', async () => {
+    groupReceiptPhotos.mockResolvedValueOnce([[0], [1, 2]]);
+    parseReceiptFromBase64
+      .mockResolvedValueOnce({ ...GOOD, merchant: 'Rexall', total: 5.07, subtotal: 4.49, tax: 0.58, items: [{ name: 'Chips', price: 4.49 }] })
+      .mockResolvedValueOnce({ ...GOOD, merchant: 'Loblaws', total: 26.45, subtotal: 26.45, tax: 0, items: [{ name: 'Cheerios', price: 26.45 }] });
+    saveImages.mockImplementation(async (images, sid) => images.map((img) => `receipts-temporary/${sid}/${img.index}.jpg`));
+    await sms(makeReq(threePhotos), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+
+    expect(parseReceiptFromBase64).toHaveBeenCalledTimes(2);
+    expect(parseReceiptFromBase64.mock.calls[0][0].map((img) => img.index)).toEqual([0]);
+    expect(parseReceiptFromBase64.mock.calls[1][0].map((img) => img.index)).toEqual([1, 2]);
+    const saved = receipts().filter(([id]) => id !== 'prev').map(([, r]) => r);
+    expect(saved).toHaveLength(2);
+    expect(saved).toEqual(expect.arrayContaining([
+      expect.objectContaining({ merchant: 'Rexall', messageSid: 'SM1', messagePart: 0, imagePaths: ['receipts-temporary/SM1/0.jpg'] }),
+      expect.objectContaining({ merchant: 'Loblaws', messageSid: 'SM1', messagePart: 1, imagePaths: ['receipts-temporary/SM1/1.jpg', 'receipts-temporary/SM1/2.jpg'] }),
+    ]));
+    expect(sendSms).toHaveBeenCalledTimes(1);
+    expect(lastSms()).toMatch(/^2 receipts in that message\./);
+    expect(lastSms()).toContain('Receipt 1 of 2: Saved: Rexall');
+    expect(lastSms()).toContain('Receipt 2 of 2: Saved: Loblaws');
+  });
+
+  it('saves the readable receipts and records a failure for the one that read as nothing', async () => {
+    groupReceiptPhotos.mockResolvedValueOnce([[0], [1], [2]]);
+    parseReceiptFromBase64
+      .mockResolvedValueOnce(GOOD)
+      .mockResolvedValueOnce(BLANK)
+      .mockResolvedValueOnce({ ...GOOD, merchant: 'No Frills', total: 22.67, subtotal: 21.91, tax: 0.76, items: [{ name: 'Naan', price: 21.91 }] });
+    saveFailedImages.mockImplementation(async (images, sid) => images.map((img) => `receipts-failed/${sid}/${img.index}.jpg`));
+    await sms(makeReq(threePhotos), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+
+    expect(receipts().filter(([id]) => id !== 'prev')).toHaveLength(2);
+    expect(failures()).toHaveLength(1);
+    expect(failures()[0][0]).toBe('SM1-1');
+    expect(failures()[0][1]).toMatchObject({ messageSid: 'SM1', messagePart: 1, imagePaths: ['receipts-failed/SM1/1.jpg'], numMedia: 1 });
+    expect(lastSms()).toContain("Receipt 2 of 3: couldn't read it. It's in Notifications to retry.");
+    expect(lastSms()).toContain('Receipt 3 of 3: Saved: No Frills');
   });
 });
 

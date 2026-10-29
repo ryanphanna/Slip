@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const { validateReceipt, dateLooksWrong, totalsLookWrong, itemsLookMissing, normalizeEditPatch, normalizeItemPatch } = require('./validate');
-const { parseReceiptFromBase64, parseReceiptFromText } = require('./receipt');
+const { parseReceiptFromBase64, parseReceiptFromText, photoReadNothing } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
 const { isAllowed } = require('./allowlist');
@@ -275,6 +275,7 @@ async function claimRetry(db, failureRef, phone) {
       sourceText,
       token,
       messageSid: failure.get('messageSid') || null,
+      messagePart: failure.get('messagePart') ?? null,
       previousStatus,
       receivedAt: failure.get('createdAt')?.toDate?.() || new Date(),
       limitRef,
@@ -289,7 +290,7 @@ async function retryProcessing(request) {
   if (!id) throw retryError('invalid-argument', 'Failure id is required');
   const db = admin.firestore();
   const failureRef = db.collection('processing_failures').doc(id);
-  const { paths, sourceText, token, messageSid, previousStatus, receivedAt, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
+  const { paths, sourceText, token, messageSid, messagePart, previousStatus, receivedAt, limitRef, windowStart } = await claimRetry(db, failureRef, phone);
 
   // Only the claim's owner may release it, and only while it is still held;
   // a superseded or finished claim is never overwritten. `refund` returns the
@@ -332,6 +333,8 @@ async function retryProcessing(request) {
         return { base64: buffer.toString('base64'), mimeType: metadata.contentType || 'image/jpeg' };
       }));
       raw = await parseReceiptFromBase64(images, undefined, isFirstReceipt);
+      // Never save a blank receipt; the failure stays open to retry again.
+      if (photoReadNothing(raw)) throw retryError('nothing-read', "Still couldn't read anything from these photos");
     } else {
       // Text-only failure: re-parse the pasted text through the same text path SMS uses.
       raw = await parseReceiptFromText(sourceText, isFirstReceipt);
@@ -352,6 +355,11 @@ async function retryProcessing(request) {
       await release({ refund: false, status: 'resolved', extra: { resolution: 'not-a-receipt' } });
       throw retryError('failed-precondition', error.message);
     }
+    if (error.code === 'nothing-read') {
+      // The reader ran, so the rate-limit slot stays used.
+      await release({ refund: false });
+      throw retryError('failed-precondition', error.message);
+    }
     await release({ refund: true });
     throw error;
   }
@@ -369,6 +377,7 @@ async function retryProcessing(request) {
         from: phone,
         ownerUid: request.auth.uid,
         messageSid,
+        ...(messagePart != null ? { messagePart } : {}),
         imagePaths: paths,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         recoveredFromFailure: id,

@@ -173,6 +173,48 @@ async function parseReceiptFromBase64(images, apiKey, forcePro = false) {
   }
 }
 
+// Several photos in one text can be pages of one long receipt or different
+// receipts. Returns photo indexes grouped per receipt, e.g. [[0, 1], [2]].
+// Any problem falls back to one receipt, the old behaviour.
+const GROUP_PROMPT = (count) => `These ${count} photos were sent together, numbered 0 to ${count - 1} in order. Each photo shows a receipt or part of one. Several photos may be parts of one long receipt, or they may be different receipts. Group them by receipt and return ONLY JSON: {"receipts": [[0, 1], [2]]}. Use every photo number exactly once, keep each group in photo order, and list groups in order of their first photo.`;
+
+function validPhotoGroups(groups, count) {
+  if (!Array.isArray(groups) || groups.length === 0) return false;
+  const seen = new Set();
+  for (const group of groups) {
+    if (!Array.isArray(group) || group.length === 0) return false;
+    for (const index of group) {
+      if (!Number.isInteger(index) || index < 0 || index >= count || seen.has(index)) return false;
+      seen.add(index);
+    }
+  }
+  return seen.size === count;
+}
+
+async function groupReceiptPhotos(images, apiKey) {
+  const oneReceipt = [images.map((_, index) => index)];
+  if (images.length < 2) return oneReceipt;
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: FLASH_MODEL,
+      generationConfig: { responseMimeType: 'application/json' }
+    });
+    const promptParts = buildImagePromptParts(images);
+    promptParts.push({ text: GROUP_PROMPT(images.length) });
+    const result = await withTimeout(model.generateContent(promptParts), config.GEMINI_TIMEOUT_MS);
+    const groups = cleanJsonResponse(result.response.text()).receipts;
+    if (!validPhotoGroups(groups, images.length)) {
+      logger.warn('Photo grouping answer was unusable, treating as one receipt', { count: images.length });
+      return oneReceipt;
+    }
+    return groups.map((group) => [...group].sort((a, b) => a - b)).sort((a, b) => a[0] - b[0]);
+  } catch (err) {
+    logger.warn('Photo grouping failed, treating as one receipt', { error: err.message });
+    return oneReceipt;
+  }
+}
+
 /**
  * Parse receipt from raw pasted text.
  */
@@ -224,6 +266,8 @@ async function parseReceiptFromUrl(imageUrl, apiKey) {
 
 module.exports = {
   PROMPT,
+  groupReceiptPhotos,
+  validPhotoGroups,
   parseReceiptFromBase64,
   parseReceiptFromText,
   parseReceiptFromUrl,
