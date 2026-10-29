@@ -9,7 +9,7 @@ const admin = require('firebase-admin');
 const { sendSms } = require('../lib/twilio');
 const { sendMonthlyDigest } = require('../lib/digest');
 const { getMonthlyRecap } = require('../lib/web-api');
-const { shiftMonthKey, isMonthKey } = require('../lib/query');
+const { shiftMonthKey, isMonthKey, getMonthlyStats } = require('../lib/query');
 
 process.env.ALLOWED_PHONES = '+14165551234,+14165559999';
 const FROM = '+14165551234';
@@ -121,6 +121,25 @@ describe('getMonthlyRecap', () => {
     const recap = await getMonthlyRecap({ ...AUTH, data: { month: '2026-01' } });
     expect(recap.total).toBe(15);
     expect(recap.previous).toMatchObject({ monthKey: '2025-12', month: 'December', year: 2025, total: 40 });
+  });
+});
+
+describe('SUMMARY text reply', () => {
+  it('matches the recap page for the current month when receipts were sent in the month printed on them', async () => {
+    jest.setSystemTime(new Date(2026, 9, 20, 12));
+    const sent = (day) => fake.db.Timestamp.fromMillis(new Date(2026, 9, day, 12).getTime());
+    seed('o1', { date: '2026-10-02', createdAt: sent(2), total: 30, merchant: 'Metro', category: 'Grocery', items: [{ name: 'Bread', price: 4 }, { name: 'Aspirin', price: 9, category: 'Health' }] });
+    seed('o2', { date: '2026-10-11', createdAt: sent(11), total: 18.5, merchant: 'Presto', category: 'Transportation' });
+    seed('o3', { date: '2026-10-12', createdAt: sent(12), total: 45, merchant: 'Target', category: 'Shopping', currency: 'USD' });
+    seed('s', { date: '2026-09-28', createdAt: fake.db.Timestamp.fromMillis(new Date(2026, 8, 28, 12).getTime()), total: 99, merchant: 'Old', category: 'Grocery' });
+
+    const summary = await getMonthlyStats(FROM);
+    const recap = await getMonthlyRecap({ ...AUTH, data: { month: '2026-10' } });
+    expect(recap.total).toBe(summary.total);
+    expect(recap.count).toBe(summary.count);
+    expect(recap.categories).toEqual(summary.categories);
+    expect(recap.byCurrency).toEqual(summary.byCurrency);
+    expect(recap.total).toBe(48.5);
   });
 });
 
