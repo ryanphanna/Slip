@@ -262,6 +262,16 @@ describe('retryProcessing', () => {
     expect(fake.store.processing_failures.get('f1')).toMatchObject({ status: 'failed', retryToken: null });
   });
 
+  it('marks a retried receipt that repeats an earlier one as a possible duplicate', async () => {
+    storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
+    seed('receipts', 'earlier', { from: '+14165551234', merchantKey: 'costco', merchant: 'Costco', total: 12.5, date: '2026-10-01' });
+    seed('processing_failures', 'f1', { from: '+14165551234', imagePaths: ['path/a.jpg'] });
+    parseReceiptFromBase64.mockResolvedValue({ merchant: 'Costco', total: 12.5, date: '2026-10-01', items: [{ name: 'Milk', price: 12.5 }] });
+
+    const result = await retryProcessing({ ...AUTH, data: { id: 'f1' } });
+    expect(fake.store.receipts.get(result.id)).toMatchObject({ possibleDuplicate: true, possibleDuplicateOf: 'earlier' });
+  });
+
   it('a recovered receipt keeps its place in a multi-receipt text', async () => {
     storageFiles['path/a.jpg'] = { content: 'img', contentType: 'image/jpeg' };
     seed('processing_failures', 'SM1-1', { from: '+14165551234', messageSid: 'SM1', messagePart: 1, imagePaths: ['path/a.jpg'] });

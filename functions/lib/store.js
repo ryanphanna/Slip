@@ -107,9 +107,9 @@ async function findPossibleDuplicate(receipt, from) {
   return snap.empty ? null : snap.docs[0].id;
 }
 
-async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {}) {
-  const db = admin.firestore();
-  const doc = await db.collection('receipts').add({
+// The stored shape of a new receipt; every path that creates one uses it.
+function receiptRecord(receipt, from, messageSid, imagePaths = [], extra = {}) {
+  return {
     ...receipt,
     merchantKey: receipt.merchant ? receipt.merchant.trim().toLowerCase() : null,
     from,
@@ -117,7 +117,11 @@ async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {
     imagePaths,
     ...extra,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+}
+
+async function saveReceipt(receipt, from, messageSid, imagePaths = [], extra = {}) {
+  const doc = await admin.firestore().collection('receipts').add(receiptRecord(receipt, from, messageSid, imagePaths, extra));
   return doc.id;
 }
 
@@ -153,4 +157,4 @@ async function saveProcessingFailure({ from, messageSid, error, imagePaths = [],
   return doc.id;
 }
 
-module.exports = { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };
+module.exports = { receiptRecord, saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit, countRecentReceipts };

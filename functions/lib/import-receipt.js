@@ -1,8 +1,8 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const config = require('./config');
-const { validateReceipt } = require('./validate');
-const { saveReceipt, findDuplicate, findPossibleDuplicate, checkRateLimit } = require('./store');
+const { saveReceipt, checkRateLimit } = require('./store');
+const { readReceipt, checkReceipt } = require('./receipt-checks');
 const { validateImport, SCHEMA_VERSION } = require('./import-schema');
 const { formatMoney, currencyOf } = require('./money');
 
@@ -78,17 +78,21 @@ async function importReceipt(identity, args) {
   if (!claimed) throw fail('conflict', 'An import with this idempotencyKey is still in progress. Retry shortly.');
 
   try {
-    const receipt = validateReceipt(args);
-    const duplicateId = await findDuplicate(receipt, from);
+    const receipt = readReceipt(args);
+    const { duplicateId, flags } = await checkReceipt(receipt, from);
     if (duplicateId) {
       await claimRef.set({ receiptId: duplicateId, duplicate: true }, { merge: true });
       return { receiptId: duplicateId, duplicate: true, deduplicated: false, warnings, message: `Duplicate: ${receipt.merchant} was already logged.` };
     }
-    // Same merchant/total/date outside the rapid-resend window: save, but flag it.
-    const possibleDuplicateOf = await findPossibleDuplicate(receipt, from);
-    if (possibleDuplicateOf) warnings.push(POSSIBLE_DUPLICATE_WARNING);
+    // Same notes a text-message reply would carry, so the assistant can relay them.
+    if (flags.possibleDuplicate) warnings.push(POSSIBLE_DUPLICATE_WARNING);
+    if (flags.dateNeedsCheck && receipt.date) warnings.push(`date ${receipt.date} looks wrong; it is marked for checking`);
+    if (flags.dateNeedsCheck && !receipt.date) warnings.push('no date; it is marked for checking');
+    // The import form may already have warned about the same mismatch.
+    const amountsWarned = warnings.some((w) => /does not match total|do not add up to subtotal/.test(w));
+    if (flags.totalsNeedCheck && !amountsWarned) warnings.push('items, tax and total do not add up; it is marked for checking');
     const receiptId = await saveReceipt(receipt, from, null, [], {
-      ...(possibleDuplicateOf ? { possibleDuplicate: true, possibleDuplicateOf } : {}),
+      ...flags,
       // No currency sent: validateReceipt saved it as CAD; mark it for checking.
       ...(args.currency === undefined ? { currencyNeedsCheck: true } : {}),
       importSource: {
