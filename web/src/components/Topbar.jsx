@@ -18,7 +18,7 @@ export default function Topbar({ view, onNavigate, receiptSearch, itemSearch, no
     <div className="topbar-tools">
       {view === 'receipts' && <SearchToggle {...receiptSearch} placeholder="Search receipts" />}
       {view === 'items' && <SearchToggle {...itemSearch} placeholder="Search items or merchants" />}
-      {notificationCount > 0 && <button className={view === 'notifications' ? 'notification active' : 'notification'} onClick={() => onNavigate('notifications')}>Notifications <span className="notification-count">{notificationCount}</span></button>}
+      <button className={view === 'notifications' ? 'notification active' : 'notification'} onClick={() => onNavigate('notifications')}>Notifications {notificationCount > 0 && <span className="notification-count">{notificationCount}</span>}</button>
       <button className="account-button" onClick={onSignOut}>Sign out</button>
     </div>
   </header>;

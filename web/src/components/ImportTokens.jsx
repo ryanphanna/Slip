@@ -52,7 +52,7 @@ export default function ImportTokens() {
         <strong>{token.label}</strong>
         <small>{token.revoked ? 'Revoked' : token.lastUsedAt ? `Last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'Never used'}</small>
       </span>
-      {!token.revoked && <button onClick={() => revoke(token.id)}>Revoke</button>}
+      {!token.revoked && <button className="token-revoke" onClick={() => revoke(token.id)}>Revoke</button>}
     </div>)}
     {message && <p className="status">{message}</p>}
   </div>;
