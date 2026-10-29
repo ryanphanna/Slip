@@ -39,6 +39,11 @@ describe('pointsFromDocs', () => {
     expect(pc).toMatchObject({ balance: 547648, balanceDate: '2026-10-15', balanceStore: 'No Frills', balanceReceiptId: 'b', receiptCount: 4 });
   });
 
+  it('values a known program at its published rate, and leaves others unvalued', () => {
+    expect(pc).toMatchObject({ rate: { points: 10000, dollars: 10 }, worthAtLeast: 547.65 });
+    expect(programs.find((p) => p.name === 'LCBO')).toMatchObject({ rate: null, worthAtLeast: null });
+  });
+
   it('merges store spellings into one name', () => {
     expect(pc.stores).toEqual(['Loblaws', 'No Frills', 'Shoppers Drug Mart']);
   });

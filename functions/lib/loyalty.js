@@ -1,14 +1,17 @@
 const { countedDate } = require('./query');
 const { normalizeMerchant } = require('./validate');
 
+// Published till-redemption rates, checked 2026-10-29. Promo redemption
+// events only ever beat these, so the value shown is a floor ("at least").
+// Update `points`/`dollars` here when a program changes its rate.
 // Stores that share one points balance. PC Optimum is confirmed by the data:
 // Loblaws, Superstore, No Frills and Shoppers receipts continue one running
 // balance. Any other store is its own program, named after the store.
 const PROGRAMS = [
-  { name: 'PC Optimum', stores: ['loblaws', 'superstore', 'realcanadiansuperstore', 'nofrills', 'shoppersdrugmart', 'shoppers', 'fortinos', 'zehrs', 'valumart', 'yourindependentgrocer', 'wholesaleclub'] },
-  { name: 'Scene+', stores: ['freshco', 'sobeys', 'foodland', 'safeway'] },
-  { name: 'Be Well', stores: ['rexall'] },
-  { name: 'moi', stores: ['metro', 'foodbasics'] },
+  { name: 'PC Optimum', rate: { points: 10000, dollars: 10 }, stores: ['loblaws', 'superstore', 'realcanadiansuperstore', 'nofrills', 'shoppersdrugmart', 'shoppers', 'fortinos', 'zehrs', 'valumart', 'yourindependentgrocer', 'wholesaleclub'] },
+  { name: 'Scene+', rate: { points: 1000, dollars: 10 }, stores: ['freshco', 'sobeys', 'foodland', 'safeway'] },
+  { name: 'Be Well', rate: { points: 25000, dollars: 10 }, stores: ['rexall'] },
+  { name: 'moi', rate: { points: 500, dollars: 4 }, stores: ['metro', 'foodbasics'] },
 ];
 
 const storeKey = (merchant) => String(merchant || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -66,8 +69,13 @@ function pointsFromDocs(docs, today = new Date()) {
   }
 
   return [...programs.values()]
-    .map((program) => ({
+    .map((program) => {
+      const rate = PROGRAMS.find((known) => known.name === program.name)?.rate || null;
+      const balance = program.latest ? program.latest.balance : null;
+      return {
       name: program.name,
+      rate,
+      worthAtLeast: rate && balance != null ? Math.round((balance * rate.dollars / rate.points) * 100) / 100 : null,
       stores: [...program.stores.values()].map(displayName).sort(),
       receiptCount: program.receiptCount,
       balance: program.latest ? program.latest.balance : null,
@@ -75,7 +83,8 @@ function pointsFromDocs(docs, today = new Date()) {
       balanceStore: program.latest ? displayName(program.stores.get(program.latest.storeKey)) : null,
       balanceReceiptId: program.latest ? program.latest.receiptId : null,
       earnedByMonth: months.map((monthKey) => ({ monthKey, points: Math.round((program.earnedByMonth[monthKey] || 0) * 100) / 100 })),
-    }))
+      };
+    })
     // Programs with a balance first, then most recently updated.
     .sort((a, b) => (b.balance != null) - (a.balance != null) || (b.balanceDate || '').localeCompare(a.balanceDate || '') || a.name.localeCompare(b.name));
 }

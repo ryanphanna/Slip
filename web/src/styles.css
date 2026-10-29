@@ -1259,7 +1259,7 @@ button:hover {
 
 .points-card h4 {
   font-size: .95rem;
-  margin: 1.25rem 0 .5rem;
+  margin: 1.25rem 0 0;
 }
 
 .points-stores {
@@ -1287,8 +1287,77 @@ button:hover {
   padding: 0;
 }
 
-.points-months li {
-  padding: .55rem .25rem;
+.points-card h4 .muted {
+  font-weight: 400;
+  margin-left: .35rem;
+}
+
+.points-worth {
+  font-weight: 600;
+  margin: .35rem 0 0;
+}
+
+.points-worth .muted {
+  font-size: .85rem;
+  font-weight: 400;
+}
+
+.points-chart {
+  /* Room above the tallest bar for its hover label */
+  padding-top: 1.75rem;
+  display: grid;
+  gap: 2px;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.points-chart-month {
+  border-radius: 6px;
+  display: grid;
+  gap: .35rem;
+  outline: none;
+  position: relative;
+}
+
+.points-chart-track {
+  align-items: flex-end;
+  border-bottom: 1px solid #d9d0c2;
+  display: flex;
+  height: 64px;
+  justify-content: center;
+}
+
+.points-chart-bar {
+  background: #9d4e2d;
+  border-radius: 4px 4px 0 0;
+  width: min(28px, 70%);
+}
+
+.points-chart-label {
+  color: #8a8277;
+  font-size: .8rem;
+  text-align: center;
+}
+
+.points-chart-month:hover::after,
+.points-chart-month:focus-visible::after {
+  background: #2d2924;
+  border-radius: 6px;
+  bottom: calc(100% + 2px);
+  color: #f4efe6;
+  content: attr(data-value);
+  font-size: .8rem;
+  left: 50%;
+  padding: .2rem .45rem;
+  pointer-events: none;
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.points-chart-month:focus-visible .points-chart-label {
+  color: #9d4e2d;
+  font-weight: 600;
 }
 
 @media (max-width: 700px) {
