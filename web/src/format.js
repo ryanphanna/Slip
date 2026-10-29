@@ -63,6 +63,24 @@ export function hasDistinctPublicName(item) {
 }
 
 const BAR_COLORS = ['#4a7c59', '#d9873f', '#6f8ba6', '#a8c490', '#c9b48a'];
+// Extra colours for the recap page, which shows every category (CIV-1073).
+const MORE_BAR_COLORS = ['#8a6d9e', '#b5653d', '#5f9e9a', '#d6a74a', '#7d7f4a', '#b07a8c', '#4f6d7a', '#9c8f7a'];
+
+// Every positive category, largest first with Other last; no collapsing.
+export function allCategorySegments(categories) {
+  const palette = [...BAR_COLORS, ...MORE_BAR_COLORS];
+  return Object.entries(categories || {})
+    .filter(([, amount]) => Number.isFinite(amount) && amount > 0)
+    .sort((a, b) => (a[0] === 'Other') - (b[0] === 'Other') || b[1] - a[1])
+    .map(([name, amount], index) => ({ name, amount, color: palette[index % palette.length] }));
+}
+
+// "$40.10 more than August", "$5.00 less than August", "Same as August".
+export function comparisonLabel(current, previous, previousMonth) {
+  const diff = Math.round(((current || 0) - (previous || 0)) * 100) / 100;
+  if (diff === 0) return `Same as ${previousMonth}`;
+  return `${formatMoney(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than ${previousMonth}`;
+}
 
 export function categorySegments(categories) {
   const positive = Object.entries(categories || {}).filter(([, amount]) => Number.isFinite(amount) && amount > 0).sort((a, b) => b[1] - a[1]);

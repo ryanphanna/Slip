@@ -1165,3 +1165,99 @@ button:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Monthly recap page (CIV-1073) */
+
+.notification-card.clickable {
+  cursor: pointer;
+}
+
+.notification-card.clickable:focus-visible {
+  outline: 2px solid #9d4e2d;
+  outline-offset: 2px;
+}
+
+.recap-page {
+  margin: 0 auto;
+  max-width: 760px;
+}
+
+.recap-back {
+  justify-self: start;
+}
+
+.notification-card .recap-change {
+  font-size: .9rem;
+  margin: .35rem 0 0;
+}
+
+.category-legend.with-notes {
+  display: grid;
+  gap: .6rem;
+}
+
+.category-legend.with-notes li {
+  align-items: baseline;
+  column-gap: .4rem;
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+}
+
+.category-legend.with-notes small {
+  font-size: .85rem;
+  text-align: right;
+}
+
+.notification-card .recap-dropped {
+  margin: 0;
+}
+
+.recap-section {
+  padding: 1.25rem;
+}
+
+.recap-section h3 {
+  margin-bottom: .75rem;
+}
+
+.recap-section .receipt-list {
+  margin: 0 -.25rem;
+}
+
+.recap-stores {
+  border-top: 1px solid #d9d0c2;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.recap-stores li {
+  align-items: center;
+  border-bottom: 1px solid #d9d0c2;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: .8rem .25rem;
+}
+
+.recap-store-name {
+  display: grid;
+  font-weight: 600;
+}
+
+.recap-store-name small {
+  color: #8a8277;
+  font-size: .8rem;
+  font-weight: 400;
+}
+
+@media (max-width: 700px) {
+  .category-legend.with-notes li {
+    grid-template-columns: 10px 1fr;
+  }
+
+  .category-legend.with-notes small {
+    grid-column: 2;
+    text-align: left;
+  }
+}

@@ -7,16 +7,21 @@ import { auth, call, isConfigured } from './firebase.js';
 import ItemsView from './views/ItemsView.jsx';
 import Login from './views/Login.jsx';
 import NotificationsView from './views/NotificationsView.jsx';
+import RecapView from './views/RecapView.jsx';
 import ReceiptsView, { EMPTY_FILTERS } from './views/ReceiptsView.jsx';
 import SettingsView from './views/SettingsView.jsx';
 import SetupRequired from './views/SetupRequired.jsx';
 import './styles.css';
 
 const VIEW_PATHS = { receipts: '/', items: '/items', notifications: '/notifications', settings: '/settings' };
+const RECAP_PATH = /^\/notifications\/recap\/(\d{4}-(?:0[1-9]|1[0-2]))\/?$/;
+const recapPath = (month) => `/notifications/recap/${month}`;
 function viewFromPath(pathname) {
+  if (RECAP_PATH.test(pathname)) return 'recap';
   const match = Object.entries(VIEW_PATHS).find(([, path]) => path === pathname);
   return match ? match[0] : 'receipts';
 }
+const recapMonthFromPath = (pathname) => pathname.match(RECAP_PATH)?.[1] || null;
 
 function Inbox({ user }) {
   const [receipts, setReceipts] = useState([]);
@@ -26,6 +31,8 @@ function Inbox({ user }) {
   const [failures, setFailures] = useState([]);
   const [selected, setSelected] = useState(null);
   const [view, setViewState] = useState(() => viewFromPath(window.location.pathname));
+  const [recapMonth, setRecapMonth] = useState(() => recapMonthFromPath(window.location.pathname));
+  const [recapVersion, setRecapVersion] = useState(0);
 
   function setView(next) {
     setViewState(next);
@@ -33,8 +40,23 @@ function Inbox({ user }) {
     if (window.location.pathname !== path) window.history.pushState({ view: next }, '', path);
   }
 
+  function openRecap(month) {
+    setRecapMonth(month);
+    setViewState('recap');
+    window.history.pushState({ view: 'recap', month, fromNotifications: true }, '', recapPath(month));
+  }
+
+  // Opened from Notifications: step back in history so browser Back and this control agree.
+  function closeRecap() {
+    if (window.history.state?.fromNotifications) window.history.back();
+    else setView('notifications');
+  }
+
   useEffect(() => {
-    const onPopState = () => setViewState(viewFromPath(window.location.pathname));
+    const onPopState = () => {
+      setViewState(viewFromPath(window.location.pathname));
+      setRecapMonth(recapMonthFromPath(window.location.pathname));
+    };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -100,11 +122,12 @@ function Inbox({ user }) {
   function receiptSaved(updated) {
     setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
     setSelected((current) => ({ ...current, ...updated }));
+    setRecapVersion((version) => version + 1);
   }
 
   return <main className="app-shell">
     <Topbar
-      view={view}
+      view={view === 'recap' ? 'notifications' : view}
       onNavigate={setView}
       receiptSearch={{ open: showSearch, onToggle: () => setShowSearch((visible) => !visible), value: search, onChange: setSearch }}
       itemSearch={{ open: showItemSearch, onToggle: () => setShowItemSearch((visible) => !visible), value: itemSearch, onChange: setItemSearch }}
@@ -114,7 +137,8 @@ function Inbox({ user }) {
     {loading && <p className="empty">Loading…</p>}
     {!loading && error && <p className="error">{error}</p>}
     {ready && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} search={itemSearch} onReceiptUpdated={receiptUpdated} />}
-    {ready && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={retryFailure} />}
+    {ready && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={retryFailure} onOpenRecap={openRecap} />}
+    {ready && view === 'recap' && recapMonth && <RecapView month={recapMonth} version={recapVersion} onBack={closeRecap} onSelect={setSelected} />}
     {ready && view === 'settings' && <SettingsView settings={settings} onDigestChange={changeDigest} />}
     {ready && view === 'receipts' && <ReceiptsView
       receipts={receipts}
