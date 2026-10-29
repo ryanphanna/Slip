@@ -39,7 +39,10 @@ async function checkTokenRateLimit(from, tokenId) {
 }
 
 // `identity` comes only from the authenticated token ({ from, uid, tokenId }).
-async function importReceipt(identity, args) {
+// `options` is for the local upload script only (scripts/upload-receipts.js),
+// never the MCP endpoint: `receivedAt` is when the receipt email arrived, so an
+// old receipt isn't marked as a wrong date; `skipRateLimit` allows a backfill.
+async function importReceipt(identity, args, { receivedAt, skipRateLimit = false } = {}) {
   const { errors, warnings } = validateImport(args);
   if (errors.length) throw fail('invalid-argument', 'Receipt rejected: ' + errors.join('; '), errors);
 
@@ -60,10 +63,12 @@ async function importReceipt(identity, args) {
       await claimRef.delete().catch(() => {});
     }
 
-    const limit = await checkRateLimit(from);
-    if (limit.exceeded) throw fail('rate-limited', `Rate limit reached (${limit.reason}). Try again later.`);
-    if (await checkTokenRateLimit(from, tokenId)) {
-      throw fail('rate-limited', 'This token reached its hourly import limit. Try again later.');
+    if (!skipRateLimit) {
+      const limit = await checkRateLimit(from);
+      if (limit.exceeded) throw fail('rate-limited', `Rate limit reached (${limit.reason}). Try again later.`);
+      if (await checkTokenRateLimit(from, tokenId)) {
+        throw fail('rate-limited', 'This token reached its hourly import limit. Try again later.');
+      }
     }
 
     try {
@@ -79,7 +84,7 @@ async function importReceipt(identity, args) {
 
   try {
     const receipt = readReceipt(args);
-    const { duplicateId, flags } = await checkReceipt(receipt, from);
+    const { duplicateId, flags } = await checkReceipt(receipt, from, { receivedAt });
     if (duplicateId) {
       await claimRef.set({ receiptId: duplicateId, duplicate: true }, { merge: true });
       return { receiptId: duplicateId, duplicate: true, deduplicated: false, warnings, message: `Duplicate: ${receipt.merchant} was already logged.` };

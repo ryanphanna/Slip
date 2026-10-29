@@ -12,6 +12,7 @@ const { handleMcp } = require('../lib/mcp');
 const { validateImport, INPUT_SCHEMA, MISSING_CURRENCY_WARNING } = require('../lib/import-schema');
 const { updateReceipt, createImportToken, listImportTokens, revokeImportToken } = require('../lib/web-api');
 const config = require('../lib/config');
+const { importReceipt } = require('../lib/import-receipt');
 
 const PHONE_A = '+14165551111';
 const PHONE_B = '+14165552222';
@@ -221,6 +222,27 @@ describe('import', () => {
     expect(byMerchant.Costco).toMatchObject({ dateNeedsCheck: true });
     expect(byMerchant.Metro).toMatchObject({ totalsNeedCheck: true });
     expect(byMerchant.Cafe.itemsNeedCheck).toBeUndefined();
+  });
+
+  it('saves the points printed on a receipt and rejects a negative balance', async () => {
+    const { token } = await mint(PHONE_A);
+    const ok = await call(token, valid({ idempotencyKey: 'key-points01', loyaltyPointsEarned: 700, loyaltyPointsBalance: 547648 }));
+    expect(ok.body.result.isError).toBe(false);
+    expect(receipts()[0][1]).toMatchObject({ loyaltyPointsEarned: 700, loyaltyPointsBalance: 547648 });
+    const bad = await call(token, valid({ idempotencyKey: 'key-points02', loyaltyPointsBalance: -5 }));
+    expect(bad.body.result.isError).toBe(true);
+  });
+
+  it('local upload: checks an old receipt against its email date and skips the hourly limits', async () => {
+    const identity = { from: PHONE_A, uid: null, tokenId: 'local-upload' };
+    const options = { receivedAt: new Date('2025-03-02T12:00:00'), skipRateLimit: true };
+    for (let i = 0; i < config.IMPORT_TOKEN_RATE_LIMIT_PER_HOUR + 2; i++) {
+      const result = await importReceipt(identity, valid({ idempotencyKey: `key-old-${String(i).padStart(4, '0')}`, merchant: `Store ${i}`, date: '2025-03-01' }), options);
+      expect(result.duplicate).toBe(false);
+    }
+    const saved = receipts().map(([, doc]) => doc);
+    expect(saved).toHaveLength(config.IMPORT_TOKEN_RATE_LIMIT_PER_HOUR + 2);
+    expect(saved.some((doc) => doc.dateNeedsCheck)).toBe(false);
   });
 
   it('isolates accounts: each token writes only to its own account', async () => {
