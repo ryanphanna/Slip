@@ -7,13 +7,14 @@ import { auth, call, isConfigured } from './firebase.js';
 import ItemsView from './views/ItemsView.jsx';
 import Login from './views/Login.jsx';
 import NotificationsView from './views/NotificationsView.jsx';
+import PointsView from './views/PointsView.jsx';
 import RecapView from './views/RecapView.jsx';
 import ReceiptsView, { EMPTY_FILTERS } from './views/ReceiptsView.jsx';
 import SettingsView from './views/SettingsView.jsx';
 import SetupRequired from './views/SetupRequired.jsx';
 import './styles.css';
 
-const VIEW_PATHS = { receipts: '/', items: '/items', notifications: '/notifications', settings: '/settings' };
+const VIEW_PATHS = { receipts: '/', items: '/items', points: '/points', notifications: '/notifications', settings: '/settings' };
 const RECAP_PATH = /^\/notifications\/recap\/(\d{4}-(?:0[1-9]|1[0-2]))\/?$/;
 const recapPath = (month) => `/notifications/recap/${month}`;
 function viewFromPath(pathname) {
@@ -139,6 +140,7 @@ function Inbox({ user }) {
     {ready && view === 'items' && <ItemsView receipts={receipts} catalogItems={catalogItems} search={itemSearch} onReceiptUpdated={receiptUpdated} />}
     {ready && view === 'notifications' && <NotificationsView failures={failures} notifications={notifications} onRetry={retryFailure} onOpenRecap={openRecap} />}
     {ready && view === 'recap' && recapMonth && <RecapView month={recapMonth} version={recapVersion} onBack={closeRecap} onSelect={setSelected} />}
+    {ready && view === 'points' && <PointsView version={recapVersion} onSelect={setSelected} />}
     {ready && view === 'settings' && <SettingsView settings={settings} onDigestChange={changeDigest} />}
     {ready && view === 'receipts' && <ReceiptsView
       receipts={receipts}

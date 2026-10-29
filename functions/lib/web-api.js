@@ -7,6 +7,7 @@ const config = require('./config');
 const { isAllowed } = require('./allowlist');
 const importTokens = require('./import-tokens');
 const { monthStatsFromDocs, loadAllReceipts, isMonthKey, shiftMonthKey } = require('./query');
+const { pointsFromDocs } = require('./loyalty');
 const { DEFAULT_CURRENCY, currencyOf } = require('./money');
 
 const EDITABLE_FIELDS = new Set([
@@ -207,6 +208,13 @@ async function getMonthlyRecap(request) {
     topMerchants: topMerchants(docs),
     receipts,
   };
+}
+
+// Loyalty points per program for the web Points page (CIV-1130).
+async function getPoints(request) {
+  const { phone } = requireAuth(request);
+  const snapshots = await loadAllReceipts(phone);
+  return { programs: pointsFromDocs(snapshots.map((doc) => ({ id: doc.id, ...doc.data() }))) };
 }
 
 async function getProcessingFailureImageUrls(request) {
@@ -548,6 +556,7 @@ module.exports = {
   listProcessingFailures,
   listNotifications,
   getMonthlyRecap,
+  getPoints,
   getProcessingFailureImageUrls,
   retryProcessing,
   importTargetReceipts,

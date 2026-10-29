@@ -1,4 +1,4 @@
-const NAV_VIEWS = [['receipts', 'Receipts'], ['items', 'Items'], ['settings', 'Settings']];
+const NAV_VIEWS = [['receipts', 'Receipts'], ['items', 'Items'], ['points', 'Points'], ['settings', 'Settings']];
 
 function SearchToggle({ open, onToggle, value, onChange, placeholder }) {
   return <>

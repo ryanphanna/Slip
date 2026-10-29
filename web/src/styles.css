@@ -1251,6 +1251,46 @@ button:hover {
   font-weight: 400;
 }
 
+/* Points page */
+
+.points-intro {
+  margin: 0;
+}
+
+.points-card h4 {
+  font-size: .95rem;
+  margin: 1.25rem 0 .5rem;
+}
+
+.points-stores {
+  font-size: .9rem;
+  margin: -.4rem 0 .75rem;
+}
+
+.points-balance {
+  display: block;
+  font-size: 1.6rem;
+}
+
+.points-balance .muted {
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.points-as-of {
+  font-size: .9rem;
+  margin: .3rem 0 0;
+}
+
+.points-as-of .toolbar-link {
+  font-size: inherit;
+  padding: 0;
+}
+
+.points-months li {
+  padding: .55rem .25rem;
+}
+
 @media (max-width: 700px) {
   .category-legend.with-notes li {
     grid-template-columns: 10px 1fr;
