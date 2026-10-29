@@ -24,7 +24,7 @@ const { validateTwilioSignature, sendSms, fetchMedia } = require('./lib/twilio')
 const { parseReceiptFromBase64, parseReceiptFromText } = require('./lib/receipt');
 const { validateReceipt, dateLooksWrong, totalsLookWrong, itemsLookMissing } = require('./lib/validate');
 const { saveReceipt, saveProcessingFailure, findDuplicate, findPossibleDuplicate, isMessageProcessed, checkRateLimit } = require('./lib/store');
-const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory } = require('./lib/query');
+const { getMonthlyStats, getSpendingStats, getLastReceipt, aggregateSpendingByCategory, currentMonthDocs } = require('./lib/query');
 const { saveImages, saveFailedImages } = require('./lib/image-store');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudget, getBudgetReport, getBudgetStatus } = require('./lib/budget');
@@ -454,16 +454,7 @@ exports.sms = onRequest(
           try {
             const budget = await getBudget(from, receipt.category);
             if (budget && budget.limit > 0) {
-              const db = admin.firestore();
-              const now = new Date();
-              const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-              const snapshot = await db.collection('receipts')
-                .where('from', '==', from)
-                .where('createdAt', '>=', startOfMonth)
-                .get();
-
-              const docs = snapshot.docs.map(doc => doc.data());
+              const docs = await currentMonthDocs(from);
               const { categories } = aggregateSpendingByCategory(docs);
               const spentKey = Object.keys(categories).find(k => k.toLowerCase() === receipt.category.toLowerCase());
               const spent = spentKey ? categories[spentKey] : 0;
