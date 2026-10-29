@@ -44,11 +44,11 @@ export default function RecapView({ month, version, onBack, onSelect }) {
   }, [month, version]);
 
   const back = <button className="toolbar-link recap-back" onClick={onBack}>Back to notifications</button>;
-  if (error) return <section className="recap-page card-stack">{back}<p className="error">{error}</p></section>;
-  if (!recap || recap.monthKey !== month) return <section className="recap-page card-stack">{back}<p className="empty">Loading…</p></section>;
+  if (error) return <section className="page-column card-stack">{back}<p className="error">{error}</p></section>;
+  if (!recap || recap.monthKey !== month) return <section className="page-column card-stack">{back}<p className="empty">Loading…</p></section>;
 
   const dropped = droppedCategories(recap);
-  return <section className="recap-page card-stack">
+  return <section className="page-column card-stack">
     {back}
     <article className="card notification-card">
       <div>
@@ -62,7 +62,7 @@ export default function RecapView({ month, version, onBack, onSelect }) {
       {dropped.length > 0 && <p className="muted recap-dropped">Nothing this month in {dropped.map(([name, amount], index) => <span key={name}>{index > 0 && ', '}<span className="also-spent-entry">{name} ({formatMoney(amount)} in {recap.previous.month})</span></span>)}</p>}
     </article>
 
-    {recap.topMerchants.length > 0 && <article className="card recap-section">
+    {recap.topMerchants.length > 0 && <article className="card section-card">
       <h3>Top stores</h3>
       <ol className="recap-stores">
         {recap.topMerchants.map((store) => <li key={store.name}>
@@ -72,7 +72,7 @@ export default function RecapView({ month, version, onBack, onSelect }) {
       </ol>
     </article>}
 
-    <article className="card recap-section">
+    <article className="card section-card">
       <h3>Receipts</h3>
       {recap.receipts.length === 0
         ? <p className="muted">No receipts this month.</p>

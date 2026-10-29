@@ -1,6 +1,8 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
-const { validateReceipt, dateLooksWrong, totalsLookWrong, itemsLookMissing, normalizeEditPatch, normalizeItemPatch } = require('./validate');
+const { validateReceipt, normalizeEditPatch, normalizeItemPatch } = require('./validate');
+const { readReceipt, checkReceipt } = require('./receipt-checks');
+const { receiptRecord } = require('./store');
 const { parseReceiptFromBase64, parseReceiptFromText, photoReadNothing } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
 const config = require('./config');
@@ -330,6 +332,7 @@ async function retryProcessing(request) {
   }
 
   let receipt;
+  let flags;
   try {
     let raw;
     if (paths.length > 0) {
@@ -350,11 +353,8 @@ async function retryProcessing(request) {
         && (!Array.isArray(raw.items) || raw.items.length === 0);
       if (extractedNothing) throw retryError('not-a-receipt', "That text didn't look like a receipt");
     }
-    receipt = validateReceipt(raw);
-    if (raw.confidence != null) receipt.confidence = raw.confidence;
-    if (receipt.date == null || dateLooksWrong(receipt.date, receivedAt)) receipt.dateNeedsCheck = true;
-    if (totalsLookWrong(receipt)) receipt.totalsNeedCheck = true;
-    if (paths.length > 0 && itemsLookMissing(receipt)) receipt.itemsNeedCheck = true;
+    receipt = readReceipt(raw);
+    ({ flags } = await checkReceipt(receipt, phone, { receivedAt, fromPhotos: paths.length > 0, skipResendCheck: true }));
   } catch (error) {
     if (error.code === 'not-a-receipt') {
       // The text was read fine but is not a receipt: retrying can never help, so
@@ -379,17 +379,12 @@ async function retryProcessing(request) {
       if (current.get('status') !== 'retrying' || current.get('retryToken') !== token) {
         throw retryError('failed-precondition', 'This retry was superseded');
       }
-      tx.set(receiptRef, {
-        ...receipt,
-        merchantKey: receipt.merchant ? receipt.merchant.trim().toLowerCase() : null,
-        from: phone,
+      tx.set(receiptRef, receiptRecord(receipt, phone, messageSid, paths, {
+        ...flags,
         ownerUid: request.auth.uid,
-        messageSid,
         ...(messagePart != null ? { messagePart } : {}),
-        imagePaths: paths,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
         recoveredFromFailure: id,
-      });
+      }));
       tx.set(failureRef, {
         status: 'recovered',
         recoveredReceiptId: receiptRef.id,
@@ -401,7 +396,7 @@ async function retryProcessing(request) {
     if (error.code !== 'failed-precondition') await release({ refund: false });
     throw error;
   }
-  return { id: receiptRef.id, ...receipt };
+  return { id: receiptRef.id, ...receipt, ...flags };
 }
 
 function canonicalItemId(phone, merchant, item) {

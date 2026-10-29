@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const config = require('./config');
-const { dateLooksWrong, totalsLookWrong, itemsLookMissing } = require('./validate');
+const { checkFlags } = require('./receipt-checks');
 
 async function saveImageFiles(images, messageSid, prefix) {
   const bucket = admin.storage().bucket();
@@ -42,8 +42,7 @@ async function saveImages(images, messageSid, receipt = null) {
 
     // Receipts flagged for checking keep their photo, so the check can still
     // be done after temporary photos are deleted.
-    const needsCheck = receipt.date == null || dateLooksWrong(receipt.date)
-      || totalsLookWrong(receipt) || itemsLookMissing(receipt);
+    const needsCheck = Object.keys(checkFlags(receipt, { fromPhotos: true })).length > 0;
 
     if (isHighValue || isTaxOrMedical || isLowConfidence || isRndMerchant || needsCheck) {
       prefix = config.STORAGE_PREFIX_PERMANENT;

@@ -29,7 +29,7 @@ function EarnedChart({ months }) {
 function ProgramCard({ program, onOpenReceipt }) {
   const hasEarned = program.earnedByMonth.some((month) => month.points > 0);
   const showStores = program.stores.length > 1;
-  return <article className="card recap-section points-card">
+  return <article className="card section-card points-card">
     <h3>{program.name}</h3>
     {showStores && <p className="muted points-stores">{program.stores.join(', ')}</p>}
     {program.balance != null
@@ -67,11 +67,11 @@ export default function PointsView({ version, onSelect }) {
     catch (err) { setError(err.message || 'Could not open that receipt.'); }
   }
 
-  if (error) return <section className="recap-page card-stack"><p className="error">{error}</p></section>;
-  if (!programs) return <section className="recap-page card-stack"><p className="empty">Loading…</p></section>;
-  if (programs.length === 0) return <section className="recap-page card-stack"><p className="empty">No points found on your receipts yet.</p></section>;
+  if (error) return <section className="page-column card-stack"><p className="error">{error}</p></section>;
+  if (!programs) return <section className="page-column card-stack"><p className="empty">Loading…</p></section>;
+  if (programs.length === 0) return <section className="page-column card-stack"><p className="empty">No points found on your receipts yet.</p></section>;
 
-  return <section className="recap-page card-stack">
+  return <section className="page-column card-stack">
     <p className="muted points-intro">Each balance is the one printed on your latest receipt from that program.</p>
     {programs.map((program) => <ProgramCard key={program.name} program={program} onOpenReceipt={openReceipt} />)}
   </section>;
