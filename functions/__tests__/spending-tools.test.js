@@ -79,6 +79,20 @@ describe('spending-tools helper', () => {
     expect(result.receiptCount).toBe(1);
   });
 
+  it('filters date ranges on the printed date, falling back to the sent date', async () => {
+    const docs = [
+      { merchant: 'Late', total: 40, category: 'Grocery', date: '2026-05-30', createdAt: { toDate: () => new Date('2026-06-02T12:00:00Z') } },
+      { merchant: 'June', total: 10, category: 'Grocery', date: '2026-06-30', createdAt: { toDate: () => new Date('2026-07-01T12:00:00Z') } },
+      { merchant: 'Undated', total: 7, category: 'Dining', date: null, createdAt: { toDate: () => new Date('2026-06-10T12:00:00Z') } },
+    ];
+    mockGet.mockResolvedValue({ docs: docs.map(d => ({ data: () => d })) });
+
+    const june = await executeTool('getSpendingTotal', { startDate: '2026-06-01', endDate: '2026-06-30' });
+    expect(june).toMatchObject({ total: 17, receiptCount: 2 });
+    const summary = await executeTool('getMonthlySummary', { year: 2026, month: 6 });
+    expect(summary.total).toBe(17);
+  });
+
   it('calculates spending by category with merchant filter', async () => {
     mockGet.mockResolvedValue({
       docs: mockDocs.map(d => ({ data: () => d })),

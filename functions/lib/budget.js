@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { aggregateSpendingByCategory } = require('./query');
+const { aggregateSpendingByCategory, currentMonthDocs } = require('./query');
 
 function getDocId(from, category) {
   const safeFrom = (from || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
@@ -40,10 +40,6 @@ async function getAllBudgets(from) {
 // Budgets are CAD limits: only CAD spend counts toward them. Spend in other
 // currencies is returned separately as `otherSpend` ({ USD: { total, count } }).
 async function getBudgetStatus(from) {
-  const db = admin.firestore();
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
   // Get all budgets
   const budgets = await getAllBudgets(from);
   const budgetMap = {};
@@ -51,13 +47,8 @@ async function getBudgetStatus(from) {
     budgetMap[b.category.toLowerCase()] = b.limit;
   }
 
-  // Get current month's receipts
-  const snapshot = await db.collection('receipts')
-    .where('from', '==', from)
-    .where('createdAt', '>=', startOfMonth)
-    .get();
-
-  const docs = snapshot.docs.map(doc => doc.data());
+  // Current month's receipts, by printed date (sent date when none was read)
+  const docs = await currentMonthDocs(from);
   const { categories: spentMap, byCurrency } = aggregateSpendingByCategory(docs);
 
   // Combine into status report

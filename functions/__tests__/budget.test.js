@@ -87,6 +87,19 @@ describe('getBudgetReport', () => {
   });
 });
 
+describe('budget month uses the printed date', () => {
+  it('counts a receipt in the month printed on it, not the month it was sent', async () => {
+    await setBudget('+1', 'Grocery', 100);
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+    seedReceipt('late', { from: '+1', total: 40, category: 'Grocery', date: `${lastMonth.getFullYear()}-${pad(lastMonth.getMonth() + 1)}-15` });
+    seedReceipt('now', { from: '+1', total: 25, category: 'Grocery', date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01` });
+    const report = await getBudgetReport('+1');
+    expect(report[0].spent).toBe(25);
+  });
+});
+
 describe('budgets with mixed currencies', () => {
   it('only CAD spend counts toward a CAD budget; other currencies are reported separately', async () => {
     await setBudget('+1', 'Grocery', 200);
