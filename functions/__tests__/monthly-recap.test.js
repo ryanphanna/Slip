@@ -9,7 +9,7 @@ const admin = require('firebase-admin');
 const { sendSms } = require('../lib/twilio');
 const { sendMonthlyDigest } = require('../lib/digest');
 const { getMonthlyRecap } = require('../lib/web-api');
-const { shiftMonthKey, isMonthKey, getMonthlyStats } = require('../lib/query');
+const { shiftMonthKey, isMonthKey, getMonthlyStats, getSpendingStats } = require('../lib/query');
 
 process.env.ALLOWED_PHONES = '+14165551234,+14165559999';
 const FROM = '+14165551234';
@@ -140,6 +140,40 @@ describe('SUMMARY text reply', () => {
     expect(recap.categories).toEqual(summary.categories);
     expect(recap.byCurrency).toEqual(summary.byCurrency);
     expect(recap.total).toBe(48.5);
+  });
+});
+
+describe('counting by printed date', () => {
+  // Bought September 28, texted in October 2.
+  function seedLateReceipt() {
+    jest.setSystemTime(new Date(2026, 9, 20, 12));
+    const sent = (month, day) => fake.db.Timestamp.fromMillis(new Date(2026, month, day, 12).getTime());
+    seed('late', { date: '2026-09-28', createdAt: sent(9, 2), total: 40, merchant: 'Metro', category: 'Grocery' });
+    seed('oct', { date: '2026-10-05', createdAt: sent(9, 5), total: 10, merchant: 'Presto', category: 'Transportation' });
+    seed('undated', { date: null, createdAt: sent(9, 6), total: 7, merchant: 'Cafe', category: 'Dining' });
+  }
+
+  it('SUMMARY counts a late-sent receipt in the month printed on it', async () => {
+    seedLateReceipt();
+    const summary = await getMonthlyStats(FROM);
+    expect(summary.total).toBe(10);
+    expect(summary.count).toBe(1);
+    const september = await getMonthlyRecap({ ...AUTH, data: { month: '2026-09' } });
+    expect(september.total).toBe(40);
+  });
+
+  it('TOTAL MONTH and TOTAL YEAR filter on the printed date', async () => {
+    seedLateReceipt();
+    const month = await getSpendingStats(FROM, new Date(2026, 9, 1));
+    expect(month).toMatchObject({ total: 10, count: 1 });
+    const year = await getSpendingStats(FROM, new Date(2026, 0, 1));
+    expect(year).toMatchObject({ total: 50, count: 2 });
+  });
+
+  it('all-time TOTAL still counts receipts with no printed date', async () => {
+    seedLateReceipt();
+    const all = await getSpendingStats(FROM, null);
+    expect(all).toMatchObject({ total: 57, count: 3 });
   });
 });
 

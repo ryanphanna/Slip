@@ -75,28 +75,21 @@ function countPrimary(docs) {
   return docs.filter((d) => currencyOf(d) === DEFAULT_CURRENCY).length;
 }
 
+// SUMMARY: this month by printed date, the same rule as the recap page.
 async function getMonthlyStats(from) {
-  const db = admin.firestore();
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const snapshot = await db.collection('receipts')
-    .where('from', '==', from)
-    .where('createdAt', '>=', startOfMonth)
-    .get();
-
-  const docs = snapshot.docs.map(doc => doc.data());
-  const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
-
-  return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}), month: now.toLocaleString('default', { month: 'long' }) };
+  const monthKey = dateKey(new Date()).slice(0, 7);
+  const docs = (await loadAllReceipts(from)).map((doc) => doc.data());
+  const { docs: _monthDocs, ...stats } = monthStatsFromDocs(docs, monthKey);
+  return stats;
 }
 
+// TOTAL: filtered on the printed date, so a receipt sent in a later month
+// still counts in the month it was bought. Receipts without a printed date
+// count only in all-time totals.
 async function getSpendingStats(from, startDate) {
-  const db = admin.firestore();
-  let query = db.collection('receipts').where('from', '==', from);
-  if (startDate) query = query.where('createdAt', '>=', startDate);
-  const snapshot = await query.get();
-  const docs = snapshot.docs.map(doc => doc.data());
+  const all = (await loadAllReceipts(from)).map((doc) => doc.data());
+  const start = startDate ? dateKey(startDate) : null;
+  const docs = start ? all.filter((d) => typeof d.date === 'string' && d.date >= start) : all;
   const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
   return { total, categories, count: countPrimary(docs), ...(byCurrency ? { byCurrency } : {}) };
 }
@@ -149,14 +142,14 @@ async function loadAllReceipts(from) {
 async function getLastMonthStats(from) {
   const now = new Date();
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const monthKey = formatDate(startOfLastMonth).slice(0, 7);
+  const monthKey = dateKey(startOfLastMonth).slice(0, 7);
   const docs = (await loadAllReceipts(from)).map((doc) => doc.data());
   const { docs: _monthDocs, ...stats } = monthStatsFromDocs(docs, monthKey);
   return stats;
 }
 
-function formatDate(date) {
-  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), '01'].join('-');
+function dateKey(date) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
 }
 
 module.exports = { getMonthlyStats, getLastMonthStats, monthStatsFromDocs, loadAllReceipts, isMonthKey, shiftMonthKey, monthName, getSpendingStats, getLastReceipt, findLatestReceiptForSender, aggregateSpendingByCategory };
