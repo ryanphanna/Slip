@@ -31,6 +31,8 @@ const TOP_PROPERTIES = {
   subCategory: { type: 'string', maxLength: 80 },
   location: { type: 'string', maxLength: 200 },
   isSubscription: { type: 'boolean' },
+  loyaltyPointsEarned: { type: 'number', minimum: 0, description: 'Loyalty points earned on this receipt, if printed.' },
+  loyaltyPointsBalance: { type: 'number', minimum: 0, description: 'Loyalty points balance printed on the receipt (closing balance), if any.' },
   items: {
     type: 'array',
     maxItems: MAX_ITEMS,
@@ -125,6 +127,12 @@ function validateImport(args, now = new Date()) {
   if (args.location !== undefined) checkString(args.location, 'location', errors, { max: 200 });
   if (args.isSubscription !== undefined && typeof args.isSubscription !== 'boolean') {
     errors.push('isSubscription must be a boolean');
+  }
+  for (const key of ['loyaltyPointsEarned', 'loyaltyPointsBalance']) {
+    const value = args[key];
+    if (value !== undefined && !(typeof value === 'number' && Number.isFinite(value) && value >= 0)) {
+      errors.push(`${key} must be a number of 0 or more`);
+    }
   }
 
   if (args.items !== undefined) {
