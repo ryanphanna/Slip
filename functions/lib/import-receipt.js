@@ -88,7 +88,9 @@ async function importReceipt(identity, args) {
     if (flags.possibleDuplicate) warnings.push(POSSIBLE_DUPLICATE_WARNING);
     if (flags.dateNeedsCheck && receipt.date) warnings.push(`date ${receipt.date} looks wrong; it is marked for checking`);
     if (flags.dateNeedsCheck && !receipt.date) warnings.push('no date; it is marked for checking');
-    if (flags.totalsNeedCheck) warnings.push('items, tax and total do not add up; it is marked for checking');
+    // The import form may already have warned about the same mismatch.
+    const amountsWarned = warnings.some((w) => /does not match total|do not add up to subtotal/.test(w));
+    if (flags.totalsNeedCheck && !amountsWarned) warnings.push('items, tax and total do not add up; it is marked for checking');
     const receiptId = await saveReceipt(receipt, from, null, [], {
       ...flags,
       // No currency sent: validateReceipt saved it as CAD; mark it for checking.

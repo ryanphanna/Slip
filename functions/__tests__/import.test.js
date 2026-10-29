@@ -212,7 +212,8 @@ describe('import', () => {
     const wrongYear = await call(token, valid({ idempotencyKey: 'key-wrongyear', date: '2024-10-01' }));
     expect(wrongYear.body.result.structuredContent.warnings).toContain('date 2024-10-01 looks wrong; it is marked for checking');
     const mismatched = await call(token, valid({ idempotencyKey: 'key-mismatch', merchant: 'Metro', total: 99 }));
-    expect(mismatched.body.result.structuredContent.warnings).toContain('items, tax and total do not add up; it is marked for checking');
+    // One warning for the mismatch: the import form's own, not a second one.
+    expect(mismatched.body.result.structuredContent.warnings).toEqual(['subtotal + tax does not match total']);
     const noItems = await call(token, valid({ idempotencyKey: 'key-noitems', merchant: 'Cafe', items: [], subtotal: undefined, tax: undefined }));
     expect(noItems.body.result.isError).toBe(false);
 
