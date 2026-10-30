@@ -910,6 +910,17 @@ button:hover {
   color: #9d4e2d;
 }
 
+/* Flagged but nothing to do: Slip knows why, or an explanation is waiting */
+.receipt-row.flag-known {
+  outline: 1px dashed #c9b8a6;
+  outline-offset: -1px;
+}
+
+.receipt-row.flag-known .flag-reason {
+  color: inherit;
+  opacity: .75;
+}
+
 .detail-main {
   min-width: 0;
 }

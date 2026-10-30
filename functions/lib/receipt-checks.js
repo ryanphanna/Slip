@@ -12,12 +12,24 @@ function readReceipt(raw) {
   return receipt;
 }
 
+const DISCOUNT_NOTE = 'item prices are before a discount; the total is right';
+
+// Items add up to more than the subtotal, but subtotal + tax is the total: a
+// discount the receipt didn't list per item (Tim Hortons offers, Multi-Save).
+// Still marked, but the web app shows it as nothing to do (CIV-1194).
+function discountNotItemized({ items, subtotal, tax, total }) {
+  if (!Array.isArray(items) || typeof subtotal !== 'number' || typeof total !== 'number') return false;
+  const sum = items.reduce((acc, item) => acc + (typeof item.price === 'number' ? item.price : 0), 0);
+  const near = (a, b) => Math.abs(a - b) <= 0.05;
+  return Math.abs(sum) > Math.abs(subtotal) + 0.05 && near(subtotal + (typeof tax === 'number' ? tax : 0), total);
+}
+
 // "Check this" marks. `fromPhotos`: only a photo read with no items is
 // suspicious; pasted texts and AI imports often have none.
 function checkFlags(receipt, { receivedAt = new Date(), fromPhotos = false } = {}) {
   return {
     ...(receipt.date == null || dateLooksWrong(receipt.date, receivedAt) ? { dateNeedsCheck: true } : {}),
-    ...(totalsLookWrong(receipt) ? { totalsNeedCheck: true } : {}),
+    ...(totalsLookWrong(receipt) ? { totalsNeedCheck: true, ...(discountNotItemized(receipt) ? { checkNote: DISCOUNT_NOTE } : {}) } : {}),
     ...(fromPhotos && itemsLookMissing(receipt) ? { itemsNeedCheck: true } : {}),
   };
 }
@@ -55,7 +67,7 @@ function flagNotes(receipt, flags) {
 // statement-import mark (CIV-1194). The web app can clear these, never set them.
 const CHECK_FIELDS = [
   'possibleDuplicate', 'possibleDuplicateOf', 'dateNeedsCheck', 'totalsNeedCheck',
-  'currencyNeedsCheck', 'itemsNeedCheck', 'statementReview',
+  'currencyNeedsCheck', 'itemsNeedCheck', 'statementReview', 'checkNote',
 ];
 
 // True when a receipt still has a mark to look at.
@@ -64,4 +76,4 @@ function isFlagged(receipt) {
     || receipt.currencyNeedsCheck || receipt.itemsNeedCheck || receipt.statementReview);
 }
 
-module.exports = { readReceipt, checkFlags, checkReceipt, flagNotes, CHECK_FIELDS, isFlagged };
+module.exports = { readReceipt, checkFlags, checkReceipt, flagNotes, CHECK_FIELDS, isFlagged, discountNotItemized, DISCOUNT_NOTE };

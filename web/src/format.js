@@ -102,7 +102,7 @@ export function categorySegments(categories) {
 
 // Check marks set when a receipt is saved (CIV-1194). Mirrors CHECK_FIELDS in
 // functions/lib/receipt-checks.js.
-export const CHECK_FIELDS = ['possibleDuplicate', 'possibleDuplicateOf', 'dateNeedsCheck', 'totalsNeedCheck', 'currencyNeedsCheck', 'itemsNeedCheck', 'statementReview'];
+export const CHECK_FIELDS = ['possibleDuplicate', 'possibleDuplicateOf', 'dateNeedsCheck', 'totalsNeedCheck', 'currencyNeedsCheck', 'itemsNeedCheck', 'statementReview', 'checkNote'];
 
 export function isFlagged(receipt) {
   return Boolean(receipt.possibleDuplicate || receipt.dateNeedsCheck || receipt.totalsNeedCheck
@@ -125,11 +125,21 @@ export function flagReasons(receipt) {
   return [
     ...(receipt.possibleDuplicate ? [{ key: 'duplicate', text: 'Possible duplicate of an earlier receipt', duplicateOf: receipt.possibleDuplicateOf || null }] : []),
     ...(receipt.dateNeedsCheck ? [{ key: 'date', text: 'Check the date' }] : []),
-    ...(receipt.totalsNeedCheck ? [{ key: 'totals', text: 'Amounts don\'t add up' }] : []),
+    ...(receipt.totalsNeedCheck ? [{ key: 'totals', text: receipt.checkNote ? `Amounts don't add up: ${receipt.checkNote}` : 'Amounts don\'t add up' }] : []),
     ...(receipt.currencyNeedsCheck ? [{ key: 'currency', text: 'Check the currency' }] : []),
     ...(receipt.itemsNeedCheck ? [{ key: 'items', text: 'Items missing' }] : []),
     ...(statement ? [{ key: 'statement', text: [statement.reason, chargeLabel(statement.charge)].filter(Boolean).join(': ') || 'Check against a card charge' }] : []),
   ];
+}
+
+// Flagged, but nothing for the user to do: Slip already knows why (a
+// `checkNote`, e.g. item prices printed before a discount), or an
+// explanation is waiting to be processed. Shown with a dashed outline.
+export function flagNeedsNothing(receipt) {
+  if (!isFlagged(receipt)) return false;
+  if (receipt.explanation?.text) return true;
+  const only = (field) => CHECK_FIELDS.every((other) => other === field || other === 'checkNote' || !receipt[other]);
+  return Boolean(receipt.checkNote) && only('totalsNeedCheck');
 }
 
 // The short line for a receipt row: the reasons, or a note that an
