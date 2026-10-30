@@ -245,6 +245,16 @@ describe('import', () => {
     expect(saved.some((doc) => doc.dateNeedsCheck)).toBe(false);
   });
 
+  it('local upload: saves repeat charges from one store instead of treating them as a resend', async () => {
+    const identity = { from: PHONE_A, uid: null, tokenId: 'local-upload' };
+    const options = { skipRateLimit: true, skipResendCheck: true };
+    for (const date of ['2026-08-29', '2026-09-29']) {
+      const result = await importReceipt(identity, valid({ idempotencyKey: `key-icloud-${date}`, merchant: 'Apple', date }), options);
+      expect(result.duplicate).toBe(false);
+    }
+    expect(receipts()).toHaveLength(2);
+  });
+
   it('isolates accounts: each token writes only to its own account', async () => {
     const a = await mint(PHONE_A);
     const b = await mint(PHONE_B);

@@ -15,11 +15,17 @@ For a large backlog, make one file per calendar month of email, and split a mont
 
 Use an email when it shows a completed purchase or refund with a total: store receipts, e-receipts, order confirmations that show the amount charged, and refund confirmations.
 
+Also use these:
+
+- Orders paid fully with points, rewards or a gift card (for example a Tim Hortons order covered by Tims Rewards). Write them with `total` 0 and every item, so the visit still shows up.
+- Rent paid by e-transfer: one entry per payment, with `merchant` "Rent", `category` `Home`, `subCategory` "Rent" and `isSubscription` true.
+
 Skip these (list them in `skipped`):
 
 - Order or shipping updates with no amount charged
 - Quotes, carts, invoices not yet paid, and payment reminders
-- Bank or card statements, transfers and bill-payment confirmations
+- Bank or card statements, and bill-payment confirmations
+- E-transfers to or from people, other than rent
 - Marketing emails, even with prices in them
 - An order that a later email shows was cancelled before it was charged
 
@@ -72,7 +78,7 @@ Leave out any field you can't read. Don't send `null` and don't add fields that 
 - `category`: one of `Takeout/Dining`, `Grocery`, `Transport`, `Shopping`, `Entertainment`, `Health`, `Home`, `Other`. `subCategory` is a short free-text detail such as "Coffee Shop" or "Pharmacy".
 - `isSubscription`: `true` for recurring charges (streaming, phone, gym, software), otherwise `false`.
 - `loyaltyPointsEarned`, `loyaltyPointsBalance`: only when the email prints them (for example a PC Optimum closing balance).
-- `items`: every line item with its final price after per-item discounts, and `quantity` as the unit count. Don't add a separate item for an order-level discount summary. Leave `items` out if the email doesn't list them.
+- `items`: every line item. `price` is the line's total after per-item discounts, not the price of one unit: two coffees at $2.00 each are one item with `price` 4.00 and `quantity` 2. The prices should add up to `subtotal`. Don't add a separate item for an order-level discount summary. Leave `items` out if the email doesn't list them.
 - `source.client`: your own name, such as `hark`, `instinct`, `poke` or `claude`.
 
 ## Privacy
