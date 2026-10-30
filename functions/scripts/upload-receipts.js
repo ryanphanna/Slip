@@ -62,7 +62,10 @@ async function main() {
   initializeAdminApp();
   const admin = require('firebase-admin');
   const existingSnap = await admin.firestore().collection('receipts').where('from', '==', phone).get();
-  const existing = existingSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  // Receipts from earlier uploads are matched by their idempotency key instead.
+  const existing = existingSnap.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .filter((doc) => doc.importSource?.tokenId !== 'local-upload');
   const matches = matchExisting(valid.map((entry) => entry.receipt), existing);
   const toSave = valid.filter((_, index) => !matches.has(index));
 
@@ -84,11 +87,11 @@ async function main() {
   const counts = { saved: 0, alreadyImported: 0, duplicate: 0, failed: 0, marked: 0 };
   for (const entry of toSave) {
     try {
-      const result = await importReceipt(identity, entry.receipt, { receivedAt: entry.receivedAt, skipRateLimit: true });
+      const result = await importReceipt(identity, entry.receipt, { receivedAt: entry.receivedAt, skipRateLimit: true, skipResendCheck: true });
       if (result.deduplicated) counts.alreadyImported += 1;
       else if (result.duplicate) counts.duplicate += 1;
       else counts.saved += 1;
-      if (!result.deduplicated && result.warnings.some((w) => w.includes('marked for checking'))) counts.marked += 1;
+      if (!result.deduplicated && result.warnings.some((w) => /marked for checking|does not match total|do not add up/.test(w))) counts.marked += 1;
     } catch (error) {
       counts.failed += 1;
       console.log(`  failed: ${entry.file} #${entry.index + 1} ${entry.receipt.merchant}: ${error.message}`);

@@ -41,8 +41,11 @@ async function checkTokenRateLimit(from, tokenId) {
 // `identity` comes only from the authenticated token ({ from, uid, tokenId }).
 // `options` is for the local upload script only (scripts/upload-receipts.js),
 // never the MCP endpoint: `receivedAt` is when the receipt email arrived, so an
-// old receipt isn't marked as a wrong date; `skipRateLimit` allows a backfill.
-async function importReceipt(identity, args, { receivedAt, skipRateLimit = false } = {}) {
+// old receipt isn't marked as a wrong date; `skipRateLimit` allows a backfill;
+// `skipResendCheck` stops a backfill's repeat charges (the same monthly
+// subscription, two equal coffees) from counting as a quick resend of the
+// receipt saved a moment before. The idempotency key still stops real resends.
+async function importReceipt(identity, args, { receivedAt, skipRateLimit = false, skipResendCheck = false } = {}) {
   const { errors, warnings } = validateImport(args);
   if (errors.length) throw fail('invalid-argument', 'Receipt rejected: ' + errors.join('; '), errors);
 
@@ -84,7 +87,7 @@ async function importReceipt(identity, args, { receivedAt, skipRateLimit = false
 
   try {
     const receipt = readReceipt(args);
-    const { duplicateId, flags } = await checkReceipt(receipt, from, { receivedAt });
+    const { duplicateId, flags } = await checkReceipt(receipt, from, { receivedAt, skipResendCheck });
     if (duplicateId) {
       await claimRef.set({ receiptId: duplicateId, duplicate: true }, { merge: true });
       return { receiptId: duplicateId, duplicate: true, deduplicated: false, warnings, message: `Duplicate: ${receipt.merchant} was already logged.` };
