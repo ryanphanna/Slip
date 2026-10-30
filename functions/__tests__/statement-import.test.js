@@ -54,7 +54,14 @@ describe('classify', () => {
     expect(classify(tx({ kind: 'cash' }))).toBe('transfer');
     expect(classify(tx({ kind: 'etransfer-person' }))).toBe('transfer');
     expect(classify(tx({ kind: 'income', amount: -500 }))).toBe('income');
-    expect(classify(tx({ kind: 'unknown' }))).toBe('unknown');
+    expect(classify(tx({ kind: 'unknown', amount: 500 }))).toBe('unknown');
+  });
+
+  test('an unnamed chequing line: small debit is a purchase, large deposit is income', () => {
+    expect(classify(tx({ kind: 'unknown', amount: 11.95 }))).toBe('spend');
+    expect(classify(tx({ kind: 'unknown', amount: -1200 }))).toBe('income');
+    expect(classify(tx({ kind: 'unknown', amount: -0.4 }))).toBe('unknown');
+    expect(classify(tx({ kind: 'interest', amount: -0.01 }))).toBe('income');
   });
 
   test('saved rules go first', () => {
@@ -288,7 +295,7 @@ describe('planEntries', () => {
     const interest = tx({ description: 'INTEREST', amount: 4, kind: 'interest' });
     const payment = tx({ description: 'PAYMENT RECEIVED - THANK YOU', amount: -100, kind: 'card-payment' });
     const pay = tx({ account: 'Pretend Chequing', description: 'PRETEND PAYROLL', amount: -2000, kind: 'income' });
-    const unknown = tx({ account: 'Pretend Chequing', description: 'MYSTERY', kind: 'unknown' });
+    const unknown = tx({ account: 'Pretend Chequing', description: 'MYSTERY', kind: 'unknown', amount: 500 });
     const { entries, skipped } = plan([spend, refund, rent, fee, interest, payment, pay, unknown], { rules: RENT_RULES });
     const by = new Map(entries.map((e) => [e.transaction, e.args]));
     expect(by.get(spend)).toMatchObject({ merchant: 'Pretend Pizza', category: 'Takeout/Dining', subCategory: 'Restaurant', type: 'purchase', total: 12.5, currency: 'CAD', source: { client: 'statement' } });

@@ -24,7 +24,7 @@ const ADDED_BUCKETS = ['spend', 'rent', 'bills', 'cardFees', 'reload', 'transfer
 const KIND_BUCKETS = {
   purchase: 'spend', refund: 'spend', rent: 'rent', bill: 'bills', fee: 'cardFees', interest: 'cardFees',
   reload: 'reload', 'card-payment': 'transfer', transfer: 'transfer', cash: 'transfer',
-  'etransfer-person': 'transfer', income: 'income', unknown: 'unknown',
+  'etransfer-person': 'transfer', income: 'income',
 };
 
 // Reasons shown on a receipt's statement mark. The first and last match the
@@ -76,6 +76,9 @@ function findRule(t, rules = []) {
   }) || null;
 }
 
+const SMALL_DEBIT = 100;
+const LARGE_DEPOSIT = 50;
+
 // The bucket for a transaction. Saved rules go first.
 function classify(t, rules = []) {
   const rule = findRule(t, rules);
@@ -83,7 +86,14 @@ function classify(t, rules = []) {
   const text = t.description || '';
   if (/RETURNED PAYMENT$|CRA REVENUE/i.test(text)) return 'transfer';
   if (/^REGULAR PURCHASES \d/i.test(text)) return 'cardFees';
+  // Interest paid to you (money in) is income, not a card charge.
+  if (t.kind === 'interest' && t.amount < 0) return 'income';
   if (KIND_BUCKETS[t.kind]) return KIND_BUCKETS[t.kind];
+  // Chequing lines the reader couldn't name: a small debit is a purchase made
+  // with the debit card, a large deposit is income (pay, cheques, tax refunds).
+  // Large debits stay unknown so a bill or transfer is never guessed as spending.
+  if (t.amount > 0 && t.amount <= SMALL_DEBIT) return 'spend';
+  if (t.amount <= -LARGE_DEPOSIT) return 'income';
   return 'unknown';
 }
 

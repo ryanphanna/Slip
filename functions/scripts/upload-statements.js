@@ -14,8 +14,11 @@
  * File names carry account digits, so --accounts gives a JSON file (kept
  * outside the repo) of file-name prefix -> label, used for CSVs and PDFs.
  *
+ * --since YYYY-MM-DD leaves out older lines (Slip's statement history starts
+ * in 2023).
+ *
  * Usage:
- *   node scripts/upload-statements.js <files or folders> --phone +14165551234 [--accounts accounts.json]          (dry run)
+ *   node scripts/upload-statements.js <files or folders> --phone +14165551234 [--accounts accounts.json] [--since 2023-01-01]          (dry run)
  *   node scripts/upload-statements.js <files or folders> --phone +14165551234 [--accounts accounts.json] --save
  */
 const crypto = require('crypto');
@@ -33,7 +36,8 @@ const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : n
 const save = args.includes('--save');
 const phone = option('--phone');
 const accountsFile = option('--accounts');
-const targets = args.filter((arg, index) => !arg.startsWith('--') && !['--phone', '--accounts'].includes(args[index - 1]));
+const since = option('--since');
+const targets = args.filter((arg, index) => !arg.startsWith('--') && !['--phone', '--accounts', '--since'].includes(args[index - 1]));
 
 if (!phone || !/^\+\d{10,15}$/.test(phone) || targets.length === 0) {
   console.error('Usage: node scripts/upload-statements.js <files or folders> --phone +14165551234 [--accounts accounts.json] [--save]');
@@ -66,7 +70,9 @@ async function usedKeys(db, keys) {
 async function main() {
   const accounts = accountsFile ? JSON.parse(fs.readFileSync(accountsFile, 'utf8')) : {};
   const files = targets.flatMap((target) => listFiles(target));
-  const { inventory, transactions, dropped } = readStatementFiles(files, { accounts, labelPdfs: true });
+  const read = readStatementFiles(files, { accounts, labelPdfs: true });
+  const { inventory, dropped } = read;
+  const transactions = since ? read.transactions.filter((t) => t.date >= since) : read.transactions;
 
   initializeAdminApp();
   const admin = require('firebase-admin');

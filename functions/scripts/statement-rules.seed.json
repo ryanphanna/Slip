@@ -1,5 +1,43 @@
 [
-  { "pattern": "MEDALLION", "merchant": "Rent", "category": "Home", "subCategory": "Rent", "bucket": "rent" },
-  { "pattern": "INTERAC E-TRANSFER SEND", "minAmount": 945, "maxAmount": 945, "merchant": "Rent", "category": "Home", "subCategory": "Rent", "bucket": "rent" },
-  { "pattern": "METRO 62", "minAmount": 1000, "merchant": "Metro Pharmacy", "category": "Health", "subCategory": "Pharmacy" }
+  {
+    "pattern": "MEDALLION",
+    "merchant": "Rent",
+    "category": "Home",
+    "subCategory": "Rent",
+    "bucket": "rent"
+  },
+  {
+    "pattern": "INTERAC E-TRANSFER SEND",
+    "minAmount": 945,
+    "maxAmount": 945,
+    "merchant": "Rent",
+    "category": "Home",
+    "subCategory": "Rent",
+    "bucket": "rent"
+  },
+  {
+    "pattern": "METRO 62",
+    "minAmount": 1000,
+    "merchant": "Metro Pharmacy",
+    "category": "Health",
+    "subCategory": "Pharmacy"
+  },
+  {
+    "pattern": "GOODLIFE",
+    "merchant": "GoodLife Fitness",
+    "category": "Health",
+    "subCategory": "Fitness",
+    "bucket": "bills"
+  },
+  {
+    "pattern": "GLASSHOUSE DENT",
+    "merchant": "Glasshouse Dental",
+    "category": "Health",
+    "subCategory": "Dentist",
+    "bucket": "spend"
+  },
+  {
+    "pattern": "BNS PREAUTH|WALMART MC EFT|PCF PAD|VISA, SCOTIABANK|BILL CORRECTION MASTERCARD",
+    "bucket": "transfer"
+  }
 ]
