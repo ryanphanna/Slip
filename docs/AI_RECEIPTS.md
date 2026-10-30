@@ -18,13 +18,13 @@ Use an email when it shows a completed purchase or refund with a total: store re
 Also use these:
 
 - Orders paid fully with points, rewards or a gift card (for example a Tim Hortons order covered by Tims Rewards). Write them with `total` 0 and every item, so the visit still shows up.
-- Rent paid by e-transfer: one entry per payment, with `merchant` "Rent", `category` `Home`, `subCategory` "Rent" and `isSubscription` true.
+- Rent, however it was paid (e-transfer, or a rent-payment service such as PayQuad): one entry per payment, with `merchant` "Rent", `category` `Home`, `subCategory` "Rent" and `isSubscription` true.
 
 Skip these (list them in `skipped`):
 
 - Order or shipping updates with no amount charged
 - Quotes, carts, invoices not yet paid, and payment reminders
-- Bank or card statements, and bill-payment confirmations
+- Bank or card statements, and bill-payment confirmations other than rent
 - E-transfers to or from people, other than rent
 - Marketing emails, even with prices in them
 - An order that a later email shows was cancelled before it was charged
