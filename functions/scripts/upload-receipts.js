@@ -3,7 +3,9 @@
  * Upload a receipts file made by an AI assistant from receipt emails
  * (format: docs/AI_RECEIPTS.md). Each receipt goes through the same
  * validation, checks and idempotency as an AI import, without the hourly
- * import limits, so a large backlog can be loaded in one go.
+ * import limits, so a large backlog can be loaded in one go. Receipts that
+ * are already in Slip under another store spelling or a day apart are left
+ * out (CIV-1159); the dry run lists them.
  *
  * Usage:
  *   node scripts/upload-receipts.js <file.json> [more.json] --phone +14165551234          (dry run)
@@ -13,6 +15,7 @@ const fs = require('fs');
 const { initializeAdminApp } = require('../lib/admin');
 const { validateImport } = require('../lib/import-schema');
 const { isRealDate } = require('../lib/validate');
+const { matchExisting, lineTotalItems } = require('../lib/email-file');
 
 const args = process.argv.slice(2);
 const save = args.includes('--save');
@@ -30,6 +33,7 @@ function readEntry(entry) {
   const { emailDate, ...receipt } = entry || {};
   if (!receipt.source) receipt.source = { client: 'email-file' };
   if (receipt.schemaVersion === undefined) receipt.schemaVersion = 1;
+  if (receipt.items) receipt.items = lineTotalItems(receipt);
   const receivedAt = isRealDate(emailDate) ? new Date(`${emailDate}T12:00:00`) : undefined;
   return { receipt, receivedAt };
 }
@@ -55,20 +59,30 @@ async function main() {
     (errors.length ? invalid : valid).push({ ...entry, errors });
   }
 
-  console.log(`${entries.length} receipts in ${files.length} file(s); ${valid.length} valid, ${invalid.length} invalid; ${skippedByAssistant} skipped by the assistant.`);
+  initializeAdminApp();
+  const admin = require('firebase-admin');
+  const existingSnap = await admin.firestore().collection('receipts').where('from', '==', phone).get();
+  const existing = existingSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const matches = matchExisting(valid.map((entry) => entry.receipt), existing);
+  const toSave = valid.filter((_, index) => !matches.has(index));
+
+  console.log(`${entries.length} receipts in ${files.length} file(s); ${valid.length} valid, ${invalid.length} invalid; ${matches.size} already in Slip; ${skippedByAssistant} skipped by the assistant.`);
   for (const entry of invalid) {
     console.log(`  invalid: ${entry.file} #${entry.index + 1} ${entry.receipt.merchant || '?'} ${entry.receipt.date || ''}: ${entry.errors.join('; ')}`);
   }
+  for (const [index, doc] of matches) {
+    const { receipt } = valid[index];
+    console.log(`  already in Slip: ${receipt.date} ${receipt.merchant} ${receipt.total} = ${doc.date} ${doc.merchant} (${doc.id})`);
+  }
   if (!save) {
-    console.log('Dry run: nothing saved. Add --save to upload the valid receipts.');
+    console.log(`Dry run: nothing saved. Add --save to upload the ${toSave.length} new receipts.`);
     return;
   }
 
-  initializeAdminApp();
   const { importReceipt } = require('../lib/import-receipt');
   const identity = { from: phone, uid: null, tokenId: 'local-upload' };
   const counts = { saved: 0, alreadyImported: 0, duplicate: 0, failed: 0, marked: 0 };
-  for (const entry of valid) {
+  for (const entry of toSave) {
     try {
       const result = await importReceipt(identity, entry.receipt, { receivedAt: entry.receivedAt, skipRateLimit: true });
       if (result.deduplicated) counts.alreadyImported += 1;
