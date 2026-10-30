@@ -15,9 +15,12 @@ function normalizeMerchant(name) {
 
   // Whole-word match, so "Walmart Supercenter" -> "Walmart" and "METRO #123" ->
   // "Metro", but "Metrolinx" (or any longer word that merely contains a key) is left alone.
+  // Brackets after another name are a detail, not the store: "Token Transit
+  // (NFTA Metro)" and "Uber Eats (Walmart)" stay as they are (CIV-1159).
+  const outside = lower.replace(/\([^)]*\)/g, ' ').trim() || lower;
   for (const [key, canonical] of Object.entries(config.MERCHANT_NORMALIZE_MAP || {})) {
     const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(lower)) {
+    if (new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`).test(outside)) {
       return canonical;
     }
   }

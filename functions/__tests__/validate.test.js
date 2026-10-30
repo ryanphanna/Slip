@@ -274,6 +274,14 @@ describe('normalizeMerchant whole-word matching', () => {
     expect(normalizeMerchant(input)).toBe(input);
   });
 
+  it.each([
+    ['Token Transit (NFTA Metro)'],
+    ['RideMMT (Mountain Metro Transit)'],
+    ['Uber Eats (Walmart)'],
+  ])('leaves %j unchanged (key only appears in brackets after another name)', (input) => {
+    expect(normalizeMerchant(input)).toBe(input);
+  });
+
   it('returns null for non-strings and trims otherwise', () => {
     expect(normalizeMerchant(null)).toBeNull();
     expect(normalizeMerchant(42)).toBeNull();
