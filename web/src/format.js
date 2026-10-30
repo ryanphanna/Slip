@@ -112,7 +112,9 @@ export function isFlagged(receipt) {
 // "Card charge June 21, $51.13, LAMAISONSIMONS"; missing parts are left out.
 export function chargeLabel(charge) {
   if (!charge) return '';
-  const amount = Number.isFinite(charge.amount) ? formatMoney(charge.amount) : '';
+  // Amounts may arrive as numbers or number text.
+  const value = typeof charge.amount === 'string' && charge.amount.trim() ? Number(charge.amount) : charge.amount;
+  const amount = Number.isFinite(value) ? formatMoney(value) : '';
   const parts = [charge.date ? formatListDate(charge.date) : '', amount, charge.description || ''].filter(Boolean);
   return parts.length ? `Card charge ${parts.join(', ')}` : '';
 }
