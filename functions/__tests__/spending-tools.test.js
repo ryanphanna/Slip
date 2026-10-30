@@ -278,3 +278,45 @@ describe('spending tools with mixed currencies', () => {
   });
 });
 
+
+describe('spending tools skip Transfer and Income (CIV-1189)', () => {
+  const docs = [
+    { merchant: 'Costco', total: 100, category: 'Grocery', createdAt: { toDate: () => new Date() } },
+    { merchant: 'Amex', total: 800, category: 'Transfer', createdAt: { toDate: () => new Date() } },
+    { merchant: 'Employer', total: 3000, category: 'Income', isSubscription: true, createdAt: { toDate: () => new Date() } },
+  ];
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGet.mockResolvedValue({ docs: docs.map((d) => ({ data: () => d })) });
+  });
+
+  it('getSpendingTotal counts only spending, even when asked for the Transfer category', async () => {
+    expect(await executeTool('getSpendingTotal', {})).toMatchObject({ total: 100, receiptCount: 1 });
+    expect(await executeTool('getSpendingTotal', { category: 'Transfer' })).toMatchObject({ total: 0, receiptCount: 0 });
+  });
+
+  it('getSpendingByCategory, getTopMerchants and getMonthlySummary leave them out', async () => {
+    const byCat = await executeTool('getSpendingByCategory', {});
+    expect(byCat).toMatchObject({ total: 100, receiptCount: 1, categories: [{ category: 'Grocery', amount: 100 }] });
+    expect(await executeTool('getTopMerchants', {})).toEqual([{ merchant: 'Costco', total: 100, visits: 1 }]);
+    const monthly = await executeTool('getMonthlySummary', {});
+    expect(monthly).toMatchObject({ total: 100, receiptCount: 1, topMerchants: [{ merchant: 'Costco', amount: 100 }] });
+  });
+
+  it('getSubscriptions leaves them out of the monthly overhead', async () => {
+    const result = await executeTool('getSubscriptions', {});
+    expect(result.subscriptions.map((s) => s.merchant)).not.toContain('Employer');
+    expect(result.totalMonthlyOverhead).toBe(100);
+  });
+
+  it('searchReceipts still finds them, since they stay in history', async () => {
+    const result = await executeTool('searchReceipts', { query: 'transfer' });
+    expect(result.map((r) => r.merchant)).toEqual(['Amex']);
+  });
+
+  it('setCategoryBudget refuses Transfer and Income without saving', async () => {
+    expect(await executeTool('setCategoryBudget', { category: 'Transfer', limit: 100 })).toEqual({ error: expect.stringContaining("isn't counted as spending") });
+    expect(await executeTool('setCategoryBudget', { category: 'income', limit: 100 })).toEqual({ error: expect.stringContaining("isn't counted as spending") });
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+});

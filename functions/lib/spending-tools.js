@@ -2,13 +2,14 @@ const admin = require('firebase-admin');
 const { aggregateSpendingByCategory, countedDate, dateKey } = require('./query');
 const { currencyOf, DEFAULT_CURRENCY } = require('./money');
 const { normalizeMerchant } = require('./validate');
+const { isSpending, isSpendingCategory, SPENDING_CATEGORIES } = require('./categories');
 
 
 // Tool declarations in Gemini function-calling format
 const TOOL_DECLARATIONS = [
   {
     name: 'getSpendingTotal',
-    description: 'Get the total amount spent across all receipts, optionally filtered by date range, merchant, or category.',
+    description: 'Get the total amount spent across all receipts, optionally filtered by date range, merchant, or category. Transfer and Income entries are not spending and are never counted.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -21,7 +22,7 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: 'getSpendingByCategory',
-    description: 'Get spending broken down by category, optionally filtered by date range or merchant.',
+    description: 'Get spending broken down by category, optionally filtered by date range or merchant. Transfer and Income entries are not counted.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -86,7 +87,7 @@ const TOOL_DECLARATIONS = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        category: { type: 'STRING', description: 'The spending category name (e.g. Grocery, Health, Home, Takeout/Dining, etc.).' },
+        category: { type: 'STRING', description: `The spending category name, one of: ${SPENDING_CATEGORIES.join(', ')}. Transfer and Income can't have budgets.` },
         limit:    { type: 'NUMBER', description: 'The monthly budget limit amount.' },
       },
       required: ['category', 'limit'],
@@ -120,6 +121,7 @@ function toDayKey(value) {
 
 // Date ranges use the printed receipt date (sent date when none was read),
 // the same rule as TOTAL, SUMMARY and the recap page. Both ends inclusive.
+// Lists every entry; the spending tools filter with isSpending.
 async function queryReceipts({ startDate, endDate, merchant, category } = {}) {
   const db = admin.firestore();
   const start = toDayKey(startDate);
@@ -148,7 +150,7 @@ async function queryReceipts({ startDate, endDate, merchant, category } = {}) {
 }
 
 async function getSpendingTotal({ startDate, endDate, merchant, category } = {}) {
-  const docs = await queryReceipts({ startDate, endDate, merchant, category });
+  const docs = (await queryReceipts({ startDate, endDate, merchant, category })).filter(isSpending);
   // `total`/`receiptCount` are CAD only; other currencies are reported
   // separately in `byCurrency` and never added in.
   const sums = {};
@@ -176,12 +178,12 @@ async function getSpendingByCategory({ startDate, endDate, merchant } = {}) {
   const sorted = Object.entries(categories)
     .sort(([, a], [, b]) => b - a)
     .map(([category, amount]) => ({ category, amount }));
-  const primaryCount = docs.filter((d) => currencyOf(d) === DEFAULT_CURRENCY).length;
+  const primaryCount = docs.filter((d) => isSpending(d) && currencyOf(d) === DEFAULT_CURRENCY).length;
   return { categories: sorted, total, currency: DEFAULT_CURRENCY, receiptCount: primaryCount, ...(byCurrency ? { byCurrency } : {}) };
 }
 
 async function getTopMerchants({ startDate, endDate, limit = 10 } = {}) {
-  const docs = await queryReceipts({ startDate, endDate });
+  const docs = (await queryReceipts({ startDate, endDate })).filter(isSpending);
   // CAD ranking only: merchant totals are never mixed across currencies.
   const merchants = {};
   for (const d of docs) {
@@ -229,7 +231,7 @@ async function getMonthlySummary({ year, month } = {}) {
   const start = new Date(y, m - 1, 1);
   const end   = new Date(y, m, 0); // last day of month
 
-  const docs = await queryReceipts({ startDate: dateKey(start), endDate: dateKey(end) });
+  const docs = (await queryReceipts({ startDate: dateKey(start), endDate: dateKey(end) })).filter(isSpending);
 
   const { total, categories, byCurrency } = aggregateSpendingByCategory(docs);
   
@@ -325,7 +327,7 @@ async function getSubscriptions() {
   const subscriptions = {};
   for (const doc of snapshot.docs) {
     const data = doc.data();
-    if (!data.merchant || data.total == null) continue;
+    if (!data.merchant || data.total == null || !isSpending(data)) continue;
     
     const normalized = normalizeMerchant(data.merchant);
     const key = normalized.toLowerCase();
@@ -375,7 +377,9 @@ async function executeTool(name, args) {
     case 'getRecentReceipts':     return getRecentReceipts(args);
     case 'getMonthlySummary':     return getMonthlySummary(args);
     case 'searchReceipts':        return searchReceipts(args);
-    case 'setCategoryBudget':     return setBudget(from, args.category, args.limit);
+    case 'setCategoryBudget':
+      if (!isSpendingCategory(args.category)) return { error: `${args.category} isn't counted as spending, so it can't have a budget.` };
+      return setBudget(from, args.category, args.limit);
     case 'getBudgetStatus':       return getBudgetReport(from);
     case 'getSubscriptions':      return getSubscriptions();
     default: throw new Error(`Unknown tool: ${name}`);

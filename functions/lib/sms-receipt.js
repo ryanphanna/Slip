@@ -5,6 +5,7 @@ const { saveReceipt, saveProcessingFailure } = require('./store');
 const { getLastReceipt, aggregateSpendingByCategory, currentMonthDocs } = require('./query');
 const { saveImages, saveFailedImages } = require('./image-store');
 const { getBudget } = require('./budget');
+const { isSpending } = require('./categories');
 const { formatMoney, currencyOf, DEFAULT_CURRENCY } = require('./money');
 const { readReceipt, checkReceipt, flagNotes } = require('./receipt-checks');
 const config = require('./config');
@@ -143,8 +144,8 @@ function processReceiptMessage({ body, from, maskedFrom, messageSid, numMedia })
           logger.warn('Receipt saved with no date', { messageSid, merchant });
         }
 
-        // Budgets are CAD limits, so a non-CAD receipt gets no budget status.
-        if (receipt.category && receiptCurrency === DEFAULT_CURRENCY) {
+        // Budgets are CAD spending limits, so a non-CAD, Transfer or Income entry gets no budget status.
+        if (receipt.category && isSpending(receipt) && receiptCurrency === DEFAULT_CURRENCY) {
           try {
             const budget = await getBudget(from, receipt.category);
             if (budget && budget.limit > 0) {

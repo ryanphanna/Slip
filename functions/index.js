@@ -25,7 +25,7 @@ const { isMessageProcessed, checkRateLimit } = require('./lib/store');
 const { getMonthlyStats, getSpendingStats, getLastReceipt } = require('./lib/query');
 const { isAllowed } = require('./lib/allowlist');
 const { setBudget, getBudgetReport, getBudgetStatus } = require('./lib/budget');
-const { resolveCategory, VALID_CATEGORIES } = require('./lib/categories');
+const { resolveCategory, isSpendingCategory, SPENDING_CATEGORIES } = require('./lib/categories');
 const { formatMoney, alsoSpentLine, currencyOf } = require('./lib/money');
 const { processReceiptMessage } = require('./lib/sms-receipt');
 const { sendMonthlyDigest, sendWeeklyBudgetCheck } = require('./lib/digest');
@@ -270,7 +270,9 @@ exports.sms = onRequest(
             const typedCategory = parts.slice(1, -1).join(' ');
             const category = resolveCategory(typedCategory);
             if (!category) {
-              await sendSms(from, `${oops()} I don't know the category "${typedCategory}". Use one of: ${VALID_CATEGORIES.join(', ')}.`);
+              await sendSms(from, `${oops()} I don't know the category "${typedCategory}". Use one of: ${SPENDING_CATEGORIES.join(', ')}.`);
+            } else if (!isSpendingCategory(category)) {
+              await sendSms(from, `${category} isn't counted as spending, so it can't have a budget. Use one of: ${SPENDING_CATEGORIES.join(', ')}.`);
             } else {
               await setBudget(from, category, limit);
               await sendSms(from, `Budget set: ${category} limit is now $${limit.toFixed(2)}.`);

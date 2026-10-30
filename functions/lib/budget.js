@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { aggregateSpendingByCategory, currentMonthDocs } = require('./query');
+const { isSpendingCategory } = require('./categories');
 
 function getDocId(from, category) {
   const safeFrom = (from || 'unknown').replace(/[^a-zA-Z0-9]/g, '');
@@ -11,6 +12,8 @@ async function setBudget(from, category, limit) {
   const db = admin.firestore();
   const docId = getDocId(from, category);
   const cleanCategory = (category || 'Other').trim();
+  // Transfer and Income are not spending, so a budget on them never fills.
+  if (!isSpendingCategory(cleanCategory)) throw new Error(`No budgets for ${cleanCategory}: it isn't counted as spending.`);
   const cleanLimit = Math.max(0, Number(limit) || 0);
 
   await db.collection('budgets').doc(docId).set({

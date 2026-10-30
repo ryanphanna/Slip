@@ -132,3 +132,34 @@ describe('digests with mixed currencies', () => {
     expect(message).toContain('Also spent: US$500.00 (not counted in budgets)');
   });
 });
+
+describe('Transfer and Income in digests (CIV-1189)', () => {
+  it('the monthly recap leaves them out of the total, count and categories', async () => {
+    seedReceipt('r1', { total: 40, category: 'Grocery', date: lastMonthDateString('05') });
+    seedReceipt('r2', { total: 500, category: 'Transfer', date: lastMonthDateString('06') });
+    seedReceipt('r3', { total: 2000, category: 'Income', date: lastMonthDateString('07') });
+    await sendMonthlyDigest(FROM);
+    const message = sendSms.mock.calls[0][1];
+    expect(message).toContain('$40.00 across 1 receipt');
+    expect(message).not.toContain('Transfer');
+    expect(message).not.toContain('Income');
+    const notification = [...fake.store.notifications.values()][0];
+    expect(notification).toMatchObject({ total: 40, count: 1, categories: { Grocery: 40 } });
+  });
+
+  it('sends no recap for a month with only Transfer and Income entries', async () => {
+    seedReceipt('r1', { total: 500, category: 'Transfer', date: lastMonthDateString('06') });
+    seedReceipt('r2', { total: 2000, category: 'Income', date: lastMonthDateString('07') });
+    await sendMonthlyDigest(FROM);
+    expect(sendSms).not.toHaveBeenCalled();
+  });
+
+  it('the weekly budget text leaves them out', async () => {
+    await setBudget(FROM, 'Grocery', 100);
+    seedReceipt('r1', { total: 30, category: 'Grocery' });
+    seedReceipt('r2', { total: 500, category: 'Transfer' });
+    seedReceipt('r3', { total: 2000, category: 'Income' });
+    await sendWeeklyBudgetCheck(FROM);
+    expect(sendSms.mock.calls[0][1]).toContain('Grocery: $30.00 / $100.00 (30%)');
+  });
+});

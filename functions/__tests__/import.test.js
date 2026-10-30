@@ -439,3 +439,19 @@ describe('import', () => {
     await expect(updateReceipt({ ...authFor('u2', PHONE_B), data: { id: receiptId, patch: { merchant: 'x' } } })).rejects.toMatchObject({ code: 'not-found' });
   });
 });
+
+describe('Transfer and Income entries (CIV-1189)', () => {
+  const { validateReceipt } = require('../lib/validate');
+
+  it.each([['Transfer'], ['Income']])('imports, schema and edits accept %s', (category) => {
+    expect(validateImport(valid({ category, items: undefined, subtotal: undefined, tax: undefined })).errors).toEqual([]);
+    expect(INPUT_SCHEMA.properties.category.enum).toContain(category);
+    expect(validateReceipt({ merchant: 'Amex', total: 500, category }).category).toBe(category);
+  });
+
+  it("the receipt reader's prompt still offers only spending categories", () => {
+    const source = require('fs').readFileSync(require.resolve('../lib/gemini'), 'utf8');
+    expect(source).toContain('Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other');
+    expect(source).not.toMatch(/Transfer|Income/);
+  });
+});

@@ -1,3 +1,7 @@
+// Every category the server accepts. Mirrors VALID_CATEGORIES in
+// functions/lib/categories.js; Transfer and Income are never counted as spending.
+export const CATEGORIES = ['Takeout/Dining', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Home', 'Other', 'Transfer', 'Income'];
+
 // Empty field -> null (not 0); unparseable text is sent as-is so the server rejects it.
 export function amountOrNull(value) {
   if (value === '' || value == null) return null;

@@ -119,3 +119,34 @@ describe('aggregateSpendingByCategory across currencies', () => {
   });
 });
 
+
+describe('Transfer and Income are not spending (CIV-1189)', () => {
+  const spending = [
+    { total: 25, category: 'Grocery' },
+    { total: 10, category: 'Health' },
+  ];
+
+  it('leaves Transfer and Income entries out of the total and categories', () => {
+    const result = aggregateSpendingByCategory([
+      ...spending,
+      { total: 500, category: 'Transfer' },
+      { total: 2000, category: 'Income' },
+      { total: 40, category: 'Transfer', currency: 'USD' },
+    ]);
+    expect(result).toEqual({ total: 35, categories: { Grocery: 25, Health: 10 } });
+  });
+
+  it('leaves ordinary categories unchanged', () => {
+    expect(aggregateSpendingByCategory([...spending, { total: 500, category: 'Transfer' }]))
+      .toEqual(aggregateSpendingByCategory(spending));
+  });
+
+  it('counts a Transfer or Income item on a spending receipt under the receipt category', () => {
+    const result = aggregateSpendingByCategory([{
+      total: 30,
+      category: 'Grocery',
+      items: [{ name: 'Milk', price: 20, category: 'Grocery' }, { name: 'Reload', price: 10, category: 'Transfer' }],
+    }]);
+    expect(result).toEqual({ total: 30, categories: { Grocery: 30 } });
+  });
+});

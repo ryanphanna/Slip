@@ -1,6 +1,24 @@
-const VALID_CATEGORIES = ['Takeout/Dining', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Home', 'Other'];
+// Kinds of spending. The receipt reader's prompt (gemini.js) lists only these.
+const SPENDING_CATEGORIES = ['Takeout/Dining', 'Grocery', 'Transport', 'Shopping', 'Entertainment', 'Health', 'Home', 'Other'];
+
+// Kept in history but never counted as spending (CIV-1189). Transfer: card
+// payments, moves between your own accounts, and store-balance reloads whose
+// purchases are logged too. Income: pay.
+const NON_SPENDING_CATEGORIES = ['Transfer', 'Income'];
+
+const VALID_CATEGORIES = [...SPENDING_CATEGORIES, ...NON_SPENDING_CATEGORIES];
 
 const key = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Any capitalization, so a typed "transfer" is caught too.
+function isSpendingCategory(category) {
+  return !NON_SPENDING_CATEGORIES.some((name) => key(name) === key(category));
+}
+
+// The one rule every spending total, count, budget and recap uses.
+function isSpending(doc) {
+  return isSpendingCategory(doc?.category);
+}
 
 // Maps what a user typed to a canonical category: case-insensitive, tolerant of
 // simple plurals (Groceries -> Grocery) and of either half of "Takeout/Dining".
@@ -19,4 +37,4 @@ function resolveCategory(input) {
   return null;
 }
 
-module.exports = { VALID_CATEGORIES, resolveCategory };
+module.exports = { VALID_CATEGORIES, SPENDING_CATEGORIES, NON_SPENDING_CATEGORIES, isSpending, isSpendingCategory, resolveCategory };

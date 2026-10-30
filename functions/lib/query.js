@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { DEFAULT_CURRENCY, currencyOf } = require('./money');
+const { isSpending, isSpendingCategory } = require('./categories');
 
 function findLatestReceiptForSender(snapshotDocs, from) {
   for (const doc of snapshotDocs) {
@@ -19,7 +20,8 @@ function aggregateOneCurrency(docs) {
     if (Array.isArray(d.items) && d.items.length > 0) {
       let sumItems = 0;
       for (const item of d.items) {
-        const itemCat = item.category || d.category || 'Other';
+        // A Transfer or Income item on a spending receipt counts under the receipt's category.
+        const itemCat = (isSpendingCategory(item.category) && item.category) || d.category || 'Other';
         const itemPrice = item.price || 0;
         categories[itemCat] = (categories[itemCat] || 0) + itemPrice;
         sumItems += itemPrice;
@@ -50,11 +52,11 @@ function aggregateOneCurrency(docs) {
 
 // Totals are CAD (missing currency = CAD). Other currencies are never added in;
 // they appear only under `byCurrency` as { total, categories, count } (key
-// omitted when there are none).
+// omitted when there are none). Transfer and Income entries are skipped.
 function aggregateSpendingByCategory(docs) {
   const primary = [];
   const others = {};
-  for (const d of docs) {
+  for (const d of docs.filter(isSpending)) {
     const code = currencyOf(d);
     if (code === DEFAULT_CURRENCY) primary.push(d);
     else (others[code] = others[code] || []).push(d);
@@ -72,7 +74,7 @@ function aggregateSpendingByCategory(docs) {
 
 // Receipt count for the CAD headline, so "$X across N receipts" matches X.
 function countPrimary(docs) {
-  return docs.filter((d) => currencyOf(d) === DEFAULT_CURRENCY).length;
+  return docs.filter((d) => isSpending(d) && currencyOf(d) === DEFAULT_CURRENCY).length;
 }
 
 // SUMMARY: this month by printed date, the same rule as the recap page.
@@ -125,10 +127,12 @@ function monthName(monthKey) {
 // One month's stats from already-loaded receipt data, filtered on the
 // purchase date. This is the single month rule the monthly recap (SMS and
 // Notifications card) and the web recap page share, so their numbers match.
+// Spending only: the recap page's receipt list matches its headline count.
 function monthStatsFromDocs(docs, monthKey) {
   const startDate = `${monthKey}-01`;
   const endDate = `${shiftMonthKey(monthKey, 1)}-01`;
   const monthDocs = docs.filter((doc) => {
+    if (!isSpending(doc)) return false;
     const day = countedDate(doc);
     return day != null && day >= startDate && day < endDate;
   });

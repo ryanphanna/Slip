@@ -11,6 +11,7 @@ const importTokens = require('./import-tokens');
 const { monthStatsFromDocs, loadAllReceipts, isMonthKey, shiftMonthKey } = require('./query');
 const { pointsFromDocs } = require('./loyalty');
 const { DEFAULT_CURRENCY, currencyOf } = require('./money');
+const { isSpending } = require('./categories');
 
 const EDITABLE_FIELDS = new Set([
   'merchant', 'location', 'date', 'total', 'subtotal', 'tax', 'category',
@@ -163,12 +164,12 @@ async function listNotifications(request) {
 
 const TOP_MERCHANT_LIMIT = 5;
 
-// Where the most CAD went: same `total` field and CAD-only rule as the
-// recap total, so the list is always a subset of the headline number.
+// Where the most CAD went: same `total` field, CAD-only and spending-only
+// rules as the recap total, so the list is always a subset of the headline number.
 function topMerchants(docs) {
   const byKey = new Map();
   for (const doc of docs) {
-    if (doc.total == null || currencyOf(doc) !== DEFAULT_CURRENCY) continue;
+    if (doc.total == null || !isSpending(doc) || currencyOf(doc) !== DEFAULT_CURRENCY) continue;
     const name = (doc.merchant || '').trim() || 'Unknown merchant';
     const key = name.toLowerCase();
     const entry = byKey.get(key) || { name, total: 0, count: 0 };

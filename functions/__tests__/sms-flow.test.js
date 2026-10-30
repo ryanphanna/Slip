@@ -595,3 +595,37 @@ describe('text commands', () => {
     expect(fake.store.budgets?.size || 0).toBe(0);
   });
 });
+
+describe('Transfer and Income in text replies (CIV-1189)', () => {
+  const budgets = () => [...(fake.store.budgets || new Map()).values()];
+  const now = () => makeTimestamp(new Date());
+
+  it.each([['BUDGET Transfer 100', 'Transfer'], ['BUDGET income 100', 'Income']])('%s is refused with a clear reply', async (body, category) => {
+    await sms(makeReq({ Body: body }), makeRes());
+    expect(budgets()).toHaveLength(0);
+    expect(lastSms()).toBe(`${category} isn't counted as spending, so it can't have a budget. Use one of: Takeout/Dining, Grocery, Transport, Shopping, Entertainment, Health, Home, Other.`);
+  });
+
+  it('TOTAL MONTH and BUDGET leave them out', async () => {
+    seed('budgets', `${FROM.replace(/\D/g, '')}_grocery`, { from: FROM, category: 'Grocery', limit: 100 });
+    seed('receipts', 'g', { from: FROM, category: 'Grocery', total: 40, createdAt: now() });
+    seed('receipts', 't', { from: FROM, category: 'Transfer', total: 800, createdAt: now() });
+    seed('receipts', 'i', { from: FROM, category: 'Income', total: 3000, createdAt: now() });
+    await sms(makeReq({ Body: 'TOTAL MONTH' }), makeRes());
+    expect(lastSms()).toContain(': $40.00 (1 receipt)');
+    await sms(makeReq({ MessageSid: 'SMb', Body: 'BUDGET' }), makeRes());
+    expect(lastSms()).toBe('Monthly Budgets:\nGrocery: $40.00 / $100.00 (40%)');
+    await sms(makeReq({ MessageSid: 'SMc', Body: 'SUMMARY' }), makeRes());
+    expect(lastSms()).toContain('Total: $40.00');
+    expect(lastSms()).not.toMatch(/Transfer|Income/);
+  });
+
+  it('the budget line in the save reply leaves them out', async () => {
+    seed('budgets', `${FROM.replace(/\D/g, '')}_grocery`, { from: FROM, category: 'Grocery', limit: 100 });
+    seed('receipts', 'prev', { from: FROM, createdAt: now(), merchant: 'x', total: 1, category: 'Transfer' });
+    parseReceiptFromText.mockResolvedValue({ ...GOOD, date: null });
+    await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
+    await waitFor(() => sendSms.mock.calls.length > 0);
+    expect(lastSms()).toContain('Budget: $23.50/$100.00 spent');
+  });
+});

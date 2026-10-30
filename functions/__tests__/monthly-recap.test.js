@@ -189,3 +189,47 @@ describe('month helpers', () => {
     expect(isMonthKey('2026-13')).toBe(false);
   });
 });
+
+describe('Transfer and Income on the recap and text replies (CIV-1189)', () => {
+  function seedWithTransfers() {
+    seedMixedMonth();
+    seed('t1', { date: '2026-09-20', total: 800, merchant: 'Amex payment', category: 'Transfer' });
+    seed('t2', { date: '2026-09-25', total: 3000, merchant: 'Employer', category: 'Income' });
+    seed('t3', { date: '2026-08-20', total: 25, merchant: 'Tim Hortons', category: 'Transfer' });
+    seed('t4', { date: '2026-10-02', total: 50, merchant: 'Savings', category: 'Transfer', currency: 'USD' });
+  }
+
+  it('the recap page and card match a month without them', async () => {
+    seedMixedMonth();
+    const plain = await getMonthlyRecap({ ...AUTH, data: { month: '2026-09' } });
+    fake = createFakeFirestore();
+    admin.firestore.mockReturnValue(fake.db);
+    seedWithTransfers();
+    const recap = await getMonthlyRecap({ ...AUTH, data: { month: '2026-09' } });
+    const { receipts: plainReceipts, ...plainStats } = plain;
+    const { receipts, ...stats } = recap;
+    expect(stats).toEqual(plainStats);
+    expect(stats).toMatchObject({ total: 82.44, count: 3, previous: { total: 35, count: 2 } });
+    expect(receipts.map((r) => r.id)).toEqual(plainReceipts.map((r) => r.id));
+
+    await sendMonthlyDigest(FROM);
+    const notification = [...fake.store.notifications.values()][0];
+    expect(notification).toMatchObject({ total: 82.44, count: recap.count, categories: recap.categories });
+  });
+
+  it('SUMMARY, TOTAL MONTH and TOTAL YEAR leave them out', async () => {
+    jest.setSystemTime(new Date(2026, 9, 20, 12));
+    seedWithTransfers();
+    seed('o1', { date: '2026-10-05', total: 12, merchant: 'Metro', category: 'Grocery' });
+    seed('o2', { date: '2026-10-06', total: 2000, merchant: 'Employer', category: 'Income' });
+    const summary = await getMonthlyStats(FROM);
+    // October: 'g' $70, the undated 'f' $99 and 'o1' $12; the Income and USD Transfer are left out.
+    expect(summary).toMatchObject({ total: 181, count: 3, categories: { Grocery: 82, Other: 99 } });
+    expect(summary.categories.Income).toBeUndefined();
+    expect(summary.byCurrency).toBeUndefined();
+    expect(await getSpendingStats(FROM, new Date(2026, 9, 1))).toMatchObject({ total: 181, count: 3 });
+    const year = await getSpendingStats(FROM, new Date(2026, 0, 1));
+    expect(year.categories.Transfer).toBeUndefined();
+    expect(year.categories.Income).toBeUndefined();
+  });
+});

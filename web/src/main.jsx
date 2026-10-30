@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Topbar from './components/Topbar.jsx';
 import ReceiptDetail from './components/ReceiptDetail.jsx';
 import { auth, call, isConfigured } from './firebase.js';
+import { CATEGORIES } from './format.js';
 import ItemsView from './views/ItemsView.jsx';
 import Login from './views/Login.jsx';
 import NotificationsView from './views/NotificationsView.jsx';
@@ -99,7 +100,7 @@ function Inbox({ user }) {
   }
   useEffect(() => { load(); }, []);
 
-  const categories = [...new Set(receipts.map((receipt) => receipt.category).filter(Boolean))].sort();
+  const categories = [...new Set([...CATEGORIES, ...receipts.map((receipt) => receipt.category).filter(Boolean)])].sort();
   const ready = !loading && !error;
 
   async function retryFailure(id) {

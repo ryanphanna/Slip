@@ -75,7 +75,10 @@ Leave out any field you can't read. Don't send `null` and don't add fields that 
 - `currency`: the 3-letter code the receipt was paid in (`CAD`, `USD`, `EUR`). Read it from the receipt: the store's country or address, and symbols such as `US$`. Don't assume CAD.
 - `total`, `subtotal`, `tax`: numbers with at most 2 decimals, no currency symbols. `total` is the amount actually charged after discounts and gift cards. Refunds can be written as positive numbers with `type` set to `refund`.
 - `type`: `purchase` or `refund`.
-- `category`: one of `Takeout/Dining`, `Grocery`, `Transport`, `Shopping`, `Entertainment`, `Health`, `Home`, `Other`. `subCategory` is a short free-text detail such as "Coffee Shop" or "Pharmacy".
+- `category`: one of `Takeout/Dining`, `Grocery`, `Transport`, `Shopping`, `Entertainment`, `Health`, `Home`, `Other`, `Transfer`, `Income`. `subCategory` is a short free-text detail such as "Coffee Shop" or "Pharmacy".
+  - `Transfer` is money moving, not spent: card payments, moves between your own accounts, and reloads into a store balance when the orders paid from that balance are also sent as receipts. A reload whose purchases aren't sent (such as a transit card) stays as spending.
+  - `Income` is money coming in, such as pay.
+  - Slip keeps both in history but never counts them in spending totals, budgets or recaps.
 - `isSubscription`: `true` for recurring charges (streaming, phone, gym, software), otherwise `false`.
 - `loyaltyPointsEarned`, `loyaltyPointsBalance`: only when the email prints them (for example a PC Optimum closing balance).
 - `items`: every line item. `price` is the line's total after per-item discounts, not the price of one unit: two coffees at $2.00 each are one item with `price` 4.00 and `quantity` 2. The prices should add up to `subtotal`. Don't add a separate item for an order-level discount summary. Leave `items` out if the email doesn't list them.

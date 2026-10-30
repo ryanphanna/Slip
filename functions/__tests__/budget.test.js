@@ -111,3 +111,20 @@ describe('budgets with mixed currencies', () => {
     expect(await getBudgetReport('+1')).toEqual(report);
   });
 });
+
+describe('Transfer and Income budgets (CIV-1189)', () => {
+  it('refuses a budget on Transfer or Income', async () => {
+    await expect(setBudget('+1', 'Transfer', 100)).rejects.toThrow("isn't counted as spending");
+    await expect(setBudget('+1', 'income', 100)).rejects.toThrow("isn't counted as spending");
+    expect(await getAllBudgets('+1')).toEqual([]);
+  });
+
+  it('leaves Transfer and Income entries out of budget spend', async () => {
+    await setBudget('+1', 'Grocery', 200);
+    seedReceipt('r1', { from: '+1', total: 50, category: 'Grocery' });
+    seedReceipt('r2', { from: '+1', total: 900, category: 'Transfer' });
+    seedReceipt('r3', { from: '+1', total: 3000, category: 'Income' });
+    const { report } = await getBudgetStatus('+1');
+    expect(report).toEqual([{ category: 'Grocery', limit: 200, spent: 50, remaining: 150, percentage: 25 }]);
+  });
+});
