@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { call } from '../firebase.js';
-import { amountOrNull, formatMoney, formatPurchaseDate, hasDistinctPublicName } from '../format.js';
+import { amountOrNull, CHECK_FIELDS, flagReasons, formatMoney, formatPurchaseDate, hasDistinctPublicName, isFlagged } from '../format.js';
 
 const CURRENCIES = [
   ['CAD', 'Canadian dollar'],
@@ -19,7 +19,7 @@ const CATALOG_FIELDS = [
   ['productUrl', 'Product URL', 'Product URL'],
 ];
 
-export default function ReceiptDetail({ receipt, onClose, onSaved, categories = [] }) {
+export default function ReceiptDetail({ receipt, onClose, onSaved, onOpenReceipt, categories = [] }) {
   const [draft, setDraft] = useState({ ...receipt, items: receipt.items || [] });
   const [editing, setEditing] = useState(false);
   const [images, setImages] = useState([]);
@@ -27,6 +27,8 @@ export default function ReceiptDetail({ receipt, onClose, onSaved, categories = 
   const [status, setStatus] = useState('');
   const [otherCategory, setOtherCategory] = useState(receipt.category ? !categories.includes(receipt.category) : false);
   const [expandedItems, setExpandedItems] = useState(() => new Set());
+  const [explanation, setExplanation] = useState(receipt.explanation?.text || '');
+  const [flagStatus, setFlagStatus] = useState('');
 
   useEffect(() => {
     setDraft({ ...receipt, items: receipt.items || [] });
@@ -34,6 +36,8 @@ export default function ReceiptDetail({ receipt, onClose, onSaved, categories = 
     setStatus('');
     setOtherCategory(receipt.category ? !categories.includes(receipt.category) : false);
     setExpandedItems(new Set());
+    setExplanation(receipt.explanation?.text || '');
+    setFlagStatus('');
     call('getReceiptImageUrls', { id: receipt.id }).then(({ urls }) => setImages(urls)).catch(() => setStatus('The receipt image could not be loaded.'));
   }, [receipt.id]);
 
@@ -71,6 +75,45 @@ export default function ReceiptDetail({ receipt, onClose, onSaved, categories = 
       onSaved(result);
     } catch (error) { setStatus(error.message || 'Could not save.'); }
   }
+
+  // Check marks (CIV-1194): clear them all, or leave a note for the next
+  // processing pass, which acts on it and clears the marks itself.
+  async function saveFlagChange(patch, done) {
+    setFlagStatus('Saving…');
+    try {
+      const result = await call('updateReceipt', { id: receipt.id, patch });
+      setFlagStatus(done);
+      onSaved(result);
+    } catch (error) { setFlagStatus(error.message || 'Could not save.'); }
+  }
+
+  const looksRight = () => saveFlagChange(Object.fromEntries(CHECK_FIELDS.map((field) => [field, null])), 'Marked as fine.');
+  const saveExplanation = (event) => {
+    event.preventDefault();
+    saveFlagChange({ explanation }, explanation.trim() ? 'Explanation saved.' : 'Explanation removed.');
+  };
+
+  async function openDuplicate(id) {
+    if (!(await onOpenReceipt(id))) setFlagStatus('The earlier receipt could not be found.');
+  }
+
+  const flagged = isFlagged(receipt);
+  const explained = Boolean(receipt.explanation?.text);
+  const flagPanel = flagged && <section className="flag-panel">
+    {explained
+      ? <p className="flag-reason">Explained, waiting to be processed</p>
+      : flagReasons(receipt).map((reason) => <p className="flag-reason" key={reason.key}>
+        {reason.text}
+        {reason.duplicateOf && onOpenReceipt && <> · <button type="button" className="toolbar-link" onClick={() => openDuplicate(reason.duplicateOf)}>Open it</button></>}
+      </p>)}
+    <form className="flag-explain" onSubmit={saveExplanation}>
+      <label>Explain this charge<textarea rows="2" maxLength="300" placeholder="For example, this is rent, or same purchase as the other receipt" value={explanation} onChange={(e) => setExplanation(e.target.value)} /></label>
+      <div className="flag-actions">
+        <button type="submit" className="toolbar-link">Save explanation</button>
+        <button type="button" className="toolbar-link" onClick={looksRight}>Looks right</button>
+      </div>
+    </form>
+  </section>;
 
   const editForm = <form onSubmit={save} className="detail-form">
     <div className="field-grid">
@@ -148,7 +191,11 @@ export default function ReceiptDetail({ receipt, onClose, onSaved, categories = 
           {images.map((url) => <button className="image-button" key={url} onClick={() => setZoomedImage(url)}><img src={url} alt="Original receipt; click to enlarge" /></button>)}
         </div>}
       </div>
-      {editing ? editForm : readOnly}
+      <div className="detail-main">
+        {flagPanel}
+        {flagStatus && <p className="status flag-status">{flagStatus}</p>}
+        {editing ? editForm : readOnly}
+      </div>
     </div>
     {zoomedImage && <div className="image-modal" role="dialog" aria-label="Expanded receipt image" onClick={() => setZoomedImage(null)}>
       <button className="image-modal-close" aria-label="Close expanded image" onClick={() => setZoomedImage(null)}>×</button>

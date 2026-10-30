@@ -99,3 +99,41 @@ export function categorySegments(categories) {
   top.sort((a, b) => (a[0] === 'Other') - (b[0] === 'Other') || b[1] - a[1]);
   return top.map(([name, amount], index) => ({ name, amount, color: BAR_COLORS[index] }));
 }
+
+// Check marks set when a receipt is saved (CIV-1194). Mirrors CHECK_FIELDS in
+// functions/lib/receipt-checks.js.
+export const CHECK_FIELDS = ['possibleDuplicate', 'possibleDuplicateOf', 'dateNeedsCheck', 'totalsNeedCheck', 'currencyNeedsCheck', 'itemsNeedCheck', 'statementReview'];
+
+export function isFlagged(receipt) {
+  return Boolean(receipt.possibleDuplicate || receipt.dateNeedsCheck || receipt.totalsNeedCheck
+    || receipt.currencyNeedsCheck || receipt.itemsNeedCheck || receipt.statementReview);
+}
+
+// "Card charge June 21, $51.13, LAMAISONSIMONS"; missing parts are left out.
+export function chargeLabel(charge) {
+  if (!charge) return '';
+  const amount = Number.isFinite(charge.amount) ? formatMoney(charge.amount) : '';
+  const parts = [charge.date ? formatListDate(charge.date) : '', amount, charge.description || ''].filter(Boolean);
+  return parts.length ? `Card charge ${parts.join(', ')}` : '';
+}
+
+// Plain reasons for a flagged receipt, one per mark.
+export function flagReasons(receipt) {
+  const statement = receipt.statementReview;
+  return [
+    ...(receipt.possibleDuplicate ? [{ key: 'duplicate', text: 'Possible duplicate of an earlier receipt', duplicateOf: receipt.possibleDuplicateOf || null }] : []),
+    ...(receipt.dateNeedsCheck ? [{ key: 'date', text: 'Check the date' }] : []),
+    ...(receipt.totalsNeedCheck ? [{ key: 'totals', text: 'Amounts don\'t add up' }] : []),
+    ...(receipt.currencyNeedsCheck ? [{ key: 'currency', text: 'Check the currency' }] : []),
+    ...(receipt.itemsNeedCheck ? [{ key: 'items', text: 'Items missing' }] : []),
+    ...(statement ? [{ key: 'statement', text: [statement.reason, chargeLabel(statement.charge)].filter(Boolean).join(': ') || 'Check against a card charge' }] : []),
+  ];
+}
+
+// The short line for a receipt row: the reasons, or a note that an
+// explanation is waiting to be processed.
+export function flagSummary(receipt) {
+  if (!isFlagged(receipt)) return '';
+  if (receipt.explanation?.text) return 'Explained, waiting to be processed';
+  return flagReasons(receipt).map((reason) => reason.text).join(' · ');
+}

@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 const crypto = require('node:crypto');
 const { validateReceipt, normalizeEditPatch, normalizeItemPatch } = require('./validate');
-const { readReceipt, checkReceipt } = require('./receipt-checks');
+const { readReceipt, checkReceipt, CHECK_FIELDS, isFlagged } = require('./receipt-checks');
 const { receiptRecord } = require('./store');
 const { parseReceiptFromBase64, parseReceiptFromText, photoReadNothing } = require('./receipt');
 const { getSettings, updateSettings, settingsId } = require('./settings');
@@ -18,6 +18,7 @@ const EDITABLE_FIELDS = new Set([
   'subCategory', 'currency', 'type', 'isSubscription', 'loyaltyPointsEarned',
   'loyaltyPointsBalance', 'items',
 ]);
+const EXPLANATION_MAX_LENGTH = 300;
 const VISIBLE_FAILURE_STATUSES = new Set(['failed', 'pending', '', 'resolved', 'duplicate', 'retrying']);
 
 function requireAuth(request) {
@@ -97,6 +98,36 @@ async function getReceipt(request) {
   return serializeDoc(doc);
 }
 
+function invalidArgument(message) {
+  const error = new Error(message);
+  error.code = 'invalid-argument';
+  return error;
+}
+
+// Check marks in an edit: each may only be cleared (sent as null), never set.
+// Returns the marks to delete.
+function checkFieldClears(patch) {
+  const cleared = [];
+  for (const field of CHECK_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(patch || {}, field)) continue;
+    if (patch[field] !== null) throw invalidArgument('Check marks can only be cleared');
+    cleared.push(field);
+  }
+  return cleared;
+}
+
+// The user's note on a flagged receipt, for a later processing pass to act on.
+// Returns undefined (not sent), null (clear it) or the trimmed text.
+function explanationText(patch) {
+  if (!Object.prototype.hasOwnProperty.call(patch || {}, 'explanation')) return undefined;
+  const value = patch.explanation;
+  if (value === null) return null;
+  if (typeof value !== 'string') throw invalidArgument('Explanation must be text');
+  const text = value.trim();
+  if (text.length > EXPLANATION_MAX_LENGTH) throw invalidArgument(`Explanation must be ${EXPLANATION_MAX_LENGTH} characters or fewer`);
+  return text || null;
+}
+
 async function updateReceipt(request) {
   const { phone } = requireAuth(request);
   const id = String(request.data?.id || '');
@@ -109,12 +140,22 @@ async function updateReceipt(request) {
     throw error;
   }
 
-  const patch = normalizeEditPatch(cleanPatch(request.data?.patch));
+  const rawPatch = request.data?.patch;
+  const cleared = checkFieldClears(rawPatch);
+  const explanation = explanationText(rawPatch);
+  const patch = normalizeEditPatch(cleanPatch(rawPatch));
   const next = validateReceipt({ ...snapshot.data(), ...patch });
   // Recompute on every edit so the search/duplicate key always follows the merchant.
   next.merchantKey = next.merchant ? next.merchant.trim().toLowerCase() : null;
-  await ref.set({ ...next, editedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-  return { id, ...next };
+  const { FieldValue, Timestamp } = admin.firestore;
+  // Saving an explanation leaves the marks alone; only clearing removes them.
+  const notes = explanation === undefined ? {}
+    : { explanation: explanation === null ? null : { text: explanation, at: Timestamp.fromMillis(Date.now()) } };
+  const deletes = Object.fromEntries(cleared.map((field) => [field, FieldValue.delete()]));
+  const writtenNotes = notes.explanation === null ? { explanation: FieldValue.delete() } : notes;
+  await ref.set({ ...next, ...writtenNotes, ...deletes, editedAt: FieldValue.serverTimestamp() }, { merge: true });
+  // Cleared fields come back as null so the web app drops them from its copy.
+  return { id, ...next, ...notes, ...Object.fromEntries(cleared.map((field) => [field, null])) };
 }
 
 async function getReceiptImageUrls(request) {
@@ -211,6 +252,17 @@ async function getMonthlyRecap(request) {
     topMerchants: topMerchants(docs),
     receipts,
   };
+}
+
+// Every receipt with a check mark, for the Flagged filter (CIV-1194). All of
+// them, not one page, so the list and its count are complete.
+async function listFlaggedReceipts(request) {
+  const { phone } = requireAuth(request);
+  const snapshots = await loadAllReceipts(phone);
+  const receipts = snapshots.map(serializeDoc).filter(isFlagged)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '')
+      || (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+  return { receipts };
 }
 
 // Loyalty points per program for the web Points page (CIV-1130).
@@ -548,6 +600,7 @@ module.exports = {
   listReceipts,
   getReceipt,
   updateReceipt,
+  listFlaggedReceipts,
   getReceiptImageUrls,
   listProcessingFailures,
   listNotifications,

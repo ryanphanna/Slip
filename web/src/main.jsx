@@ -4,7 +4,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Topbar from './components/Topbar.jsx';
 import ReceiptDetail from './components/ReceiptDetail.jsx';
 import { auth, call, isConfigured } from './firebase.js';
-import { CATEGORIES } from './format.js';
+import { CATEGORIES, isFlagged } from './format.js';
 import ItemsView from './views/ItemsView.jsx';
 import Login from './views/Login.jsx';
 import NotificationsView from './views/NotificationsView.jsx';
@@ -27,6 +27,7 @@ const recapMonthFromPath = (pathname) => pathname.match(RECAP_PATH)?.[1] || null
 
 function Inbox({ user }) {
   const [receipts, setReceipts] = useState([]);
+  const [flaggedReceipts, setFlaggedReceipts] = useState([]);
   const [catalogItems, setCatalogItems] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [settings, setSettings] = useState({ monthlyDigestEnabled: true });
@@ -79,12 +80,13 @@ function Inbox({ user }) {
   async function load({ append = false, cursor = null } = {}) {
     if (append) setLoadingMore(true); else setLoading(true);
     try {
-      const [result, failureResult, itemResult, settingsResult, notificationResult] = await Promise.all([
+      const [result, failureResult, itemResult, settingsResult, notificationResult, flaggedResult] = await Promise.all([
         call('listReceipts', { limit: 20, ...(cursor ? { cursor } : {}) }),
         call('listProcessingFailures', {}),
         call('listItems', {}).catch(() => ({ items: [] })),
         call('getSettings').catch(() => ({ monthlyDigestEnabled: true })),
         call('listNotifications').catch(() => ({ notifications: [] })),
+        append ? null : call('listFlaggedReceipts').catch(() => null),
       ]);
       setReceipts((current) => append ? [...current, ...(result.receipts || [])] : (result.receipts || []));
       setNextCursor(result.nextCursor || null);
@@ -93,6 +95,7 @@ function Inbox({ user }) {
       setSettings(settingsResult);
       setNotifications(notificationResult.notifications || []);
       setFailures(failureResult.failures || []);
+      if (flaggedResult) setFlaggedReceipts(flaggedResult.receipts || []);
       setError('');
     }
     catch (err) { setError(err.message || 'Could not load receipts.'); }
@@ -116,13 +119,24 @@ function Inbox({ user }) {
     load();
   }
 
+  // Opens a receipt that may not be loaded yet, such as the earlier receipt of
+  // a possible duplicate. Resolves false when it can't be found.
+  async function openReceipt(id) {
+    const loaded = receipts.find((receipt) => receipt.id === id) || flaggedReceipts.find((receipt) => receipt.id === id);
+    if (loaded) { setSelected(loaded); return true; }
+    try { setSelected(await call('getReceipt', { id })); return true; }
+    catch { return false; }
+  }
+
   async function changeDigest(monthlyDigestEnabled) {
     const updated = await call('updateSettings', { patch: { monthlyDigestEnabled } });
     setSettings(updated);
   }
 
+  // Cleared check marks come back as null, which reads as not flagged.
   function receiptSaved(updated) {
     setReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
+    setFlaggedReceipts((all) => all.map((r) => r.id === updated.id ? { ...r, ...updated } : r).filter(isFlagged));
     setSelected((current) => ({ ...current, ...updated }));
     setRecapVersion((version) => version + 1);
   }
@@ -145,6 +159,7 @@ function Inbox({ user }) {
     {ready && view === 'settings' && <SettingsView settings={settings} onDigestChange={changeDigest} />}
     {ready && view === 'receipts' && <ReceiptsView
       receipts={receipts}
+      flaggedReceipts={flaggedReceipts}
       categories={categories}
       search={search}
       sortOrder={sortOrder}
@@ -160,7 +175,7 @@ function Inbox({ user }) {
     />}
     {selected && <>
       <div className="detail-backdrop" onClick={() => setSelected(null)} />
-      <ReceiptDetail receipt={selected} categories={categories} onClose={() => setSelected(null)} onSaved={receiptSaved} />
+      <ReceiptDetail receipt={selected} categories={categories} onClose={() => setSelected(null)} onSaved={receiptSaved} onOpenReceipt={openReceipt} />
     </>}
   </main>;
 }

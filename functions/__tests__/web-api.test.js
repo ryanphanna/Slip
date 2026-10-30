@@ -10,7 +10,7 @@ const admin = require('firebase-admin');
 const { parseReceiptFromBase64, parseReceiptFromText } = require('../lib/receipt');
 const {
   cleanPatch, requireAuth, EDITABLE_FIELDS, VISIBLE_FAILURE_STATUSES,
-  listReceipts, getReceipt, updateReceipt, listProcessingFailures, listNotifications,
+  listReceipts, getReceipt, updateReceipt, listFlaggedReceipts, listProcessingFailures, listNotifications,
   retryProcessing, importTargetReceipts, listItems, updateItem,
   getUserSettings, updateUserSettings,
 } = require('../lib/web-api');
@@ -184,6 +184,107 @@ describe('getReceipt / updateReceipt', () => {
     expect(result.total).toBe(99);
     const stored = await fake.db.collection('receipts').doc('r1').get();
     expect(stored.data().from).toBe('+14165551234');
+  });
+});
+
+describe('check marks and explanations (CIV-1194)', () => {
+  const PHONE = '+14165551234';
+  const charge = { account: 'Amex', date: '2026-06-21', amount: 51.13, description: 'LAMAISONSIMONS' };
+  const flagged = {
+    from: PHONE, merchant: 'Simons', merchantKey: 'simons', total: 51.13, date: '2026-06-21', currency: 'CAD', category: 'Shopping', items: [],
+    possibleDuplicate: true, possibleDuplicateOf: 'r0', dateNeedsCheck: true, totalsNeedCheck: true,
+    currencyNeedsCheck: true, itemsNeedCheck: true, statementReview: { reason: 'Might be this receipt', charge },
+  };
+  const ALL_CLEARED = {
+    possibleDuplicate: null, possibleDuplicateOf: null, dateNeedsCheck: null, totalsNeedCheck: null,
+    currencyNeedsCheck: null, itemsNeedCheck: null, statementReview: null,
+  };
+  const run = (patch, auth = AUTH) => updateReceipt({ ...auth, data: { id: 'r1', patch } });
+  const MARKS = Object.keys(ALL_CLEARED);
+
+  it('clears every mark and leaves the rest of the receipt alone', async () => {
+    seed('receipts', 'r1', flagged);
+    const result = await run(ALL_CLEARED);
+    const stored = fake.store.receipts.get('r1');
+    for (const field of MARKS) expect(stored).not.toHaveProperty(field);
+    expect(stored).toMatchObject({ from: PHONE, merchant: 'Simons', total: 51.13, date: '2026-06-21', category: 'Shopping' });
+    // Returned as null so the web app drops them from its copy.
+    expect(result).toMatchObject(ALL_CLEARED);
+  });
+
+  it('clears only the marks sent', async () => {
+    seed('receipts', 'r1', flagged);
+    await run({ dateNeedsCheck: null });
+    const stored = fake.store.receipts.get('r1');
+    expect(stored).not.toHaveProperty('dateNeedsCheck');
+    expect(stored).toMatchObject({ totalsNeedCheck: true, statementReview: { reason: 'Might be this receipt' } });
+  });
+
+  it.each([
+    [{ possibleDuplicate: true }],
+    [{ possibleDuplicateOf: 'someone-else' }],
+    [{ dateNeedsCheck: false }],
+    [{ statementReview: { reason: 'x', charge } }],
+    [{ itemsNeedCheck: undefined, totalsNeedCheck: 'yes' }],
+  ])('refuses to set a mark: %j, and writes nothing', async (patch) => {
+    seed('receipts', 'r1', { ...flagged, statementReview: undefined, possibleDuplicate: undefined, possibleDuplicateOf: undefined });
+    const before = { ...fake.store.receipts.get('r1') };
+    await expect(run({ merchant: 'Changed', ...patch })).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(fake.store.receipts.get('r1')).toEqual(before);
+  });
+
+  it('will not clear marks on another phone\'s receipt', async () => {
+    seed('receipts', 'r1', { ...flagged, from: '+19999999999' });
+    await expect(run(ALL_CLEARED)).rejects.toMatchObject({ code: 'not-found' });
+    expect(fake.store.receipts.get('r1')).toMatchObject({ possibleDuplicate: true, statementReview: { charge } });
+  });
+
+  it('saves a trimmed explanation with a time and keeps the marks', async () => {
+    seed('receipts', 'r1', flagged);
+    const result = await run({ explanation: '  this is rent  ' });
+    const stored = fake.store.receipts.get('r1');
+    expect(stored.explanation.text).toBe('this is rent');
+    expect(typeof stored.explanation.at.toMillis()).toBe('number');
+    expect(result.explanation.text).toBe('this is rent');
+    for (const field of MARKS) expect(stored[field]).toEqual(flagged[field]);
+  });
+
+  it('accepts 300 characters and rejects 301 or a non-text explanation', async () => {
+    seed('receipts', 'r1', flagged);
+    await run({ explanation: 'x'.repeat(300) });
+    expect(fake.store.receipts.get('r1').explanation.text).toHaveLength(300);
+    await expect(run({ explanation: 'y'.repeat(301) })).rejects.toMatchObject({ code: 'invalid-argument' });
+    await expect(run({ explanation: { text: 'rent' } })).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(fake.store.receipts.get('r1').explanation.text).toBe('x'.repeat(300));
+  });
+
+  it('an empty or null explanation removes it', async () => {
+    seed('receipts', 'r1', { ...flagged, explanation: { text: 'old', at: 1 } });
+    await run({ explanation: '   ' });
+    expect(fake.store.receipts.get('r1')).not.toHaveProperty('explanation');
+    seed('receipts', 'r1', { ...flagged, explanation: { text: 'old', at: 1 } });
+    await run({ explanation: null });
+    expect(fake.store.receipts.get('r1')).not.toHaveProperty('explanation');
+  });
+
+  it('will not save an explanation on another phone\'s receipt', async () => {
+    seed('receipts', 'r1', { ...flagged, from: '+19999999999' });
+    await expect(run({ explanation: 'mine now' })).rejects.toMatchObject({ code: 'not-found' });
+    expect(fake.store.receipts.get('r1')).not.toHaveProperty('explanation');
+  });
+
+  it('lists every flagged receipt of the caller, newest date first', async () => {
+    const plain = { from: PHONE, merchant: 'Costco', total: 5, items: [] };
+    seed('receipts', 'clean', { ...plain, date: '2026-07-01' });
+    seed('receipts', 'items', { ...plain, date: '2026-05-01', itemsNeedCheck: true });
+    seed('receipts', 'statement', { ...plain, date: '2026-06-21', statementReview: { reason: 'Might be this receipt', charge } });
+    seed('receipts', 'cleared', { ...plain, date: '2026-06-30', possibleDuplicate: false, dateNeedsCheck: null });
+    seed('receipts', 'theirs', { ...plain, from: '+19999999999', date: '2026-06-25', totalsNeedCheck: true });
+    for (let i = 0; i < 30; i += 1) seed('receipts', `c${i}`, { ...plain, date: '2026-01-01', currencyNeedsCheck: true });
+    const { receipts } = await listFlaggedReceipts({ ...AUTH, data: {} });
+    expect(receipts.slice(0, 2).map((r) => r.id)).toEqual(['statement', 'items']);
+    expect(receipts).toHaveLength(32);
+    for (const id of ['clean', 'cleared', 'theirs']) expect(receipts.map((r) => r.id)).not.toContain(id);
   });
 });
 

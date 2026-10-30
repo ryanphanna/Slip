@@ -903,6 +903,66 @@ button:hover {
   background: #fffdf8;
 }
 
+/* Check marks: reason line on rows and the detail panel (CIV-1194) */
+
+.receipt-name small.flag-reason,
+.flag-reason {
+  color: #9d4e2d;
+}
+
+.detail-main {
+  min-width: 0;
+}
+
+.flag-panel {
+  border-left: 2px solid #9d4e2d;
+  display: grid;
+  gap: .5rem;
+  margin-top: 1.5rem;
+  padding: .1rem 0 .1rem 1rem;
+}
+
+.flag-panel .flag-reason {
+  font-size: .9rem;
+  margin: 0;
+}
+
+.flag-panel .flag-reason .toolbar-link {
+  padding: 0;
+}
+
+.flag-explain {
+  display: grid;
+  gap: .4rem;
+  margin-top: .4rem;
+}
+
+.flag-explain textarea {
+  background: #fffdf8;
+  border: 1px solid #cfc5b4;
+  border-radius: 9px;
+  color: #25231f;
+  font: inherit;
+  font-size: 1rem;
+  padding: .6rem .75rem;
+  resize: vertical;
+  width: 100%;
+}
+
+.flag-explain textarea:focus {
+  border-color: #9d4e2d;
+  outline: 3px solid #9d4e2d22;
+}
+
+.flag-actions {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.flag-status {
+  margin: .75rem 0 0;
+}
+
 /* Receipt detail: edit form and item rows */
 
 .detail-form {

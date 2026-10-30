@@ -372,6 +372,7 @@ function callable(handler, options = {}) {
 exports.listReceipts = callable(webApi.listReceipts);
 exports.getReceipt = callable(webApi.getReceipt);
 exports.updateReceipt = callable(webApi.updateReceipt);
+exports.listFlaggedReceipts = callable(webApi.listFlaggedReceipts);
 exports.getReceiptImageUrls = callable(webApi.getReceiptImageUrls);
 exports.listProcessingFailures = callable(webApi.listProcessingFailures);
 exports.listNotifications = callable(webApi.listNotifications);

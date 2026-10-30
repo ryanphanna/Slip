@@ -51,4 +51,17 @@ function flagNotes(receipt, flags) {
   ];
 }
 
-module.exports = { readReceipt, checkFlags, checkReceipt, flagNotes };
+// Every "check this" mark a saved receipt can carry, including the
+// statement-import mark (CIV-1194). The web app can clear these, never set them.
+const CHECK_FIELDS = [
+  'possibleDuplicate', 'possibleDuplicateOf', 'dateNeedsCheck', 'totalsNeedCheck',
+  'currencyNeedsCheck', 'itemsNeedCheck', 'statementReview',
+];
+
+// True when a receipt still has a mark to look at.
+function isFlagged(receipt) {
+  return Boolean(receipt.possibleDuplicate || receipt.dateNeedsCheck || receipt.totalsNeedCheck
+    || receipt.currencyNeedsCheck || receipt.itemsNeedCheck || receipt.statementReview);
+}
+
+module.exports = { readReceipt, checkFlags, checkReceipt, flagNotes, CHECK_FIELDS, isFlagged };

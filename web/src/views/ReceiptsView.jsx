@@ -1,7 +1,7 @@
 import ReceiptRow from '../components/ReceiptRow.jsx';
 import { countLabel } from '../format.js';
 
-export const EMPTY_FILTERS = { category: '', startDate: '', endDate: '', minAmount: '', maxAmount: '' };
+export const EMPTY_FILTERS = { show: '', category: '', startDate: '', endDate: '', minAmount: '', maxAmount: '' };
 
 export function filterReceipts(receipts, search, filters, sortOrder) {
   return [...receipts]
@@ -21,8 +21,10 @@ export function filterReceipts(receipts, search, filters, sortOrder) {
     });
 }
 
-export default function ReceiptsView({ receipts, categories, search, sortOrder, onSortChange, showFilters, onToggleFilters, filters, onFiltersChange, hasMore, loadingMore, onLoadMore, onSelect }) {
-  const filtered = filterReceipts(receipts, search, filters, sortOrder);
+export default function ReceiptsView({ receipts, flaggedReceipts = [], categories, search, sortOrder, onSortChange, showFilters, onToggleFilters, filters, onFiltersChange, hasMore, loadingMore, onLoadMore, onSelect }) {
+  // Flagged comes from its own complete list, not the pages loaded so far.
+  const flaggedOnly = filters.show === 'flagged';
+  const filtered = filterReceipts(flaggedOnly ? flaggedReceipts : receipts, search, filters, sortOrder);
   const setFilter = (field, value) => onFiltersChange((current) => ({ ...current, [field]: value }));
   return <>
     <section className="toolbar">
@@ -33,6 +35,10 @@ export default function ReceiptsView({ receipts, categories, search, sortOrder, 
       <button className="toolbar-link" onClick={onToggleFilters}>{showFilters ? 'Hide filters' : 'Filter receipts'}</button>
     </section>
     {showFilters && <section className="receipt-filters">
+      <label>Show<select value={filters.show} onChange={(e) => setFilter('show', e.target.value)}>
+        <option value="">All receipts</option>
+        <option value="flagged">Flagged ({flaggedReceipts.length})</option>
+      </select></label>
       <label>Category<select value={filters.category} onChange={(e) => setFilter('category', e.target.value)}>
         <option value="">All categories</option>
         {categories.map((category) => <option key={category} value={category}>{category}</option>)}
@@ -43,14 +49,18 @@ export default function ReceiptsView({ receipts, categories, search, sortOrder, 
       <label>Maximum<input inputMode="decimal" type="number" min="0" step="0.01" value={filters.maxAmount} onChange={(e) => setFilter('maxAmount', e.target.value)} placeholder="Any amount" /></label>
       <button className="clear-filters" onClick={() => onFiltersChange(EMPTY_FILTERS)}>Clear</button>
     </section>}
-    {filtered.length === 0 && <div className="empty">
+    {filtered.length === 0 && flaggedOnly && <div className="empty">
+      <h2>Nothing flagged.</h2>
+      <p>Receipts that need a second look will show here.</p>
+    </div>}
+    {filtered.length === 0 && !flaggedOnly && <div className="empty">
       <h2>No receipts here yet.</h2>
       <p>Text a receipt photo to Slip and it will appear in this inbox.</p>
     </div>}
     <div className="receipt-list">{filtered.map((receipt) => <ReceiptRow key={receipt.id} receipt={receipt} onSelect={onSelect} />)}</div>
     <div className="list-footer">
-      <span className="count">{countLabel(filtered.length, 'receipt')} loaded</span>
-      {hasMore && <button className="load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>}
+      <span className="count">{flaggedOnly ? `${countLabel(filtered.length, 'flagged receipt')}` : `${countLabel(filtered.length, 'receipt')} loaded`}</span>
+      {hasMore && !flaggedOnly && <button className="load-more" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>}
     </div>
   </>;
 }
