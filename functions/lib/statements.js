@@ -45,9 +45,13 @@ function dateInStatement(monthName, day, closing) {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
-// Removes masked numbers ("ROGERS ******5886") and extra spaces.
+// Removes anything that may be an account number: masked numbers
+// ("ROGERS ******1234", "ROGERS *123456789"), "AC123456789", and any run of
+// 7 or more digits (customer, tenant and booking numbers). Short store
+// numbers stay.
+const ACCOUNT_LIKE = /[*X]{3,}\s?\d+|\*\d{4,}|\bAC#?\s?\d+|\d{7,}/gi;
 function scrub(text) {
-  return String(text || '').replace(/[*X]{3,}\s?\d+/gi, '').replace(/\s+/g, ' ').trim();
+  return String(text || '').replace(ACCOUNT_LIKE, '').replace(/\s+/g, ' ').trim();
 }
 
 // Splits a statement description into the merchant and the trailing place.
@@ -56,7 +60,7 @@ function scrub(text) {
 // text is the merchant. Simplii Visa runs the city and province together
 // ("ALI'S NF #7047      TORONTO    ON"), so a trailing province is taken too.
 function splitMerchant(description) {
-  const raw = String(description || '').replace(/[*X]{3,}\s?\d+/gi, '').trim();
+  const raw = String(description || '').replace(ACCOUNT_LIKE, '').trim();
   let merchant = raw;
   let location = '';
   const province = raw.match(/^(.*\S)\s+([A-Z][A-Za-z.'\- ]*?)\s+(ON|QC|BC|AB|MB|SK|NS|NB|NL|PE|YT|NT|NU)$/);
@@ -345,7 +349,8 @@ function parseSimpliiChequingPdf(text, { sourceFile, account = 'Simplii chequing
       if (/^[A-Z][a-z]{2} \d{2}\s/.test(line)) problems.push('unread transaction line');
       continue;
     }
-    const description = match[5].trim();
+    // Chequing lines carry payer and member numbers ("PAYERCO123456").
+    const description = match[5].replace(/\d{6,}/g, '').trim();
     if (/^BALANCE FORWARD/.test(description)) {
       opening = parseAmount(match[7] || match[6]);
       balance = opening;

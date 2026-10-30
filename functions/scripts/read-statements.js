@@ -3,8 +3,9 @@
  * Read bank and card statements into plain transactions (CIV-1186). Reading
  * and cleaning only: nothing is written to Firestore. Writes two JSON files
  * to the --out folder, which must be outside the repo:
- *   transactions.json  every reconciled, deduplicated transaction
- *   report.json        inventory, reconciliation, gaps, overlaps and totals
+ *   transactions.json      every reconciled, deduplicated transaction
+ *   gap-transactions.json  only the months the Notion ledger lacks
+ *   report.json            inventory, reconciliation, gaps, overlaps and totals
  *
  * Files are named in the output by account label and month, never by their
  * file name, since statement file names often carry account digits. CSVs
@@ -38,6 +39,17 @@ if (path.resolve(outDir).startsWith(path.resolve(__dirname, '..', '..'))) {
 // Earlier outputs and folders that are not statements.
 const SKIP_NAMES = [/^spending-v3-/, /^simplii-8956-review\.csv$/, /^\./];
 const SKIP_FOLDERS = [/Simplii Court Case/i];
+
+// Date ranges (inclusive) that Ryan's Notion ledger does not cover, per
+// account. gap-transactions.json holds only these.
+const NOTION_GAPS = {
+  'Amex Cobalt': [[null, '2023-07-31']],
+  'Amex Marriott': [[null, '2023-07-31']],
+  'Amex SimplyCash Preferred': [[null, '2025-11-30']],
+  'Simplii Cash Back Visa': [[null, '2023-12-31']],
+  'Simplii chequing': [['2023-03-01', '2025-11-30']],
+};
+const inGap = (t) => (NOTION_GAPS[t.account] || []).some(([from, to]) => (!from || t.date >= from) && (!to || t.date <= to));
 
 const accounts = accountsFile ? JSON.parse(fs.readFileSync(accountsFile, 'utf8')) : {};
 
@@ -189,6 +201,7 @@ function main() {
 
   const { transactions, dropped } = statements.dedupeStatements(uniqueSources);
   transactions.sort((a, b) => a.account.localeCompare(b.account) || a.date.localeCompare(b.date));
+  const gapTransactions = transactions.filter(inGap);
 
   // Coverage per account: the statement months present, and missing months
   // between the first and last.
@@ -239,11 +252,14 @@ function main() {
     },
     dedupe: dropped,
     transactions: transactions.length,
+    gapTransactions: gapTransactions.length,
+    notionGaps: NOTION_GAPS,
     totals: Object.values(totals).sort((a, b) => a.account.localeCompare(b.account) || a.year.localeCompare(b.year) || a.kind.localeCompare(b.kind)),
   };
 
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, 'transactions.json'), `${JSON.stringify(transactions, null, 2)}\n`);
+  fs.writeFileSync(path.join(outDir, 'gap-transactions.json'), `${JSON.stringify(gapTransactions, null, 2)}\n`);
   fs.writeFileSync(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   console.log(`${inventory.length} files, ${report.reconciliation.passed} statements reconciled, ${failed.length} failed, ${transactions.length} transactions`);
   console.log(`Wrote ${path.join(outDir, 'transactions.json')} and report.json`);

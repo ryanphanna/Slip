@@ -66,7 +66,7 @@ trans.       eff.           transaction                                         
 date         date
 Dec 28       Dec 28         BALANCE FORWARD                                                                                       100.00
 Dec 30       Dec 29         Medallion-000Test                                              1,000.00                               900.00-
-Jan 02       Jan 02         PRETEND EMPLOYER PAYROLL                                                          1,500.00           600.00
+Jan 02       Jan 02         PRETENDCO123456 PAYROLL                                                           1,500.00           600.00
                                                         transactions continue in the next page
 trans.       eff.           transaction                                                   funds out           funds in          balance
 Jan 03       Jan 03         INTERAC E-TRANSFER SEND Pat                                       20.00                               580.00
@@ -102,6 +102,10 @@ describe('splitMerchant', () => {
   });
   test('removes masked account numbers', () => {
     expect(splitMerchant('PHONECO ******1234       800-555-0100').merchant).toBe('PHONECO');
+    expect(splitMerchant('PHONECO *123456789       800-555-0100').merchant).toBe('PHONECO');
+    expect(splitMerchant('LANDLORD CORP 12345678 TORONTO')).toEqual({ merchant: 'LANDLORD CORP', location: 'TORONTO' });
+    expect(splitMerchant('Right of offset TO AC123456789').merchant).toBe('Right of offset TO');
+    expect(splitMerchant('PRETEND CAFE #1234      TORONTO').merchant).toBe('PRETEND CAFE #1234');
   });
 });
 
