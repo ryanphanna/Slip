@@ -220,7 +220,8 @@ describe('happy path: pasted text', () => {
   it('appends budget status when a budget exists for the category', async () => {
     seed('receipts', 'prev', { from: FROM, createdAt: makeTimestamp(new Date()), merchant: 'x', total: 1 });
     seed('budgets', `${FROM.replace(/\D/g, '')}_grocery`, { from: FROM, category: 'Grocery', limit: 100 });
-    parseReceiptFromText.mockResolvedValue(GOOD);
+    // Budget status only counts this month's receipts, so date the receipt today.
+    parseReceiptFromText.mockResolvedValue({ ...GOOD, date: require('../lib/query').dateKey(new Date()) });
     await sms(makeReq({ Body: 'Costco 23.50' }), makeRes());
     await waitFor(() => sendSms.mock.calls.length > 0);
     expect(lastSms()).toContain('Budget: $23.50/$100.00 spent');
