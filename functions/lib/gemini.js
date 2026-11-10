@@ -266,6 +266,7 @@ async function parseReceiptFromUrl(imageUrl, apiKey) {
 
 module.exports = {
   PROMPT,
+  datePromptPart,   // shared with lib/claude.js so both providers get the same wording
   groupReceiptPhotos,
   validPhotoGroups,
   parseReceiptFromBase64,

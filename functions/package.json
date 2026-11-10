@@ -14,6 +14,7 @@
     "migrate:accounts": "node scripts/migrate-to-accounts.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.7.0",
     "@google-cloud/logging": "^12.3.0",
     "@google/generative-ai": "^0.24.1",
     "csv-parse": "^7.0.3",
